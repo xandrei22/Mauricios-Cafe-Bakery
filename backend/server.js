@@ -65,7 +65,9 @@ const corsOptions = {
         const allowedOrigins = [
             process.env.FRONTEND_URL,
             'http://localhost:5173',
-            'http://127.0.0.1:5173'
+            'http://127.0.0.1:5173',
+            "https://mauricios-cafe-bakery.vercel.app", // your frontend
+            "https://mauricios-cafe-bakery.onrender.com", // your backend (for Google redirect)
         ];
         if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
             callback(null, true);
