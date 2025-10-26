@@ -1,0 +1,15 @@
+﻿# dependencies
+node_modules/
+frontend/dist/
+backend/node_modules/
+frontend/node_modules/
+
+# env files
+.env
+.env.*
+*.env
+!**/.env.example
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*

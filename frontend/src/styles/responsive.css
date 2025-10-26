@@ -1,0 +1,300 @@
+/* Responsive Design Enhancements */
+
+
+/* Small tablet and large phone range (640px - 767px) */
+
+@media (min-width: 640px) and (max-width: 767px) {
+    /* Force navbar to full width */
+    .navbar-full-width-tablet {
+        width: 100vw !important;
+        left: 0 !important;
+        right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        position: fixed !important;
+        transform: translateX(0) !important;
+        max-width: none !important;
+        z-index: 50 !important;
+    }
+    /* Break out of any parent container constraints */
+    .navbar-full-width-tablet {
+        margin-left: calc(-50vw + 50%) !important;
+        margin-right: calc(-50vw + 50%) !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+    /* Ensure parent containers don't constrain the navbar */
+    .navbar-full-width-tablet {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        margin: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    /* Optimize for 2x2 grid layout */
+    .grid-tablet-2x2 {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+    /* Adjust card content for smaller cards */
+    .card-content-tablet {
+        padding: 1rem !important;
+    }
+    /* Smaller chart heights for better fit */
+    .chart-tablet {
+        height: 200px !important;
+    }
+    /* Optimize text sizes */
+    .text-tablet-sm {
+        font-size: 0.875rem !important;
+    }
+    .text-tablet-base {
+        font-size: 1rem !important;
+    }
+    /* Dashboard specific adjustments */
+    .dashboard-cards-tablet {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.75rem !important;
+    }
+    .dashboard-chart-tablet {
+        height: 180px !important;
+    }
+}
+
+
+/* Mobile-first approach */
+
+@media (max-width: 640px) {
+    /* Admin/Staff Layout */
+    .admin-layout {
+        padding-left: 0 !important;
+    }
+    /* Sidebar adjustments */
+    .sidebar-mobile-hidden {
+        display: none !important;
+    }
+    /* Navbar adjustments */
+    .navbar-mobile {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+    }
+    /* Full width navbar on mobile */
+    .navbar-full-width {
+        width: 100vw !important;
+        left: 0 !important;
+        right: 0 !important;
+    }
+    /* Compact navbar content */
+    .navbar-content-mobile {
+        gap: 0.5rem !important;
+        padding: 0.5rem !important;
+    }
+    /* Hide non-essential elements on mobile */
+    .navbar-hide-mobile {
+        display: none !important;
+    }
+    /* Dashboard cards */
+    .dashboard-card {
+        min-height: 100px !important;
+        padding: 1rem !important;
+    }
+    /* Chart containers */
+    .chart-container {
+        height: 250px !important;
+    }
+    /* Notification dropdown */
+    .notification-dropdown {
+        width: 90vw !important;
+        max-width: 320px !important;
+        right: 1rem !important;
+        left: auto !important;
+    }
+    /* Customer dashboard */
+    .customer-welcome {
+        padding: 1rem !important;
+    }
+    .customer-card {
+        min-height: 100px !important;
+        padding: 1rem !important;
+    }
+    /* Grid adjustments */
+    .grid-mobile {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+    /* Text sizing */
+    .text-mobile-sm {
+        font-size: 0.875rem !important;
+    }
+    .text-mobile-base {
+        font-size: 1rem !important;
+    }
+    .text-mobile-lg {
+        font-size: 1.125rem !important;
+    }
+    .text-mobile-xl {
+        font-size: 1.25rem !important;
+    }
+    /* Spacing adjustments */
+    .space-mobile-sm {
+        gap: 0.5rem !important;
+    }
+    .space-mobile-base {
+        gap: 1rem !important;
+    }
+    /* Button adjustments */
+    .btn-mobile {
+        padding: 0.5rem 1rem !important;
+        font-size: 0.875rem !important;
+    }
+    /* Staff forms */
+    .staff-form-container {
+        flex-direction: column !important;
+    }
+    .staff-form-sidebar {
+        order: 2 !important;
+        min-height: 40vh !important;
+    }
+    .staff-form-main {
+        order: 1 !important;
+        min-height: 60vh !important;
+    }
+    /* Modal adjustments */
+    .modal-mobile {
+        margin: 1rem !important;
+        max-width: calc(100vw - 2rem) !important;
+    }
+}
+
+
+/* Tablet adjustments */
+
+@media (min-width: 641px) and (max-width: 1024px) {
+    /* Dashboard grid */
+    .dashboard-grid-tablet {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    /* Chart height */
+    .chart-container-tablet {
+        height: 300px !important;
+    }
+    /* Sidebar */
+    .sidebar-tablet {
+        width: 4rem !important;
+    }
+    /* Navbar */
+    .navbar-tablet {
+        left: 4rem !important;
+    }
+}
+
+
+/* Large screen optimizations */
+
+@media (min-width: 1025px) {
+    /* Full sidebar */
+    .sidebar-desktop {
+        width: 16rem !important;
+    }
+    /* Full navbar */
+    .navbar-desktop {
+        left: 16rem !important;
+    }
+    /* Collapsed sidebar */
+    .sidebar-collapsed {
+        width: 4rem !important;
+    }
+    /* Collapsed navbar */
+    .navbar-collapsed {
+        left: 4rem !important;
+    }
+}
+
+
+/* Print styles */
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    .print-only {
+        display: block !important;
+    }
+    .sidebar,
+    .navbar {
+        display: none !important;
+    }
+    .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}
+
+
+/* High contrast mode */
+
+@media (prefers-contrast: high) {
+    .card {
+        border: 2px solid !important;
+    }
+    .button {
+        border: 2px solid !important;
+    }
+}
+
+
+/* Reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+
+/* Dark mode support */
+
+@media (prefers-color-scheme: dark) {
+    .dark-mode {
+        background-color: #1a1a1a !important;
+        color: #ffffff !important;
+    }
+    .dark-mode .card {
+        background-color: #2d2d2d !important;
+        border-color: #404040 !important;
+    }
+}
+
+
+/* Focus styles for accessibility */
+
+.focus-visible:focus {
+    outline: 2px solid #a87437 !important;
+    outline-offset: 2px !important;
+}
+
+
+/* Skip link for accessibility */
+
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 6px;
+    background: #a87437;
+    color: white;
+    padding: 8px;
+    text-decoration: none;
+    z-index: 1000;
+}
+
+.skip-link:focus {
+    top: 6px;
+}

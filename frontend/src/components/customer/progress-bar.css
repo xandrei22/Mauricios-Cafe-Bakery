@@ -1,0 +1,838 @@
+/* Progress bar styles to replace inline styles */
+
+.progress-bar {
+    height: 0.5rem;
+    border-radius: 9999px;
+    transition: all 0.5s ease;
+    width: 0%;
+}
+
+.progress-bar-amber {
+    background-color: #f59e0b;
+}
+
+.progress-bar-gradient {
+    background: linear-gradient(to right, #f59e0b, #eab308);
+}
+
+.rating-bar {
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: #3f3532;
+    transition: all 0.3s ease;
+    width: 0%;
+}
+
+
+/* Dynamic width classes for progress bars (0-100%) */
+
+.progress-bar-value-0 {
+    width: 0%;
+}
+
+.progress-bar-value-1 {
+    width: 1%;
+}
+
+.progress-bar-value-2 {
+    width: 2%;
+}
+
+.progress-bar-value-3 {
+    width: 3%;
+}
+
+.progress-bar-value-4 {
+    width: 4%;
+}
+
+.progress-bar-value-5 {
+    width: 5%;
+}
+
+.progress-bar-value-6 {
+    width: 6%;
+}
+
+.progress-bar-value-7 {
+    width: 7%;
+}
+
+.progress-bar-value-8 {
+    width: 8%;
+}
+
+.progress-bar-value-9 {
+    width: 9%;
+}
+
+.progress-bar-value-10 {
+    width: 10%;
+}
+
+.progress-bar-value-11 {
+    width: 11%;
+}
+
+.progress-bar-value-12 {
+    width: 12%;
+}
+
+.progress-bar-value-13 {
+    width: 13%;
+}
+
+.progress-bar-value-14 {
+    width: 14%;
+}
+
+.progress-bar-value-15 {
+    width: 15%;
+}
+
+.progress-bar-value-16 {
+    width: 16%;
+}
+
+.progress-bar-value-17 {
+    width: 17%;
+}
+
+.progress-bar-value-18 {
+    width: 18%;
+}
+
+.progress-bar-value-19 {
+    width: 19%;
+}
+
+.progress-bar-value-20 {
+    width: 20%;
+}
+
+.progress-bar-value-21 {
+    width: 21%;
+}
+
+.progress-bar-value-22 {
+    width: 22%;
+}
+
+.progress-bar-value-23 {
+    width: 23%;
+}
+
+.progress-bar-value-24 {
+    width: 24%;
+}
+
+.progress-bar-value-25 {
+    width: 25%;
+}
+
+.progress-bar-value-26 {
+    width: 26%;
+}
+
+.progress-bar-value-27 {
+    width: 27%;
+}
+
+.progress-bar-value-28 {
+    width: 28%;
+}
+
+.progress-bar-value-29 {
+    width: 29%;
+}
+
+.progress-bar-value-30 {
+    width: 30%;
+}
+
+.progress-bar-value-31 {
+    width: 31%;
+}
+
+.progress-bar-value-32 {
+    width: 32%;
+}
+
+.progress-bar-value-33 {
+    width: 33%;
+}
+
+.progress-bar-value-34 {
+    width: 34%;
+}
+
+.progress-bar-value-35 {
+    width: 35%;
+}
+
+.progress-bar-value-36 {
+    width: 36%;
+}
+
+.progress-bar-value-37 {
+    width: 37%;
+}
+
+.progress-bar-value-38 {
+    width: 38%;
+}
+
+.progress-bar-value-39 {
+    width: 39%;
+}
+
+.progress-bar-value-40 {
+    width: 40%;
+}
+
+.progress-bar-value-41 {
+    width: 41%;
+}
+
+.progress-bar-value-42 {
+    width: 42%;
+}
+
+.progress-bar-value-43 {
+    width: 43%;
+}
+
+.progress-bar-value-44 {
+    width: 44%;
+}
+
+.progress-bar-value-45 {
+    width: 45%;
+}
+
+.progress-bar-value-46 {
+    width: 46%;
+}
+
+.progress-bar-value-47 {
+    width: 47%;
+}
+
+.progress-bar-value-48 {
+    width: 48%;
+}
+
+.progress-bar-value-49 {
+    width: 49%;
+}
+
+.progress-bar-value-50 {
+    width: 50%;
+}
+
+.progress-bar-value-51 {
+    width: 51%;
+}
+
+.progress-bar-value-52 {
+    width: 52%;
+}
+
+.progress-bar-value-53 {
+    width: 53%;
+}
+
+.progress-bar-value-54 {
+    width: 54%;
+}
+
+.progress-bar-value-55 {
+    width: 55%;
+}
+
+.progress-bar-value-56 {
+    width: 56%;
+}
+
+.progress-bar-value-57 {
+    width: 57%;
+}
+
+.progress-bar-value-58 {
+    width: 58%;
+}
+
+.progress-bar-value-59 {
+    width: 59%;
+}
+
+.progress-bar-value-60 {
+    width: 60%;
+}
+
+.progress-bar-value-61 {
+    width: 61%;
+}
+
+.progress-bar-value-62 {
+    width: 62%;
+}
+
+.progress-bar-value-63 {
+    width: 63%;
+}
+
+.progress-bar-value-64 {
+    width: 64%;
+}
+
+.progress-bar-value-65 {
+    width: 65%;
+}
+
+.progress-bar-value-66 {
+    width: 66%;
+}
+
+.progress-bar-value-67 {
+    width: 67%;
+}
+
+.progress-bar-value-68 {
+    width: 68%;
+}
+
+.progress-bar-value-69 {
+    width: 69%;
+}
+
+.progress-bar-value-70 {
+    width: 70%;
+}
+
+.progress-bar-value-71 {
+    width: 71%;
+}
+
+.progress-bar-value-72 {
+    width: 72%;
+}
+
+.progress-bar-value-73 {
+    width: 73%;
+}
+
+.progress-bar-value-74 {
+    width: 74%;
+}
+
+.progress-bar-value-75 {
+    width: 75%;
+}
+
+.progress-bar-value-76 {
+    width: 76%;
+}
+
+.progress-bar-value-77 {
+    width: 77%;
+}
+
+.progress-bar-value-78 {
+    width: 78%;
+}
+
+.progress-bar-value-79 {
+    width: 79%;
+}
+
+.progress-bar-value-80 {
+    width: 80%;
+}
+
+.progress-bar-value-81 {
+    width: 81%;
+}
+
+.progress-bar-value-82 {
+    width: 82%;
+}
+
+.progress-bar-value-83 {
+    width: 83%;
+}
+
+.progress-bar-value-84 {
+    width: 84%;
+}
+
+.progress-bar-value-85 {
+    width: 85%;
+}
+
+.progress-bar-value-86 {
+    width: 86%;
+}
+
+.progress-bar-value-87 {
+    width: 87%;
+}
+
+.progress-bar-value-88 {
+    width: 88%;
+}
+
+.progress-bar-value-89 {
+    width: 89%;
+}
+
+.progress-bar-value-90 {
+    width: 90%;
+}
+
+.progress-bar-value-91 {
+    width: 91%;
+}
+
+.progress-bar-value-92 {
+    width: 92%;
+}
+
+.progress-bar-value-93 {
+    width: 93%;
+}
+
+.progress-bar-value-94 {
+    width: 94%;
+}
+
+.progress-bar-value-95 {
+    width: 95%;
+}
+
+.progress-bar-value-96 {
+    width: 96%;
+}
+
+.progress-bar-value-97 {
+    width: 97%;
+}
+
+.progress-bar-value-98 {
+    width: 98%;
+}
+
+.progress-bar-value-99 {
+    width: 99%;
+}
+
+.progress-bar-value-100 {
+    width: 100%;
+}
+
+
+/* Dynamic width classes for rating bars (0-100%) */
+
+.rating-bar-value-0 {
+    width: 0%;
+}
+
+.rating-bar-value-1 {
+    width: 1%;
+}
+
+.rating-bar-value-2 {
+    width: 2%;
+}
+
+.rating-bar-value-3 {
+    width: 3%;
+}
+
+.rating-bar-value-4 {
+    width: 4%;
+}
+
+.rating-bar-value-5 {
+    width: 5%;
+}
+
+.rating-bar-value-6 {
+    width: 6%;
+}
+
+.rating-bar-value-7 {
+    width: 7%;
+}
+
+.rating-bar-value-8 {
+    width: 8%;
+}
+
+.rating-bar-value-9 {
+    width: 9%;
+}
+
+.rating-bar-value-10 {
+    width: 10%;
+}
+
+.rating-bar-value-11 {
+    width: 11%;
+}
+
+.rating-bar-value-12 {
+    width: 12%;
+}
+
+.rating-bar-value-13 {
+    width: 13%;
+}
+
+.rating-bar-value-14 {
+    width: 14%;
+}
+
+.rating-bar-value-15 {
+    width: 15%;
+}
+
+.rating-bar-value-16 {
+    width: 16%;
+}
+
+.rating-bar-value-17 {
+    width: 17%;
+}
+
+.rating-bar-value-18 {
+    width: 18%;
+}
+
+.rating-bar-value-19 {
+    width: 19%;
+}
+
+.rating-bar-value-20 {
+    width: 20%;
+}
+
+.rating-bar-value-21 {
+    width: 21%;
+}
+
+.rating-bar-value-22 {
+    width: 22%;
+}
+
+.rating-bar-value-23 {
+    width: 23%;
+}
+
+.rating-bar-value-24 {
+    width: 24%;
+}
+
+.rating-bar-value-25 {
+    width: 25%;
+}
+
+.rating-bar-value-26 {
+    width: 26%;
+}
+
+.rating-bar-value-27 {
+    width: 27%;
+}
+
+.rating-bar-value-28 {
+    width: 28%;
+}
+
+.rating-bar-value-29 {
+    width: 29%;
+}
+
+.rating-bar-value-30 {
+    width: 30%;
+}
+
+.rating-bar-value-31 {
+    width: 31%;
+}
+
+.rating-bar-value-32 {
+    width: 32%;
+}
+
+.rating-bar-value-33 {
+    width: 33%;
+}
+
+.rating-bar-value-34 {
+    width: 34%;
+}
+
+.rating-bar-value-35 {
+    width: 35%;
+}
+
+.rating-bar-value-36 {
+    width: 36%;
+}
+
+.rating-bar-value-37 {
+    width: 37%;
+}
+
+.rating-bar-value-38 {
+    width: 38%;
+}
+
+.rating-bar-value-39 {
+    width: 39%;
+}
+
+.rating-bar-value-40 {
+    width: 40%;
+}
+
+.rating-bar-value-41 {
+    width: 41%;
+}
+
+.rating-bar-value-42 {
+    width: 42%;
+}
+
+.rating-bar-value-43 {
+    width: 43%;
+}
+
+.rating-bar-value-44 {
+    width: 44%;
+}
+
+.rating-bar-value-45 {
+    width: 45%;
+}
+
+.rating-bar-value-46 {
+    width: 46%;
+}
+
+.rating-bar-value-47 {
+    width: 47%;
+}
+
+.rating-bar-value-48 {
+    width: 48%;
+}
+
+.rating-bar-value-49 {
+    width: 49%;
+}
+
+.rating-bar-value-50 {
+    width: 50%;
+}
+
+.rating-bar-value-51 {
+    width: 51%;
+}
+
+.rating-bar-value-52 {
+    width: 52%;
+}
+
+.rating-bar-value-53 {
+    width: 53%;
+}
+
+.rating-bar-value-54 {
+    width: 54%;
+}
+
+.rating-bar-value-55 {
+    width: 55%;
+}
+
+.rating-bar-value-56 {
+    width: 56%;
+}
+
+.rating-bar-value-57 {
+    width: 57%;
+}
+
+.rating-bar-value-58 {
+    width: 58%;
+}
+
+.rating-bar-value-59 {
+    width: 59%;
+}
+
+.rating-bar-value-60 {
+    width: 60%;
+}
+
+.rating-bar-value-61 {
+    width: 61%;
+}
+
+.rating-bar-value-62 {
+    width: 62%;
+}
+
+.rating-bar-value-63 {
+    width: 63%;
+}
+
+.rating-bar-value-64 {
+    width: 64%;
+}
+
+.rating-bar-value-65 {
+    width: 65%;
+}
+
+.rating-bar-value-66 {
+    width: 66%;
+}
+
+.rating-bar-value-67 {
+    width: 67%;
+}
+
+.rating-bar-value-68 {
+    width: 68%;
+}
+
+.rating-bar-value-69 {
+    width: 69%;
+}
+
+.rating-bar-value-70 {
+    width: 70%;
+}
+
+.rating-bar-value-71 {
+    width: 71%;
+}
+
+.rating-bar-value-72 {
+    width: 72%;
+}
+
+.rating-bar-value-73 {
+    width: 73%;
+}
+
+.rating-bar-value-74 {
+    width: 74%;
+}
+
+.rating-bar-value-75 {
+    width: 75%;
+}
+
+.rating-bar-value-76 {
+    width: 76%;
+}
+
+.rating-bar-value-77 {
+    width: 77%;
+}
+
+.rating-bar-value-78 {
+    width: 78%;
+}
+
+.rating-bar-value-79 {
+    width: 79%;
+}
+
+.rating-bar-value-80 {
+    width: 80%;
+}
+
+.rating-bar-value-81 {
+    width: 81%;
+}
+
+.rating-bar-value-82 {
+    width: 82%;
+}
+
+.rating-bar-value-83 {
+    width: 83%;
+}
+
+.rating-bar-value-84 {
+    width: 84%;
+}
+
+.rating-bar-value-85 {
+    width: 85%;
+}
+
+.rating-bar-value-86 {
+    width: 86%;
+}
+
+.rating-bar-value-87 {
+    width: 87%;
+}
+
+.rating-bar-value-88 {
+    width: 88%;
+}
+
+.rating-bar-value-89 {
+    width: 89%;
+}
+
+.rating-bar-value-90 {
+    width: 90%;
+}
+
+.rating-bar-value-91 {
+    width: 91%;
+}
+
+.rating-bar-value-92 {
+    width: 92%;
+}
+
+.rating-bar-value-93 {
+    width: 93%;
+}
+
+.rating-bar-value-94 {
+    width: 94%;
+}
+
+.rating-bar-value-95 {
+    width: 95%;
+}
+
+.rating-bar-value-96 {
+    width: 96%;
+}
+
+.rating-bar-value-97 {
+    width: 97%;
+}
+
+.rating-bar-value-98 {
+    width: 98%;
+}
+
+.rating-bar-value-99 {
+    width: 99%;
+}
+
+.rating-bar-value-100 {
+    width: 100%;
+}

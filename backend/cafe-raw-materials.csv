@@ -1,0 +1,36 @@
+name,category,sku,actual_unit,display_unit,conversion_rate,reorder_level,cost_per_actual_unit,storage_location,initial_quantity,days_of_stock
+"COFFEE BEANS","coffee","COFFEE-BEANS-001","g","shot",18.0,2000.0,0.080,"Dry Storage",5000.0,30
+"FULL CREME MILK","milk","FULL-CREME-MILK-001","ml","shot",25.0,1000.0,0.045,"Refrigerator",2000.0,5
+"VEGETABLE CREAM","milk","VEG-CREAM-001","ml","shot",30.0,500.0,0.055,"Refrigerator",1000.0,7
+"CARAMEL SAUCE","sauce","CARAMEL-SAUCE-001","ml","pump",15.0,500.0,0.025,"Refrigerator",1000.0,15
+"CHOCOLATE SAUCE","sauce","CHOCO-SAUCE-001","ml","pump",20.0,400.0,0.030,"Refrigerator",800.0,12
+"WHITE CHOCOLATE SAUCE","sauce","WHITE-CHOCO-SAUCE-001","ml","pump",20.0,400.0,0.035,"Refrigerator",800.0,12
+"BUTTERSCOTCH SAUCE","sauce","BUTTERSCOTCH-SAUCE-001","ml","pump",15.0,500.0,0.028,"Refrigerator",1000.0,15
+"VANILLA SYRUP","syrup","VANILLA-SYRUP-001","ml","pump",15.0,500.0,0.020,"Refrigerator",1000.0,15
+"HAZELNUT SYRUP","syrup","HAZELNUT-SYRUP-001","ml","pump",15.0,500.0,0.025,"Refrigerator",1000.0,15
+"ENGLISH TOFFEE SYRUP","syrup","TOFFEE-SYRUP-001","ml","pump",15.0,500.0,0.025,"Refrigerator",1000.0,15
+"STRAWBERRY SYRUP","syrup","STRAWBERRY-SYRUP-001","ml","pump",15.0,500.0,0.022,"Refrigerator",1000.0,15
+"MATCH POWDER","powder","MATCHA-POWDER-001","g","tsp",2.0,100.0,0.150,"Dry Storage",200.0,90
+"CONDENSED MILK","milk","CONDENSED-MILK-001","ml","tsp",5.0,300.0,0.040,"Refrigerator",600.0,20
+"BAILEYS IRISH CREME","liqueur","BAILEYS-001","ml","shot",30.0,200.0,0.200,"Refrigerator",400.0,30
+"AMARETTO SYRUP","syrup","AMARETTO-SYRUP-001","ml","pump",15.0,500.0,0.030,"Refrigerator",1000.0,15
+"EVAPORATED MILK","milk","EVAPORATED-MILK-001","ml","shot",25.0,500.0,0.035,"Refrigerator",1000.0,10
+"GRENADINE","syrup","GRENADINE-001","ml","pump",10.0,300.0,0.018,"Refrigerator",600.0,20
+"CHERRY SYRUP","syrup","CHERRY-SYRUP-001","ml","pump",15.0,500.0,0.022,"Refrigerator",1000.0,15
+"PINEAPPLE JUICE","juice","PINEAPPLE-JUICE-001","ml","shot",30.0,500.0,0.025,"Refrigerator",1000.0,7
+"COKE","beverage","COKE-001","ml","shot",30.0,500.0,0.020,"Refrigerator",1000.0,7
+"SPRITE","beverage","SPRITE-001","ml","shot",30.0,500.0,0.020,"Refrigerator",1000.0,7
+"MILK MIXTURE","milk","MILK-MIXTURE-001","ml","shot",25.0,750.0,0.050,"Refrigerator",1500.0,3
+"UBE LIQUEUR","liqueur","UBE-LIQUEUR-001","ml","shot",30.0,200.0,0.180,"Refrigerator",400.0,30
+"CHAI TEA MIXTURE","tea","CHAI-MIXTURE-001","ml","shot",30.0,500.0,0.040,"Refrigerator",1000.0,5
+"CHAMOMILE MIXTURE","tea","CHAMOMILE-MIXTURE-001","ml","shot",30.0,500.0,0.035,"Refrigerator",1000.0,5
+"ASAM BLACK TEA","tea","ASAM-TEA-001","g","tsp",2.0,100.0,0.080,"Dry Storage",200.0,90
+"CARDAMOM","spice","CARDAMOM-001","g","sprinkle",0.2,30.0,0.400,"Dry Storage",60.0,180
+"CINNAMON STICKS","spice","CINNAMON-STICKS-001","piece","piece",1.0,20.0,0.150,"Dry Storage",40.0,120
+"BLACK PEPPER","spice","BLACK-PEPPER-001","g","sprinkle",0.3,50.0,0.200,"Dry Storage",100.0,90
+"LEMON/CALAMANSI","fruit","LEMON-CALAMANSI-001","piece","piece",1.0,20.0,0.300,"Refrigerator",40.0,7
+"BUTTER","dairy","BUTTER-001","g","tsp",5.0,200.0,0.120,"Refrigerator",400.0,14
+"RICOYA POWDER","powder","RICOYA-POWDER-001","g","tsp",3.0,150.0,0.100,"Dry Storage",300.0,60
+"TABLEA","chocolate","TABLEA-001","piece","piece",1.0,50.0,0.250,"Dry Storage",100.0,90
+"MARSHMALLOW","topping","MARSHMALLOW-001","piece","piece",1.0,100.0,0.080,"Dry Storage",200.0,60
+"SEA SALT","seasoning","SEA-SALT-001","g","sprinkle",0.5,50.0,0.050,"Dry Storage",100.0,180 
