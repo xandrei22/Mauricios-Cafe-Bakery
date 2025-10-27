@@ -42,14 +42,15 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
     transporter.verify(function(error, success) {
         if (error) {
             console.error('Email configuration error:', error);
-            console.log('Email service disabled - check EMAIL_USER and EMAIL_PASS environment variables');
+            console.log('Email service disabled - check Brevo SMTP credentials');
             transporter = null;
         } else {
             console.log('Email server is ready to send messages');
         }
     });
 } else {
-    console.log('Email service disabled - EMAIL_USER and EMAIL_PASS/EMAIL_PASSWORD not configured');
+    console.log('❌ Email service disabled - no credentials found');
+    console.log('🔍 Checked for: BREVO_SMTP_USER, BREVO_SMTP_PASS, EMAIL_USER, EMAIL_PASSWORD, EMAIL_PASS');
 }
 
 // Function to send welcome email
