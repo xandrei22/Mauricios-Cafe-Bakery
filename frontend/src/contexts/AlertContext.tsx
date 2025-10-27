@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import { getApiUrl } from '../utils/apiConfig';
 
 interface LowStockItem {
   name: string;
@@ -53,12 +54,15 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
     try {
       setIsCheckingAlerts(true);
       
+      // Get the API URL from environment variable
+      const API_URL = getApiUrl();
+      
       // Check if user is staff or admin by trying staff endpoint first
-      let response = await fetch('/api/staff/low-stock/alert-status', { credentials: 'include' });
+      let response = await fetch(`${API_URL}/api/staff/low-stock/alert-status`, { credentials: 'include' });
       
       // If staff endpoint fails with 500 or other error, try admin endpoint
       if (!response.ok && response.status !== 500) {
-        response = await fetch('/api/low-stock/alert-status', { credentials: 'include' });
+        response = await fetch(`${API_URL}/api/low-stock/alert-status`, { credentials: 'include' });
       }
       
       if (response.ok) {

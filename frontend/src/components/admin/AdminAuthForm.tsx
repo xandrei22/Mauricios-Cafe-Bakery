@@ -11,6 +11,7 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
+import { getApiUrl } from "../../utils/apiConfig";
 
 export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [isSignUp, setIsSignUp] = useState(false)
@@ -23,7 +24,7 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
   const { checkLowStockAlert } = useAlert();
 
 // Get the API URL from environment variable
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+const API_URL = getApiUrl();
 
 async function handleLogin(e: React.FormEvent) {
   e.preventDefault();
@@ -36,7 +37,7 @@ async function handleLogin(e: React.FormEvent) {
       headers: { "Content-Type": "application/json" },
       credentials: "include", // must be above body for consistent handling
       body: JSON.stringify({
-        usernameOrEmail,
+        username: usernameOrEmail,
         password,
       }),
     });

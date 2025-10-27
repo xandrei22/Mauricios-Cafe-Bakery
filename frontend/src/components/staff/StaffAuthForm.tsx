@@ -10,6 +10,7 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
+import { getApiUrl } from "../../utils/apiConfig";
 
 export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
@@ -21,7 +22,7 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
   const { checkLowStockAlert } = useAlert();
 
   // Get the API URL from environment variable
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -54,7 +55,12 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
           }
         } catch {}
         // Check for alerts immediately after successful login
-        await checkLowStockAlert();
+        // Don't await - let it fail silently if there's an error
+        checkLowStockAlert().catch(err => {
+          console.error('Failed to check low stock alert:', err);
+          // Continue with navigation even if alert check fails
+        });
+        // Navigate immediately, don't wait for alert check
         navigate("/staff/dashboard");
       }
     } catch (err) {

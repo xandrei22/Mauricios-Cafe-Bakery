@@ -81,6 +81,9 @@ const StaffDashboard: React.FC = () => {
     staffSales: { labels: [], datasets: [] }
   });
 
+  // Get the API URL from environment variable
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
   // Default empty chart data to prevent undefined errors
   const getDefaultChartData = (type: string) => ({
     labels: ['No Data'],
@@ -112,7 +115,7 @@ const StaffDashboard: React.FC = () => {
   // Fetch staff performance data
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
-      const response = await fetch(`/api/admin/dashboard/staff-performance?period=${period}`, {
+      const response = await fetch(`${API_URL}/api/admin/dashboard/staff-performance?period=${period}`, {
         credentials: 'include'
       });
       
@@ -192,7 +195,7 @@ const StaffDashboard: React.FC = () => {
   const fetchChartData = async () => {
     try {
       // Fetch sales data - use admin endpoints for consistency
-      const salesResponse = await fetch('/api/admin/dashboard/sales', {
+      const salesResponse = await fetch(`${API_URL}/api/admin/dashboard/sales`, {
         credentials: 'include'
       });
       let salesData = null;
@@ -360,7 +363,7 @@ const StaffDashboard: React.FC = () => {
       setError(null);
       
       // Fetch dashboard data - use admin endpoints for consistency
-      const staffResponse = await fetch('/api/admin/dashboard', {
+      const staffResponse = await fetch(`${API_URL}/api/admin/dashboard`, {
         credentials: 'include'
       });
       

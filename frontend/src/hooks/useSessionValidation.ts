@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getApiUrl } from '../utils/apiConfig';
 
 type Role = 'admin' | 'staff' | 'customer';
 
@@ -21,10 +22,12 @@ export const useSessionValidation = (role: Role = 'admin'): SessionValidationRes
       setIsLoading(true);
       setError(null);
 
+      const API_URL = getApiUrl();
+
       const endpointMap: Record<Role, string> = {
-        admin: '/api/admin/check-session',
-        staff: '/api/staff/check-session',
-        customer: '/api/customer/check-session',
+        admin: `${API_URL}/api/admin/check-session`,
+        staff: `${API_URL}/api/staff/check-session`,
+        customer: `${API_URL}/api/customer/check-session`,
       };
 
       const loginRouteMap: Record<Role, string> = {

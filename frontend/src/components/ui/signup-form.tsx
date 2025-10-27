@@ -8,6 +8,7 @@ import { Input } from "./input"
 import { Label } from "./label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card"
 import { CheckCircle, XCircle, Eye, EyeOff } from "lucide-react"
+import { getApiUrl } from "../../utils/apiConfig"
 
 export function SignupForm({
   className,
@@ -31,7 +32,7 @@ export function SignupForm({
   const tableFromUrl = urlParams.get('table');
 
   // Get the API URL from environment variable
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,14 +55,19 @@ export function SignupForm({
     }
 
     try {
+      // Generate username from email if not provided
+      const username = email ? email.split('@')[0] : '';
+      
       const res = await fetch(`${API_URL}/api/customer/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          username, 
+          username,
           fullName, 
           email, 
           password,
+          age: age || undefined,
+          gender: gender || undefined,
           table: tableFromUrl || undefined 
         }),
         credentials: "include",

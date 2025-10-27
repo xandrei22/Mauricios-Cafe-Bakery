@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface User {
   name: string;
@@ -20,7 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
-  const API_URL = (import.meta as any)?.env?.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   const checkSession = async () => {
     const controller = new AbortController();

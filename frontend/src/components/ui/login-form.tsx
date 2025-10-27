@@ -9,6 +9,7 @@ import { Label } from "./label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card"
 import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import { getApiUrl } from "../../utils/apiConfig";
 
 export function LoginForm({
   className,
@@ -25,7 +26,7 @@ export function LoginForm({
   const tableFromUrl = urlParams.get('table');
   
   // Get the API URL from environment variable
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
   
   // Check for Google OAuth verification error
   useEffect(() => {
