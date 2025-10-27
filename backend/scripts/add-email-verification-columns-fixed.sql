@@ -62,3 +62,5 @@ WHERE email_verified = 0 AND verification_token IS NULL;
 -- Add indexes (will fail gracefully if they already exist)
 -- Note: We'll add these manually if needed
 
+
+

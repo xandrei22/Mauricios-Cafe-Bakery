@@ -18,3 +18,5 @@ SELECT COUNT(*) as unverified_customers
 FROM customers 
 WHERE email_verified = 0;
 
+
+

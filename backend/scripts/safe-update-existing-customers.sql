@@ -15,3 +15,5 @@ SELECT
     SUM(1 - email_verified) as unverified_customers
 FROM customers;
 
+
+

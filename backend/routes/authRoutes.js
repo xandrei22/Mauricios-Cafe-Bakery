@@ -37,7 +37,7 @@ router.post('/customer/resend-verification', customerController.resendVerificati
 router.get('/auth/google', (req, res, next) => {
     try {
         const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const { table, redirect } = req.query || {};
+        return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
 
         // Stash desired redirect in the session before starting OAuth
         if (redirect) {

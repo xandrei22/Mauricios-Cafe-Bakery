@@ -24,3 +24,5 @@ CREATE INDEX IF NOT EXISTS idx_verification_token ON customers(verification_toke
 -- Add index on email_verified for faster queries
 CREATE INDEX IF NOT EXISTS idx_email_verified ON customers(email_verified);
 
+
+
