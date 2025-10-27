@@ -1,10 +1,35 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-// Create a transporter using environment variables or disable email if not configured
+// Debug logging for email configuration
+console.log('🔍 Checking email configuration...');
+console.log('BREVO_SMTP_KEY:', process.env.BREVO_SMTP_KEY ? '✓ Set' : '✗ Missing');
+console.log('BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? '✓ Set' : '✗ Missing');
+console.log('BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? '✓ Set' : '✗ Missing');
+
+// Create a transporter using Brevo (formerly Sendinblue)
 let transporter = null;
 
-if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
+// Check if Brevo SMTP credentials are available
+if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
+    console.log('✅ Brevo SMTP credentials found, creating transporter...');
+    transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+            user: process.env.BREVO_SMTP_USER,
+            pass: process.env.BREVO_SMTP_PASS
+        }
+    });
+    console.log('✅ Using Brevo (formerly Sendinblue) SMTP');
+} else if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
+    // Fallback to Gmail if Brevo not configured
+    console.log('✅ Using Gmail as fallback...');
+    console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
+    console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '✓ Set' : '✗ Missing');
+    console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
+
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
