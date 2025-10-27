@@ -30,6 +30,9 @@ export function SignupForm({
   const urlParams = new URLSearchParams(window.location.search);
   const tableFromUrl = urlParams.get('table');
 
+  // Get the API URL from environment variable
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -51,7 +54,7 @@ export function SignupForm({
     }
 
     try {
-      const res = await fetch("/api/customer/signup", {
+      const res = await fetch(`${API_URL}/api/customer/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

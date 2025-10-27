@@ -24,6 +24,9 @@ export function LoginForm({
   const urlParams = new URLSearchParams(window.location.search);
   const tableFromUrl = urlParams.get('table');
   
+  // Get the API URL from environment variable
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  
   // Check for Google OAuth verification error
   useEffect(() => {
     const error = urlParams.get('error');
@@ -43,7 +46,7 @@ export function LoginForm({
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/customer/login", {
+      const res = await fetch(`${API_URL}/api/customer/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, table: tableFromUrl || undefined }),
@@ -145,7 +148,7 @@ export function LoginForm({
                 <Button type="submit" className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white h-10 sm:h-11 text-sm sm:text-base" disabled={loading}>
                   {loading ? "Logging in..." : "Login"}
                 </Button>
-                <Button variant="outline" className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base" type="button" disabled={loading} onClick={() => window.location.href = `/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}` }>
+                <Button variant="outline" className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base" type="button" disabled={loading} onClick={() => window.location.href = `${API_URL}/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}` }>
                   {/* Google "G" logo */}
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-4 w-4 sm:h-5 sm:w-5">
                     <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.676 32.658 29.223 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.157 7.961 3.039l5.657-5.657C33.64 6.053 29.083 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20c10.494 0 19.126-7.645 19.126-20 0-1.341-.146-2.651-.415-3.917z"/>

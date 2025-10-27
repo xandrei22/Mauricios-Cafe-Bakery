@@ -20,6 +20,9 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
+  // Get the API URL from environment variable
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -27,7 +30,7 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
     try {
       console.log('Attempting staff login with:', { username: usernameOrEmail });
       
-      const res = await fetch("/api/staff/login", {
+      const res = await fetch(`${API_URL}/api/staff/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: usernameOrEmail, password }),
