@@ -31,13 +31,14 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        // Check if email is verified
-        if (!customer.email_verified) {
-            return res.status(403).json({
-                message: 'Please verify your email address before logging in. Check your email for the verification link.',
-                requiresVerification: true
-            });
-        }
+        // Email verification check disabled temporarily
+        // if (!customer.email_verified) {
+        //     return res.status(403).json({
+        //         message: 'Please verify your email address before logging in. Check your email for the verification link.',
+        //         requiresVerification: true
+        //     });
+        // }
+        console.log('⚠️ Email verification check disabled - allowing login');
 
         // Set customer session with unique key
         req.session.customerUser = {
@@ -122,30 +123,18 @@ async function signup(req, res) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Generate verification token
-        const verificationToken = crypto.randomBytes(32).toString('hex');
-        const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
-
-        // Insert new customer with verification fields
+        // Insert new customer WITHOUT email verification (disabled temporarily)
         const [result] = await db.query(
-            'INSERT INTO customers (username, password, email, full_name, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, FALSE, ?, ?, NOW())', [username, hashedPassword, email, fullName, verificationToken, verificationExpires]
+            'INSERT INTO customers (username, password, email, full_name, email_verified, created_at) VALUES (?, ?, ?, ?, TRUE, NOW())', [username, hashedPassword, email, fullName]
         );
 
-        // Send verification email
-        try {
-            const { sendVerificationEmail } = require('../utils/emailService');
-            const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
-            await sendVerificationEmail(email, fullName, verificationUrl);
-        } catch (emailError) {
-            console.error('Error sending verification email:', emailError);
-            // Don't fail the signup if email fails
-        }
+        console.log('✅ Customer account created (email verification disabled)');
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully. Please check your email to verify your account.',
+            message: 'Account created successfully. You can now log in.',
             customerId: result.insertId,
-            requiresVerification: true
+            requiresVerification: false
         });
 
     } catch (error) {
