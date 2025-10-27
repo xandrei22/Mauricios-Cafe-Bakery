@@ -143,6 +143,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 app.use(cors(corsOptions));
 
+// Parse JSON and URL-encoded request bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Serve static files from uploads directory and allow cross-origin resource policy for images
 const path = require('path');
 app.use('/uploads', (req, res, next) => {

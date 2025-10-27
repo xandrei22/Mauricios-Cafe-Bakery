@@ -27,3 +27,4 @@ UPDATE loyalty_rewards SET
 WHERE requires_order IS NULL;
 
 
+
