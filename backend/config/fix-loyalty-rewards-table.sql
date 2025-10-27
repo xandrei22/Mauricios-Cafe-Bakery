@@ -26,3 +26,4 @@ UPDATE loyalty_rewards SET
     terms_conditions = 'Must be redeemed within 30 days. One redemption per customer per reward type.'
 WHERE requires_order IS NULL;
 
+

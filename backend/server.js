@@ -43,25 +43,29 @@ dotenv.config();
 // Create Express app and set port
 const app = express();
 const server = http.createServer(app);
+
+// ✅ FIX: Proper Socket.IO CORS configuration
 const io = socketIo(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:5173" || "https://mauricios-cafe-bakery.vercel.app" || "https://mauricios-cafe-bakery.onrender.com",
+        origin: [
+            process.env.FRONTEND_URL,
+            "https://mauricios-cafe-bakery.vercel.app",
+            "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
+            "https://mauricios-cafe-bakery.onrender.com",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173"
+        ],
         methods: ["GET", "POST"],
         credentials: true
     }
 });
+
 const PORT = process.env.PORT || 5001;
 
-// Middleware for CORS, JSON parsing, and URL encoding
+// ✅ FIX: Apply CORS middleware early
 const corsOptions = {
     origin: function(origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        // Allow all origins for development
-        if (process.env.NODE_ENV !== 'production') {
-            return callback(null, true);
-        }
-        // In production, only allow specific origins
+        if (!origin) return callback(null, true); // Allow mobile/postman
         const allowedOrigins = [
             process.env.FRONTEND_URL,
             "https://mauricios-cafe-bakery.vercel.app",
@@ -70,7 +74,7 @@ const corsOptions = {
             "http://localhost:5173",
             "http://127.0.0.1:5173"
         ];
-        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
@@ -81,12 +85,24 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Add this middleware before any route definitions
+// ✅ Apply Express middleware in correct order
 app.use(express.json());
+app.use(cors(corsOptions));
 app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
+
+// ✅ HTTPS redirection (keep this after cors)
+if (process.env.NODE_ENV === 'production') {
+    app.use((req, res, next) => {
+        if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
+            return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+        }
+        next();
+    });
+}
+
 
 // Optional: redirect HTTP to HTTPS when behind a proxy/production
 if (process.env.NODE_ENV === 'production') {

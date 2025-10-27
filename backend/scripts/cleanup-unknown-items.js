@@ -122,3 +122,4 @@ if (process.argv.includes('--confirm')) {
 } else {
     console.log('\nRun with --confirm flag to proceed with cleanup.');
 }
+
