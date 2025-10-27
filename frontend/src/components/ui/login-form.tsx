@@ -37,8 +37,10 @@ export function LoginForm({
       setError(message || 'Please verify your email address before logging in. Check your email for the verification link.');
     } else if (error === 'EMAIL_REGISTERED_PASSWORD') {
       setError('This email is already registered with a password. Please log in using your email and password.');
+    } else if (error === 'GOOGLE_AUTH_NOT_CONFIGURED') {
+      setError('Google authentication is not configured. Please use email and password to login.');
     } else if (error === 'GOOGLE_AUTH_ERROR') {
-      setError('Google authentication failed. Please try again.');
+      setError('Google authentication failed. Please try again or use email and password.');
     }
   }, []);
 

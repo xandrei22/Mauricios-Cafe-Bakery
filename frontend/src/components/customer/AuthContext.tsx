@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getApiUrl } from '../../utils/apiConfig';
 
 interface User {
@@ -11,7 +11,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   authenticated: boolean;
-  refreshSession: () => void;
+  refreshSession: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -23,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authenticated, setAuthenticated] = useState(false);
   const API_URL = getApiUrl();
 
-  const checkSession = async () => {
+  const checkSession = useCallback(async () => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearTimeout(timeout);
       setLoading(false);
     }
-  };
+  }, [API_URL]);
 
   const logout = async () => {
     try {
@@ -57,17 +57,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
-    const initial = async () => { if (isMounted) await checkSession(); };
-    initial();
-    const onVisibility = () => { if (document.visibilityState === 'visible') checkSession(); };
+    
+    // Only check customer session on routes that need it
+    const checkSessionIfNeeded = async () => {
+      const currentPath = window.location.pathname;
+      
+      // Skip auth checking on staff/admin routes and public pages
+      if (currentPath.startsWith('/staff') || 
+          currentPath.startsWith('/admin') ||
+          currentPath === '/' ||
+          currentPath === '/login' ||
+          currentPath === '/customer-signup' ||
+          currentPath === '/customer-login' ||
+          currentPath.startsWith('/guest') ||
+          currentPath.startsWith('/qr-codes') ||
+          currentPath.startsWith('/visit-mauricio') ||
+          currentPath === '/privacy' ||
+          currentPath === '/terms' ||
+          currentPath === '/accessibility') {
+        setLoading(false);
+        return;
+      }
+      
+      // Only check on customer routes or when explicitly needed
+      if (currentPath.startsWith('/customer') && isMounted) {
+        await checkSession();
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    checkSessionIfNeeded();
+    
+    const onVisibility = () => { 
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/customer') && 
+          !currentPath.startsWith('/staff') && 
+          !currentPath.startsWith('/admin') && 
+          document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+    
     document.addEventListener('visibilitychange', onVisibility);
-    const interval = setInterval(() => checkSession(), 60000);
+    const interval = setInterval(() => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/customer') && 
+          !currentPath.startsWith('/staff') && 
+          !currentPath.startsWith('/admin')) {
+        checkSession();
+      }
+    }, 60000);
     return () => {
       isMounted = false;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [checkSession]);
 
   return (
     <AuthContext.Provider value={{ user, loading, authenticated, refreshSession: checkSession, logout }}>

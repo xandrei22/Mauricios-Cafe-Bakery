@@ -20,9 +20,9 @@ export const getApiUrl = (): string => {
     return 'http://localhost:5001';
   }
   
-  // In production on Vercel, use empty string for relative paths
-  // Vercel will proxy /api/* requests to Render backend via vercel.json
-  return '';
+  // In production on Vercel, use the Render backend URL directly
+  // This avoids proxy issues and ensures requests go directly to the backend
+  return 'https://mauricios-cafe-bakery.onrender.com';
 };
 
 // Export for use in components
