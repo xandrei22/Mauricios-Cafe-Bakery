@@ -37,6 +37,13 @@ router.post('/customer/resend-verification', customerController.resendVerificati
 router.get('/auth/google', (req, res, next) => {
     try {
         const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+        // Check if Google OAuth is configured
+        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+            console.error('Google OAuth not configured - missing credentials');
+            return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
+        }
+
         const { redirect, table } = req.query;
 
         // Stash desired redirect in the session before starting OAuth
@@ -65,22 +72,31 @@ router.get('/auth/google', (req, res, next) => {
 });
 
 // Google OAuth - Callback
-router.get('/auth/google/callback',
-    (req, res, next) => {
+router.get('/auth/google/callback', async(req, res, next) => {
+    try {
+        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+        // Check if Google OAuth is configured
+        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+            console.error('Google OAuth not configured - missing credentials');
+            return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
+        }
+
+        // Use Passport middleware
         passport.authenticate('google', {
             session: true
         }, (err, user, info) => {
-            const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
-
             if (err) {
                 // If the error is about email already registered, redirect with a message
                 if (err.code === 'EMAIL_REGISTERED_PASSWORD') {
                     return res.redirect(`${frontendBase}/login?error=EMAIL_REGISTERED_PASSWORD`);
                 }
                 // For other errors, redirect with a generic error
+                console.error('Google OAuth error:', err);
                 return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
             if (!user) {
+                console.error('Google OAuth: No user returned');
                 return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
             // Check if email verification is required for Google OAuth users
@@ -132,8 +148,12 @@ router.get('/auth/google/callback',
                 });
             });
         })(req, res, next);
+    } catch (err) {
+        console.error('Error in Google OAuth callback wrapper:', err);
+        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
     }
-);
+});
 
 // Error handling for routes
 router.use((err, req, res, next) => {
