@@ -47,14 +47,36 @@ const server = http.createServer(app);
 // ✅ FIX: Proper Socket.IO CORS configuration
 const io = socketIo(server, {
     cors: {
-        origin: [
-            process.env.FRONTEND_URL,
-            "https://mauricios-cafe-bakery.vercel.app",
-            "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
-            "https://mauricios-cafe-bakery.onrender.com",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173"
-        ],
+        origin: function(origin, callback) {
+            // Allow requests with no origin (mobile apps, Postman, etc.)
+            if (!origin) return callback(null, true);
+
+            const allowedOrigins = [
+                process.env.FRONTEND_URL,
+                "https://mauricios-cafe-bakery.vercel.app",
+                "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
+                "https://mauricios-cafe-bakery.onrender.com",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+            ];
+
+            try {
+                const hostname = new URL(origin).hostname;
+                if (
+                    allowedOrigins.includes(origin) ||
+                    hostname.endsWith(".vercel.app") ||
+                    hostname.endsWith("vercel.app")
+                ) {
+                    console.log("✅ Socket.IO CORS allowed for origin:", origin);
+                    return callback(null, true);
+                }
+                console.error("❌ Socket.IO CORS blocked for origin:", origin);
+                return callback(new Error('Not allowed by CORS'));
+            } catch (err) {
+                console.error("❌ Socket.IO CORS error:", err);
+                return callback(new Error('Invalid origin'));
+            }
+        },
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -80,14 +102,17 @@ const corsOptions = {
             const hostname = new URL(origin).hostname;
             if (
                 allowedOrigins.includes(origin) ||
-                hostname.endsWith(".vercel.app")
+                hostname.endsWith(".vercel.app") ||
+                hostname.endsWith("vercel.app")
             ) {
+                console.log("✅ CORS allowed for origin:", origin);
                 callback(null, true);
             } else {
                 console.error("❌ CORS blocked for origin:", origin);
                 callback(new Error('Not allowed by CORS'));
             }
         } catch (err) {
+            console.error("❌ CORS error:", err);
             callback(new Error('Invalid origin'));
         }
     },
@@ -160,14 +185,16 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production', // Requires HTTPS
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
+        sameSite: 'none', // Required for cross-origin cookies (frontend on Vercel, backend on Render)
         httpOnly: true,
-        rolling: true // Added: refresh cookie on each request
+        rolling: true, // Added: refresh cookie on each request
+        domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
     },
     name: 'sessionId', // Added: custom session name
-    unset: 'destroy' // Added: properly destroy sessions
+    unset: 'destroy', // Added: properly destroy sessions
+    proxy: true // Trust proxy for correct secure flag handling
 }));
 
 // Initialize Passport.js for authentication

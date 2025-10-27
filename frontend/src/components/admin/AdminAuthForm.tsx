@@ -22,12 +22,15 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
+  // Get the API URL from environment variable
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await fetch(`${API_URL}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: usernameOrEmail, password }),
