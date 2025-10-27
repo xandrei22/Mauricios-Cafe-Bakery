@@ -66,32 +66,35 @@ const PORT = process.env.PORT || 5001;
 const corsOptions = {
     origin: function(origin, callback) {
         if (!origin) return callback(null, true); // Allow mobile/postman
+
         const allowedOrigins = [
             process.env.FRONTEND_URL,
             "https://mauricios-cafe-bakery.vercel.app",
-            "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
             "https://mauricios-cafe-bakery.onrender.com",
             "http://localhost:5173",
             "http://127.0.0.1:5173"
         ];
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
+
+        // ✅ Allow listed origins + any vercel.app preview domain
+        try {
+            const hostname = new URL(origin).hostname;
+            if (
+                allowedOrigins.includes(origin) ||
+                hostname.endsWith(".vercel.app")
+            ) {
+                callback(null, true);
+            } else {
+                console.error("❌ CORS blocked for origin:", origin);
+                callback(new Error('Not allowed by CORS'));
+            }
+        } catch (err) {
+            callback(new Error('Invalid origin'));
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
-
-// ✅ Apply Express middleware in correct order
-app.use(express.json());
-app.use(cors(corsOptions));
-app.use(helmet({
-    contentSecurityPolicy: false,
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-}));
 
 // ✅ HTTPS redirection (keep this after cors)
 if (process.env.NODE_ENV === 'production') {
