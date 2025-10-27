@@ -4,12 +4,12 @@ require('dotenv').config();
 // Create a transporter using environment variables or disable email if not configured
 let transporter = null;
 
-if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
     transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD
+            pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS
         }
     });
 
@@ -24,7 +24,7 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
         }
     });
 } else {
-    console.log('Email service disabled - EMAIL_USER and EMAIL_PASS not configured');
+    console.log('Email service disabled - EMAIL_USER and EMAIL_PASS/EMAIL_PASSWORD not configured');
 }
 
 // Function to send welcome email

@@ -131,7 +131,7 @@ async function signup(req, res) {
             'INSERT INTO customers (username, password, email, full_name, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, FALSE, ?, ?, NOW())', [username, hashedPassword, email, fullName, verificationToken, verificationExpires]
         );
 
-        // Send verification email instead of welcome email
+        // Send verification email
         try {
             const { sendVerificationEmail } = require('../utils/emailService');
             const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
@@ -142,6 +142,7 @@ async function signup(req, res) {
         }
 
         res.status(201).json({
+            success: true,
             message: 'Account created successfully. Please check your email to verify your account.',
             customerId: result.insertId,
             requiresVerification: true
