@@ -22,41 +22,49 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
-  // Get the API URL from environment variable
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+// Get the API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/api/admin/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameOrEmail, password }),
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.message || "Login failed");
-      } else {
-        try {
-          if (data?.user) {
-            localStorage.setItem('adminUser', JSON.stringify(data.user));
-          } else if (data?.email) {
-            localStorage.setItem('adminUser', JSON.stringify({ email: data.email }));
-          }
-        } catch {}
-        // Check for alerts immediately after successful login
-        await checkLowStockAlert();
-        navigate("/admin/dashboard");
-      }
-    } catch (err) {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
+async function handleLogin(e: React.FormEvent) {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  try {
+    const res = await fetch(`${API_URL}/api/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // must be above body for consistent handling
+      body: JSON.stringify({
+        usernameOrEmail,
+        password,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({})); // prevent "Unexpected end of JSON" error
+
+    if (!res.ok) {
+      setError(data.message || "Login failed");
+      return;
     }
+
+    if (data.user) {
+      localStorage.setItem("adminUser", JSON.stringify(data.user));
+    } else if (data.email) {
+      localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
+    }
+
+    // Optional: redirect or perform post-login logic
+    await checkLowStockAlert();
+    navigate("/admin/dashboard");
+
+  } catch (err) {
+    console.error("Login error:", err);
+    setError("Network error. Please try again.");
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className={cn("min-h-screen flex", className)} {...props}>
