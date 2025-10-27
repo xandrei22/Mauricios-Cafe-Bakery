@@ -63,7 +63,8 @@ router.get('/auth/google', (req, res, next) => {
         // Kick off Google auth and pass table in OAuth state for redundancy
         return passport.authenticate('google', {
             scope: ['profile', 'email'],
-            state: table ? String(table) : undefined
+            state: table ? String(table) : undefined,
+            failWithError: true // This makes passport return errors instead of redirecting
         })(req, res, next);
     } catch (err) {
         console.error('Error initializing Google OAuth:', err);
