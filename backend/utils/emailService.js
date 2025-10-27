@@ -3,7 +3,6 @@ require('dotenv').config();
 
 // Debug logging for email configuration
 console.log('🔍 Checking email configuration...');
-console.log('BREVO_SMTP_KEY:', process.env.BREVO_SMTP_KEY ? '✓ Set' : '✗ Missing');
 console.log('BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? '✓ Set' : '✗ Missing');
 console.log('BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? '✓ Set' : '✗ Missing');
 
@@ -20,9 +19,15 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
         auth: {
             user: process.env.BREVO_SMTP_USER,
             pass: process.env.BREVO_SMTP_PASS
-        }
+        },
+        connectionTimeout: 60000, // 60 seconds (increased)
+        greetingTimeout: 60000, // 60 seconds (increased)
+        socketTimeout: 60000, // 60 seconds (increased)
+        debug: true, // Enable debug logging
+        logger: false // Disable verbose logging
     });
     console.log('✅ Using Brevo (formerly Sendinblue) SMTP');
+    console.log('🔧 Connection timeouts: 60 seconds');
 } else if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
     // Fallback to Gmail if Brevo not configured
     console.log('✅ Using Gmail as fallback...');
