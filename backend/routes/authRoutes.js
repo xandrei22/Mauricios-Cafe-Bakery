@@ -37,7 +37,7 @@ router.post('/customer/resend-verification', customerController.resendVerificati
 router.get('/auth/google', (req, res, next) => {
     try {
         const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
-        return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
+        const { redirect, table } = req.query;
 
         // Stash desired redirect in the session before starting OAuth
         if (redirect) {
@@ -70,26 +70,28 @@ router.get('/auth/google/callback',
         passport.authenticate('google', {
             session: true
         }, (err, user, info) => {
+            const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+
             if (err) {
                 // If the error is about email already registered, redirect with a message
                 if (err.code === 'EMAIL_REGISTERED_PASSWORD') {
-                    return res.redirect('http://localhost:5173/login?error=EMAIL_REGISTERED_PASSWORD');
+                    return res.redirect(`${frontendBase}/login?error=EMAIL_REGISTERED_PASSWORD`);
                 }
                 // For other errors, redirect with a generic error
-                return res.redirect('http://localhost:5173/login?error=GOOGLE_AUTH_ERROR');
+                return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
             if (!user) {
-                return res.redirect('http://localhost:5173/login?error=GOOGLE_AUTH_ERROR');
+                return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
             // Check if email verification is required for Google OAuth users
             if (user.requiresVerification && !user.email_verified) {
-                return res.redirect('http://localhost:5173/login?error=EMAIL_VERIFICATION_REQUIRED&message=Please verify your email address before logging in. Check your email for the verification link.');
+                return res.redirect(`${frontendBase}/login?error=EMAIL_VERIFICATION_REQUIRED&message=Please verify your email address before logging in. Check your email for the verification link.`);
             }
 
             req.logIn(user, (loginErr) => {
                 if (loginErr) {
                     console.error('Google login error:', loginErr);
-                    return res.redirect('http://localhost:5173/login?error=GOOGLE_AUTH_ERROR');
+                    return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
                 }
 
                 // Set customer session with correct key
