@@ -38,22 +38,60 @@ async function login(req, res) {
     try {
         const { username, password } = req.body;
 
+        // First check if this is a customer trying to access admin portal
+        const [customers] = await db.query(
+            'SELECT * FROM customers WHERE email = ?', [username]
+        );
+
+        if (customers.length > 0) {
+            return res.status(403).json({
+                message: 'Not authorized to access admin portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
+        // Check if this is a staff trying to access admin portal
+        const [staff] = await db.query(
+            'SELECT * FROM users WHERE email = ? AND role IN ("staff", "manager")', [username]
+        );
+
+        if (staff.length > 0) {
+            return res.status(403).json({
+                message: 'Not authorized to access admin portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
         // Find admin by username or email
         const [admins] = await db.query(
             'SELECT * FROM admin WHERE username = ? OR email = ?', [username, username]
         );
 
         if (admins.length === 0) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         const admin = admins[0];
+
+        // Additional check: Ensure this is a properly created admin account
+        if (!admin.full_name) {
+            return res.status(403).json({
+                message: 'Not authorized to access admin portal',
+                errorType: 'unauthorized_access'
+            });
+        }
 
         // Compare password
         const isValidPassword = await bcrypt.compare(password, admin.password);
         if (!isValidPassword) {
             console.log('Admin login failed: Invalid password for user', username);
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         // Set admin session with unique key
@@ -132,6 +170,15 @@ async function staffLogin(req, res) {
 
         // Check if user has proper staff/admin role
         if (!['staff', 'manager', 'admin'].includes(user.role)) {
+            return res.status(403).json({
+                message: 'Not authorized to access staff portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
+        // Additional check: Ensure this is an admin-created staff account
+        // Admin-created staff should have specific fields that regular users don't have
+        if (!user.first_name || !user.last_name || !user.position) {
             return res.status(403).json({
                 message: 'Not authorized to access staff portal',
                 errorType: 'unauthorized_access'
