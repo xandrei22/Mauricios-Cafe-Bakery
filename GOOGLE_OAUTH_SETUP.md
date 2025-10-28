@@ -135,3 +135,6 @@ GOOGLE_CALLBACK_URL=https://mauricios-cafe-bakery.onrender.com/api/auth/google/c
 2. Keep your Google OAuth credentials secure
 3. Use HTTPS for all redirects (both Render and Vercel automatically provide this)
 
+
+
+
