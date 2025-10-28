@@ -11,7 +11,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
 import { getApiUrl } from "../../utils/apiConfig";
-import { mobileFriendlySwal } from "../../utils/sweetAlertConfig";
 
 export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
@@ -45,23 +44,8 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       console.log('Staff login response data:', data);
       
       if (!res.ok || !data.success) {
-        // Handle different error types with appropriate responses
-        if (data.errorType === 'unauthorized_access') {
-          // Show sweet alert for unauthorized access
-          await mobileFriendlySwal.error(
-            'Not Authorized',
-            'You are not authorized to access the staff portal. Please contact your administrator.'
-          );
-        } else if (data.errorType === 'inactive_account') {
-          // Show sweet alert for inactive account
-          await mobileFriendlySwal.warning(
-            'Account Inactive',
-            'Your account is not active. Please contact your administrator.'
-          );
-        } else {
-          // Show regular error message for invalid credentials
-          setError(data.message || "Login failed");
-        }
+        // Show regular error message for all validation failures (same layout as admin)
+        setError(data.message || "Login failed");
       } else {
         console.log('Staff login successful, checking for alerts');
         try {
