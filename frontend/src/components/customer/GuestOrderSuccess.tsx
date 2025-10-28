@@ -1,12 +1,14 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
+import { decodeId } from '../../utils/idObfuscation';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { CheckCircle, ArrowLeft, ShoppingCart, User } from 'lucide-react';
 import { CustomerNavbar } from '../ui/CustomerNavbar';
 
 const GuestOrderSuccess: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const decodedId = decodeId(orderId);
   const navigate = useNavigate();
 
   return (
@@ -26,7 +28,7 @@ const GuestOrderSuccess: React.FC = () => {
           <CardContent className="space-y-6">
             <div className="text-center">
               <p className="text-lg text-gray-600 mb-2">Your order has been received and is being prepared.</p>
-              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{orderId}</span></p>
+              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{decodedId || 'Unknown'}</span></p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -43,7 +45,7 @@ const GuestOrderSuccess: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Button
                 variant="outline"
-                onClick={() => navigate('/guest/order-tracking')}
+                onClick={() => navigate(decodedId ? `/guest/order-tracking/${orderId}` : '/guest/order-tracking')}
                 className="flex items-center gap-2"
               >
                 <ShoppingCart className="h-4 w-4" />

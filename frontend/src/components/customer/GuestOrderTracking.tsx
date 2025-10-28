@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Search, Clock, CheckCircle, XCircle, Loader2, Package, Download } from 'lucide-react';
 import { CustomerNavbar } from '../ui/CustomerNavbar';
+import { decodeId, encodeId } from '../../utils/idObfuscation';
 // import { downloadReceipt } from '../../utils/receiptGenerator';
 
 interface Order {
@@ -27,12 +28,13 @@ interface Order {
 
 const GuestOrderTracking: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const decodedParamId = decodeId(orderId);
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
-  const [searchOrderId, setSearchOrderId] = useState(orderId || '');
+  const [searchOrderId, setSearchOrderId] = useState(decodedParamId || '');
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showNotification, setShowNotification] = useState(false);
@@ -105,7 +107,9 @@ const GuestOrderTracking: React.FC = () => {
     }
   };
 
-  const fetchOrder = async (orderId: string) => {
+  const fetchOrder = async (rawOrEncodedId: string) => {
+    // Accept both encoded and raw; decode if possible
+    const decoded = decodeId(rawOrEncodedId) || rawOrEncodedId;
     if (!orderId) {
       setError('Please enter your order ID');
       return;
@@ -116,7 +120,7 @@ const GuestOrderTracking: React.FC = () => {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/guest/order-status/${orderId}`);
+      const response = await fetch(`${API_URL}/api/guest/order-status/${decoded}`);
       const data = await response.json();
 
       if (data.success) {
@@ -139,15 +143,15 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   useEffect(() => {
-    if (orderId) {
-      setSearchOrderId(orderId);
+    if (decodedParamId) {
+      setSearchOrderId(decodedParamId);
     }
   }, [orderId]);
 
   // Realtime updates: connect to socket and join order room
   useEffect(() => {
     // Only attach sockets if we have an orderId being viewed
-    const activeOrderId = orderId || searchOrderId;
+    const activeOrderId = decodedParamId || searchOrderId;
     if (!activeOrderId) return;
 
     console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId);

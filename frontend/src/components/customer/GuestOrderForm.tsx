@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Loader2, User, CreditCard, Upload, FileImage } from 'lucide-react';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface GuestOrderFormProps {
   cartItems: any[];
@@ -149,8 +150,9 @@ export default function GuestOrderForm({ cartItems, onOrderPlaced, onClose, tabl
 
       console.log('Guest order placed successfully:', result);
       onOrderPlaced(result.orderId);
-      // Navigate to success page without table parameter
-      navigate(`/guest/order-success/${result.orderId}`);
+      // Navigate with obfuscated id
+      const encoded = encodeId(result.orderId);
+      navigate(`/guest/order-success/${encoded}`);
       
     } catch (error) {
       console.error('Guest checkout error:', error);
