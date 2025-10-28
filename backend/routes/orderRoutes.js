@@ -1349,9 +1349,3 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
         res.status(500).json({ success: false, error: 'Failed to fetch dashboard data' });
     }
 });
-
-module.exports = router;
-    }
-});
-
-module.exports = router;
