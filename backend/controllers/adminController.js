@@ -104,6 +104,18 @@ async function staffLogin(req, res) {
     try {
         const { username, password } = req.body;
 
+        // First check if this is a customer trying to access staff portal
+        const [customers] = await db.query(
+            'SELECT * FROM customers WHERE email = ?', [username]
+        );
+
+        if (customers.length > 0) {
+            return res.status(403).json({
+                message: 'Not authorized to access staff portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
         // Find user by username or email in the users table
         const [users] = await db.query(
             'SELECT * FROM users WHERE username = ? OR email = ?', [username, username]
