@@ -50,6 +50,7 @@ const AdminStaff: React.FC = () => {
     first_name: '', last_name: '', age: '', role: 'staff',
     phone: '', address: '', position: '', work_schedule: 'flexible' as 'morning' | 'mid' | 'night' | 'flexible',
     date_hired: '', employee_id: '', gender: '' as 'male' | 'female' | 'other' | 'prefer_not_to_say' | '',
+    birthday: '',
   });
 
   // Keep focus on search input to avoid blur on re-renders (mobile tap issue)
@@ -494,7 +495,7 @@ const AdminStaff: React.FC = () => {
         {/* Modal for Add Staff */}
         {showModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
-            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-4xl border border-white/20">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 w-full max-w-3xl border border-white/20 max-h-[85vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Create Staff Account</h2>
                 <button
@@ -617,6 +618,7 @@ const AdminStaff: React.FC = () => {
                       placeholder="Phone Number (e.g., 09123456789)"
                       maxLength={11}
                       className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                      required
                     />
                     <div className="text-xs text-gray-500 mt-1">Format: 11 digits</div>
                   </div>
@@ -629,6 +631,7 @@ const AdminStaff: React.FC = () => {
                       onChange={handleChange}
                       placeholder="Address"
                       className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                      required
                     />
                   </div>
                 </div>
@@ -692,20 +695,35 @@ const AdminStaff: React.FC = () => {
                 </div>
 
                 {/* Personal Information */}
-                <div>
-                  <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                  <select
-                    id="gender"
-                    name="gender"
-                    value={form.gender}
-                    onChange={handleChange}
-                    className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                  >
-                    <option value="">Prefer not to say</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="birthday" className="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
+                    <Input
+                      id="birthday"
+                      name="birthday"
+                      type="date"
+                      value={form.birthday}
+                      onChange={handleChange}
+                      required
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                    <select
+                      id="gender"
+                      name="gender"
+                      value={form.gender}
+                      onChange={handleChange}
+                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
+                      required
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                      <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Password Section - At the end for security */}
