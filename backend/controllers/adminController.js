@@ -132,9 +132,13 @@ function checkSession(req, res) {
 
 // Admin logout controller
 function logout(req, res) {
-    // Only destroy admin session, preserve other user sessions
-    delete req.session.adminUser;
-    res.json({ message: 'Logged out successfully' });
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error logging out' });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ message: 'Logged out successfully' });
+    });
 }
 
 // Staff login controller (can be used by both admin and staff)

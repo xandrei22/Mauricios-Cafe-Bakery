@@ -96,9 +96,13 @@ function checkSession(req, res) {
 
 // Customer logout controller
 function logout(req, res) {
-    // Only destroy customer session, preserve other user sessions
-    delete req.session.customerUser;
-    res.json({ message: 'Logged out successfully' });
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ message: 'Error logging out' });
+        }
+        res.clearCookie('connect.sid');
+        res.json({ message: 'Logged out successfully' });
+    });
 }
 
 // Customer signup controller
