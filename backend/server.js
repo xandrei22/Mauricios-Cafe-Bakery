@@ -457,6 +457,15 @@ app.get('/api/test-pdf', async(req, res) => {
     }
 });
 
+console.log({
+    adminRoutesType: typeof adminRoutes,
+    inventoryRoutesType: typeof inventoryRoutes,
+    staffRoutesType: typeof staffRoutes,
+    customerRoutesType: typeof customerRoutes,
+    guestOrderRoutesType: typeof guestOrderRoutes,
+    orderRoutesType: typeof orderRoutes
+});
+
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
