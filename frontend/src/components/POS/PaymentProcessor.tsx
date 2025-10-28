@@ -726,3 +726,5 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
     </div>
   );
 };
+
+export default PaymentProcessor; 
