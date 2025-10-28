@@ -206,7 +206,7 @@ const CustomerMenu: React.FC = () => {
     return () => {
       newSocket.close();
     };
-  }, [user?.email]);
+  }, [user?.email]); // Already correct - using user?.email
 
   // Filter and sort items when search/category/sort changes
   useEffect(() => {

@@ -208,7 +208,7 @@ const CustomerLoyalty: React.FC = () => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [authenticated, user]);
+  }, [authenticated, user?.id]); // Changed from 'user' to 'user?.id'
 
   const fetchLoyaltyData = async () => {
     try {

@@ -60,13 +60,12 @@ const CustomerOrders: React.FC = () => {
     console.log('🔍 CustomerOrders useEffect triggered:');
     console.log('  - loading:', loading);
     console.log('  - authenticated:', authenticated);
-    console.log('  - user:', user);
     console.log('  - user?.email:', user?.email);
     
     if (!loading && !authenticated) {
       console.log('❌ Not authenticated, redirecting to login');
       navigate("/customer-login");
-    } else if (authenticated && user) {
+    } else if (authenticated && user?.email) {
       console.log('✅ Authenticated, fetching orders for:', user.email);
       
       // Initialize Socket.IO connection for real-time updates
@@ -155,7 +154,7 @@ const CustomerOrders: React.FC = () => {
       // Clean up custom event listener
       window.removeEventListener('orderPlaced', handleOrderPlaced as EventListener);
     };
-  }, [loading, authenticated, user]);
+  }, [loading, authenticated, user?.email]); // Changed from 'user' to 'user?.email'
 
   // Watch for order changes and update selected order automatically
   useEffect(() => {

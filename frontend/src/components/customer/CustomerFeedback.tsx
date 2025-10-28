@@ -81,7 +81,7 @@ export default function CustomerFeedback() {
         newSocket.close();
       };
     }
-  }, [loading, authenticated, navigate, user]);
+  }, [loading, authenticated, navigate, user?.email]); // Changed from 'user' to 'user?.email'
 
   const checkCustomerOrders = async () => {
     if (!user?.email) {

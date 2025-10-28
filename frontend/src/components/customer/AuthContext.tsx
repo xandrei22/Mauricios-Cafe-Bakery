@@ -21,9 +21,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [lastSessionCheck, setLastSessionCheck] = useState<number>(0);
   const API_URL = getApiUrl();
 
   const checkSession = useCallback(async () => {
+    // Debounce: prevent rapid successive calls (minimum 2 seconds between checks)
+    const now = Date.now();
+    if (now - lastSessionCheck < 2000) {
+      return;
+    }
+    setLastSessionCheck(now);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
@@ -45,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearTimeout(timeout);
       setLoading(false);
     }
-  }, [API_URL]);
+  }, [API_URL, lastSessionCheck]);
 
   const logout = async () => {
     try {
@@ -103,6 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     document.addEventListener('visibilitychange', onVisibility);
+    // Reduced frequency from 60 seconds to 5 minutes to prevent excessive API calls
     const interval = setInterval(() => {
       const currentPath = window.location.pathname;
       if (currentPath.startsWith('/customer') && 
@@ -110,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           !currentPath.startsWith('/admin')) {
         checkSession();
       }
-    }, 60000);
+    }, 300000); // 5 minutes instead of 1 minute
     return () => {
       isMounted = false;
       clearInterval(interval);

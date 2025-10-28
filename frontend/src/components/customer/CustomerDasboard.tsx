@@ -53,7 +53,7 @@ export default function CustomerDasboard() {
       fetchPopularItems();
       fetchRedeemableItems();
     }
-  }, [loading, authenticated, user, navigate]);
+  }, [loading, authenticated, user?.id, navigate]); // Changed from 'user' to 'user?.id'
 
   const fetchDashboardData = async () => {
     try {
