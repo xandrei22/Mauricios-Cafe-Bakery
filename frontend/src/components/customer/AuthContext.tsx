@@ -51,6 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await fetch(`${API_URL}/api/customer/logout`, { method: 'POST', credentials: 'include' });
     } catch {}
+    // Clear all local storage and session storage
+    localStorage.clear();
+    sessionStorage.clear();
     setAuthenticated(false);
     setUser(null);
   };

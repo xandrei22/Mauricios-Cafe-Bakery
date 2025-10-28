@@ -71,8 +71,18 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
       'Cancel'
     );
     if (result.isConfirmed) {
-      await fetch('/api/customer/logout', { method: 'POST', credentials: 'include' });
-      navigate('/');
+      try {
+        await fetch('/api/customer/logout', { method: 'POST', credentials: 'include' });
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        // Clear all local storage and session storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Force page reload to clear any cached data
+        window.location.href = '/';
+      }
     }
   };
 

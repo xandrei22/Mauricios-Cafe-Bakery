@@ -52,10 +52,12 @@ const StaffSidebar: React.FC = () => {
       } catch (error) {
         console.error('Logout error:', error);
       } finally {
-        // Clear any staff authentication
-        localStorage.removeItem('staffToken');
-        localStorage.removeItem('staffUser');
-        navigate('/staff/login');
+        // Clear all local storage and session storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Force page reload to clear any cached data
+        window.location.href = '/staff/login';
       }
     }
   };
