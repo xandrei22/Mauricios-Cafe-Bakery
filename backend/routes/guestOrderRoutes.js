@@ -188,8 +188,8 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
         const [orderResult] = await db.query(`
             INSERT INTO orders (
                 order_id, order_number, customer_id, customer_name, table_number, items, total_price,
-                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW(), ?)
+                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW(), ?, NOW())
         `, [
             orderIdStr,
             orderNumberStr,
