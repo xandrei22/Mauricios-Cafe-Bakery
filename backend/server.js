@@ -37,6 +37,14 @@ const db = require('./config/db');
 const passport = require('passport');
 const passportConfig = require('./controllers/passport');
 
+// Import background services
+let lowStockMonitorService;
+try {
+    lowStockMonitorService = require('./services/lowStockMonitorService');
+} catch (error) {
+    console.warn('⚠️  lowStockMonitorService not available:', error.message);
+}
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -457,29 +465,6 @@ app.get('/api/test-pdf', async(req, res) => {
     }
 });
 
-console.log({
-    adminRoutesType: typeof adminRoutes,
-    inventoryRoutesType: typeof inventoryRoutes,
-    staffRoutesType: typeof staffRoutes,
-    customerRoutesType: typeof customerRoutes,
-    guestOrderRoutesType: typeof guestOrderRoutes,
-    orderRoutesType: typeof orderRoutes
-});
-
-console.log({
-    eventRoutesType: typeof eventRoutes,
-    menuRoutesType: typeof menuRoutes,
-    loyaltyRoutesType: typeof loyaltyRoutes,
-    aiChatRoutesType: typeof aiChatRoutes,
-    feedbackRoutesType: typeof feedbackRoutes,
-    uploadRoutesType: typeof uploadRoutes,
-    receiptRoutesType: typeof receiptRoutes,
-    notificationRoutesType: typeof notificationRoutes,
-    lowStockRoutesType: typeof lowStockRoutes,
-    cleanupRoutesType: typeof cleanupRoutes,
-    dailyResetRoutesType: typeof dailyResetRoutes
-});
-
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
@@ -584,6 +569,7 @@ server.listen(PORT, () => {
                 }
             } catch (error) {
                 console.error('❌ Failed to start ingredient deduction queue service:', error.message);
+                // Don't crash the server if background services fail
             }
         })();
     } else {
@@ -591,7 +577,7 @@ server.listen(PORT, () => {
     }
 
     // Start low stock monitor (guarded)
-    if (process.env.DISABLE_BACKGROUND_JOBS !== '1') {
+    if (process.env.DISABLE_BACKGROUND_JOBS !== '1' && lowStockMonitorService) {
         (async() => {
             try {
                 const db = require('./config/db');
@@ -604,8 +590,11 @@ server.listen(PORT, () => {
                 }
             } catch (error) {
                 console.error('❌ Failed to start low stock monitor:', error.message);
+                // Don't crash the server if background services fail
             }
         })();
+    } else if (!lowStockMonitorService) {
+        console.log('⏸ Low stock monitor disabled - service not available');
     } else {
         console.log('⏸ Low stock monitor disabled by DISABLE_BACKGROUND_JOBS=1');
     }
@@ -625,6 +614,7 @@ server.listen(PORT, () => {
                 }
             } catch (error) {
                 console.error('❌ Failed to start scheduled notification service:', error.message);
+                // Don't crash the server if background services fail
             }
         })();
     } else {
@@ -640,6 +630,7 @@ server.listen(PORT, () => {
                 console.log(`🧹 Daily cleanup job started`);
             } catch (error) {
                 console.error('❌ Failed to start daily cleanup job:', error.message);
+                // Don't crash the server if background services fail
             }
         })();
     } else {
