@@ -917,3 +917,4 @@ router.post('/orders/:orderId/rate', async(req, res) => {
         });
     }
 });
+module.exports = router;
