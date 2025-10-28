@@ -198,6 +198,24 @@ app.use('/uploads', (req, res, next) => {
 // Trust proxy (needed if behind proxies and for correct cookie handling)
 app.set('trust proxy', 1);
 
+// Security headers middleware to prevent caching of sensitive pages
+app.use((req, res, next) => {
+    // Set security headers for all responses
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+
+    // Prevent caching of sensitive routes
+    if (req.path.includes('/admin') || req.path.includes('/staff') || req.path.includes('/customer')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+    }
+
+    next();
+});
+
 // Session configuration for user authentication with MySQL store
 // IMPORTANT: Reuse the main DB pool to avoid a second pool that may drop
 const sessionOptions = {

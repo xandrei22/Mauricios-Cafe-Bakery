@@ -136,7 +136,7 @@ function logout(req, res) {
         if (err) {
             return res.status(500).json({ message: 'Error logging out' });
         }
-        res.clearCookie('connect.sid');
+        res.clearCookie('sessionId');
         res.json({ message: 'Logged out successfully' });
     });
 }
@@ -249,7 +249,7 @@ function staffLogout(req, res) {
         if (err) {
             return res.status(500).json({ message: 'Error logging out' });
         }
-        res.clearCookie('connect.sid');
+        res.clearCookie('sessionId');
         res.json({ message: 'Logged out successfully' });
     });
 }
