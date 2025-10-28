@@ -740,7 +740,7 @@ router.get('/dashboard', async(req, res) => {
             FROM orders 
             WHERE customer_id = ? AND status IN ('pending', 'processing', 'ready')
             ORDER BY created_at DESC
-        `);
+        `, [customerId]);
 
         // Get recent orders
         const [recentOrdersResult] = await db.query(`
@@ -755,7 +755,7 @@ router.get('/dashboard', async(req, res) => {
             WHERE customer_id = ? AND status = 'completed'
             ORDER BY created_at DESC
             LIMIT 10
-        `);
+        `, [customerId]);
 
         // Get total orders count
         const [totalOrdersResult] = await db.query(`
@@ -774,7 +774,7 @@ router.get('/dashboard', async(req, res) => {
             GROUP BY items
             ORDER BY orderCount DESC
             LIMIT 5
-        `);
+        `, [customerId]);
 
         // Get upcoming events
         const [eventsResult] = await db.query(`
@@ -788,7 +788,7 @@ router.get('/dashboard', async(req, res) => {
             FROM events 
             WHERE customer_id = ? AND event_date >= CURDATE()
             ORDER BY event_date ASC
-        `);
+        `, [customerId]);
 
         // Get recommendations (based on order history)
         const [recommendationsResult] = await db.query(`
@@ -917,4 +917,3 @@ router.post('/orders/:orderId/rate', async(req, res) => {
         });
     }
 });
-
