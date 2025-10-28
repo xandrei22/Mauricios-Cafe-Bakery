@@ -25,8 +25,10 @@ interface FeedbackMetrics {
   satisfiedCustomers: string;
 }
 
+import { getApiUrl } from '../../utils/apiConfig';
+
 export default function CustomerFeedback() {
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
   const { user, loading, authenticated } = useAuth();
   const navigate = useNavigate();
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
@@ -267,7 +269,7 @@ export default function CustomerFeedback() {
               {/* Filter Bar */}
               <div className="flex flex-wrap gap-3 rounded-xl p-4" style={{ backgroundColor: '#f5f5f5' }}>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-40 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-8">
+                  <SelectTrigger className="w-40 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-3">
                     <SelectValue placeholder="All categories" />
                   </SelectTrigger>
                   <SelectContent>
@@ -280,7 +282,7 @@ export default function CustomerFeedback() {
                 </Select>
                 
                 <Select value={selectedRating} onValueChange={setSelectedRating}>
-                  <SelectTrigger className="w-32 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-8">
+                  <SelectTrigger className="w-32 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-3">
                     <SelectValue placeholder="All Ratings" />
                   </SelectTrigger>
                   <SelectContent>

@@ -4,6 +4,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { io, Socket } from 'socket.io-client';
+import Swal from 'sweetalert2';
 
 interface Staff {
   id: number;
@@ -177,7 +178,12 @@ const AdminStaff: React.FC = () => {
       });
 
       if (response.ok) {
-        setMessage('Staff member created successfully!');
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: 'Staff member created successfully!',
+          confirmButtonColor: '#a87437'
+        });
         setForm({ 
           username: '', email: '', password: '', confirmPassword: '', 
           first_name: '', last_name: '', age: '', role: 'staff',
@@ -222,7 +228,12 @@ const AdminStaff: React.FC = () => {
       });
 
       if (response.ok) {
-        setMessage('Staff member updated successfully!');
+        Swal.fire({
+          icon: 'success',
+          title: 'Success!',
+          text: 'Staff member updated successfully!',
+          confirmButtonColor: '#a87437'
+        });
         setEditModal(false);
         setEditForm(null);
         fetchStaff();
@@ -248,21 +259,46 @@ const AdminStaff: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this staff member?')) {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#a87437',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
       try {
         const response = await fetch(`/api/admin/staff/${id}`, {
           method: 'DELETE'
         });
 
         if (response.ok) {
-          setMessage('Staff member deleted successfully!');
+          Swal.fire({
+            icon: 'success',
+            title: 'Deleted!',
+            text: 'Staff member deleted successfully!',
+            confirmButtonColor: '#a87437'
+          });
           fetchStaff();
           fetchStats();
         } else {
-          setError('Failed to delete staff member');
+          Swal.fire({
+            icon: 'error',
+            title: 'Error!',
+            text: 'Failed to delete staff member',
+            confirmButtonColor: '#a87437'
+          });
         }
       } catch (error: any) {
-        setError('Error deleting staff member');
+        Swal.fire({
+          icon: 'error',
+          title: 'Error!',
+          text: 'Error deleting staff member',
+          confirmButtonColor: '#a87437'
+        });
       }
     }
   };
