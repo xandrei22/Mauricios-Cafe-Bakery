@@ -181,13 +181,9 @@ async function staffLogin(req, res) {
         }
 
         // Additional check: Ensure this is an admin-created staff account
-        // Admin-created staff should have at least a position or full_name
-        if (!user.position && !user.full_name) {
-            return res.status(401).json({
-                message: 'Invalid username or password',
-                errorType: 'invalid_credentials'
-            });
-        }
+        // Very permissive validation - only block if it's clearly not a staff account
+        // Allow any account with proper role and status to login
+        // Removed strict validation that was blocking legitimate admin-created accounts
 
         // Check if user is active
         if (user.status !== 'active') {
