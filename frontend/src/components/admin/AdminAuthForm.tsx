@@ -32,6 +32,8 @@ async function handleLogin(e: React.FormEvent) {
   setLoading(true);
 
   try {
+    console.log('Attempting admin login with:', { username: usernameOrEmail });
+    
     const res = await fetch(`${API_URL}/api/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,25 +44,38 @@ async function handleLogin(e: React.FormEvent) {
       }),
     });
 
-    const data = await res.json().catch(() => ({})); // prevent "Unexpected end of JSON" error
+    console.log('Admin login response status:', res.status);
+    
+    const data = await res.json();
+    console.log('Admin login response data:', data);
 
-    if (!res.ok) {
+    if (!res.ok || !data.success) {
       setError(data.message || "Login failed");
       return;
     }
 
-    if (data.user) {
-      localStorage.setItem("adminUser", JSON.stringify(data.user));
-    } else if (data.email) {
-      localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
-    }
+    console.log('Admin login successful, checking for alerts');
+    
+    try {
+      if (data.user) {
+        localStorage.setItem("adminUser", JSON.stringify(data.user));
+      } else if (data.email) {
+        localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
+      }
+    } catch {}
 
-    // Optional: redirect or perform post-login logic
-    await checkLowStockAlert();
+    // Check for alerts immediately after successful login
+    // Don't await - let it fail silently if there's an error
+    checkLowStockAlert().catch(err => {
+      console.error('Failed to check low stock alert:', err);
+      // Continue with navigation even if alert check fails
+    });
+    
+    // Navigate immediately, don't wait for alert check
     navigate("/admin/dashboard");
 
   } catch (err) {
-    console.error("Login error:", err);
+    console.error("Admin login error:", err);
     setError("Network error. Please try again.");
   } finally {
     setLoading(false);
