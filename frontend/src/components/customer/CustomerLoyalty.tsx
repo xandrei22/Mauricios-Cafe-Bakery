@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useAuth } from './AuthContext';
 import { io, Socket } from 'socket.io-client';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface LoyaltyReward {
   id: number;
@@ -100,7 +101,7 @@ const CustomerLoyalty: React.FC = () => {
   useEffect(() => {
     if (authenticated && user) {
       // Initialize Socket.IO connection (use backend API URL and credentials)
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const API_URL = getApiUrl();
       const newSocket = io(API_URL, {
         transports: ['polling', 'websocket'],
         path: '/socket.io',
@@ -223,12 +224,13 @@ const CustomerLoyalty: React.FC = () => {
 
       // Get customer ID from authenticated user
       const customerId = user.id;
+      const API_URL = getApiUrl();
 
       const [pointsRes, rewardsRes, historyRes, pointsHistoryRes] = await Promise.all([
-        fetch(`/api/customers/${customerId}/loyalty`),
-        fetch(`/api/loyalty/available-rewards/${customerId}`),
-        fetch(`/api/loyalty/redemption-history/${customerId}`),
-        fetch(`/api/customers/${customerId}/points-earned-history`)
+        fetch(`${API_URL}/api/customers/${customerId}/loyalty`, { credentials: 'include' }),
+        fetch(`${API_URL}/api/loyalty/available-rewards/${customerId}`, { credentials: 'include' }),
+        fetch(`${API_URL}/api/loyalty/redemption-history/${customerId}`, { credentials: 'include' }),
+        fetch(`${API_URL}/api/customers/${customerId}/points-earned-history`, { credentials: 'include' })
       ]);
 
       if (pointsRes.ok && rewardsRes.ok && historyRes.ok && pointsHistoryRes.ok) {
@@ -305,10 +307,12 @@ const CustomerLoyalty: React.FC = () => {
       }
 
       const customerId = user.id;
+      const API_URL = getApiUrl();
       
-      const res = await fetch('/api/loyalty/redeem-reward', {
+      const res = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           customerId,
           rewardId: reward.id,
