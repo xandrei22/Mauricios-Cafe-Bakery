@@ -52,15 +52,10 @@ const StaffSidebar: React.FC = () => {
       } catch (error) {
         console.error('Logout error:', error);
       } finally {
-        // Clear all storage and prevent back navigation
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        // Replace current history entry to prevent back navigation
-        window.history.replaceState(null, '', '/staff/login');
-        
-        // Navigate to login page
-        navigate('/staff/login', { replace: true });
+        // Clear any staff authentication
+        localStorage.removeItem('staffToken');
+        localStorage.removeItem('staffUser');
+        navigate('/staff/login');
       }
     }
   };

@@ -51,14 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await fetch(`${API_URL}/api/customer/logout`, { method: 'POST', credentials: 'include' });
     } catch {}
-    
-    // Clear all storage and prevent back navigation
-    localStorage.clear();
-    sessionStorage.clear();
-    
-    // Replace current history entry to prevent back navigation
-    window.history.replaceState(null, '', '/');
-    
     setAuthenticated(false);
     setUser(null);
   };
@@ -108,9 +100,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     
     document.addEventListener('visibilitychange', onVisibility);
-    
+    const interval = setInterval(() => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/customer') && 
+          !currentPath.startsWith('/staff') && 
+          !currentPath.startsWith('/admin')) {
+        checkSession();
+      }
+    }, 60000);
     return () => {
       isMounted = false;
+      clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [checkSession]);
