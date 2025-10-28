@@ -110,21 +110,38 @@ async function staffLogin(req, res) {
         );
 
         if (users.length === 0) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         const user = users[0];
 
+        // Check if user has proper staff/admin role
+        if (!['staff', 'manager', 'admin'].includes(user.role)) {
+            return res.status(403).json({
+                message: 'Not authorized to access staff portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
         // Check if user is active
         if (user.status !== 'active') {
-            return res.status(401).json({ message: 'Account is not active. Please contact administrator.' });
+            return res.status(401).json({
+                message: 'Account is not active. Please contact administrator.',
+                errorType: 'inactive_account'
+            });
         }
 
         // Compare password
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) {
             console.log('Staff login failed: Invalid password for user', username);
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         // Set staff session with unique key
