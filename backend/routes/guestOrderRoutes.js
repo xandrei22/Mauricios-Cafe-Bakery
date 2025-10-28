@@ -362,3 +362,47 @@ router.get('/order-status/:orderId', async(req, res) => {
 });
 
 module.exports = router;
+                o.items,
+                o.total_price,
+                o.table_number,
+                c.email as customer_email
+            FROM orders o
+            LEFT JOIN customers c ON o.customer_id = c.id
+            WHERE o.order_id = ?
+        `, [orderId]);
+
+        if (orders.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Order not found'
+            });
+        }
+
+        const order = orders[0];
+        res.json({
+            success: true,
+            order: {
+                orderId: order.order_id,
+                customerName: order.customer_name,
+                status: order.status,
+                paymentStatus: order.payment_status,
+                paymentMethod: order.payment_method,
+                orderTime: order.order_time,
+                estimatedReadyTime: order.estimated_ready_time,
+                items: JSON.parse(order.items || '[]'),
+                totalPrice: parseFloat(order.total_price),
+                tableNumber: order.table_number,
+                customerEmail: order.customer_email
+            }
+        });
+
+    } catch (error) {
+        console.error('Get guest order status error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to get order status'
+        });
+    }
+});
+
+module.exports = router;
