@@ -44,8 +44,21 @@ const AdminSidebar: React.FC = () => {
       'Cancel'
     );
     if (result.isConfirmed) {
-      await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
-      navigate('/admin');
+      try {
+        await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        // Clear all storage and prevent back navigation
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Replace current history entry to prevent back navigation
+        window.history.replaceState(null, '', '/admin');
+        
+        // Navigate to admin login page
+        navigate('/admin', { replace: true });
+      }
     }
   };
   return (
