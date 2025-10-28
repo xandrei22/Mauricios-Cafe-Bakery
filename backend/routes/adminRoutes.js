@@ -5516,4 +5516,72 @@ router.get('/staff', async(req, res) => {
     }
 });
 
+// Admin Loyalty endpoints to match frontend calls
+// GET /api/admin/loyalty/rewards
+router.get('/loyalty/rewards', async (req, res) => {
+    try {
+        const [rewards] = await db.query(`
+            SELECT * FROM loyalty_rewards 
+            WHERE is_active = TRUE 
+            ORDER BY points_required ASC
+        `);
+        return res.json({ success: true, rewards });
+    } catch (error) {
+        console.error('Error (admin) fetching loyalty rewards:', error);
+        return res.status(500).json({ success: false, error: 'Failed to fetch rewards' });
+    }
+});
+
+// GET /api/admin/loyalty/customers
+router.get('/loyalty/customers', async (req, res) => {
+    try {
+        // Prefer view if present; otherwise compute a simple summary
+        let customers;
+        try {
+            const [rows] = await db.query('SELECT * FROM customer_loyalty_summary ORDER BY loyalty_points DESC LIMIT 100');
+            customers = rows;
+        } catch (e) {
+            const [rows] = await db.query(`
+                SELECT 
+                    c.id,
+                    c.full_name,
+                    c.email,
+                    c.loyalty_points,
+                    c.created_at AS member_since
+                FROM customers c
+                ORDER BY c.loyalty_points DESC
+                LIMIT 100
+            `);
+            customers = rows;
+        }
+        return res.json({ success: true, customers });
+    } catch (error) {
+        console.error('Error (admin) fetching loyalty customers:', error);
+        return res.status(500).json({ success: false, error: 'Failed to fetch customers' });
+    }
+});
+
+// GET /api/admin/loyalty/stats
+router.get('/loyalty/stats', async (req, res) => {
+    try {
+        const [totalCustomers] = await db.query(`SELECT COUNT(*) as count FROM customers WHERE loyalty_points > 0`);
+        const [totalRewards] = await db.query(`SELECT COUNT(*) as count FROM loyalty_rewards WHERE is_active = TRUE`);
+        const [totalRedemptions] = await db.query(`SELECT COUNT(*) as count FROM loyalty_reward_redemptions WHERE status = 'completed'`);
+        const [totalPoints] = await db.query(`SELECT COALESCE(SUM(loyalty_points),0) as total FROM customers`);
+
+        return res.json({
+            success: true,
+            stats: {
+                totalCustomers: totalCustomers[0].count,
+                totalRewards: totalRewards[0].count,
+                totalRedemptions: totalRedemptions[0].count,
+                totalPointsInCirculation: totalPoints[0].total
+            }
+        });
+    } catch (error) {
+        console.error('Error (admin) fetching loyalty stats:', error);
+        return res.status(500).json({ success: false, error: 'Failed to fetch stats' });
+    }
+});
+
 module.exports = router;

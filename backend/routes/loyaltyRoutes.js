@@ -18,62 +18,6 @@ const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware'
 // Apply authentication to all loyalty routes
 router.use(ensureAuthenticated);
 
-// Admin loyalty endpoints (no auth middleware for development)
-router.get('/admin/rewards', async(req, res) => {
-    try {
-        const [rewards] = await db.query(`
-            SELECT * FROM loyalty_rewards 
-            WHERE is_active = TRUE 
-            ORDER BY points_required ASC
-        `);
-        res.json({ success: true, rewards });
-    } catch (error) {
-        console.error('Error fetching admin rewards:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch rewards' });
-    }
-});
-
-router.get('/admin/stats', async(req, res) => {
-    try {
-        // Get loyalty statistics
-        const [totalCustomers] = await db.query(`SELECT COUNT(*) as count FROM customers WHERE loyalty_points > 0`);
-        const [totalRewards] = await db.query(`SELECT COUNT(*) as count FROM loyalty_rewards WHERE is_active = TRUE`);
-        const [totalRedemptions] = await db.query(`SELECT COUNT(*) as count FROM loyalty_reward_redemptions WHERE status = 'completed'`);
-        const [totalPoints] = await db.query(`SELECT SUM(loyalty_points) as total FROM customers`);
-
-        res.json({
-            success: true,
-            stats: {
-                totalCustomers: totalCustomers[0].count,
-                totalRewards: totalRewards[0].count,
-                totalRedemptions: totalRedemptions[0].count,
-                totalPointsInCirculation: totalPoints[0].total || 0
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching admin stats:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch stats' });
-    }
-});
-
-router.get('/admin/customers', async(req, res) => {
-    try {
-        const [customers] = await db.query(`
-            SELECT 
-                id, full_name, email, loyalty_points, created_at,
-                (SELECT COUNT(*) FROM loyalty_reward_redemptions WHERE customer_id = customers.id AND status = 'completed') as total_redemptions
-            FROM customers 
-            WHERE loyalty_points > 0
-            ORDER BY loyalty_points DESC
-            LIMIT 50
-        `);
-        res.json({ success: true, customers });
-    } catch (error) {
-        console.error('Error fetching admin customers:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch customers' });
-    }
-});
-
 // Get customer loyalty points
 router.get('/points/:customerId', (req, res, next) => {
     // Check if staff is authenticated, otherwise use regular auth
