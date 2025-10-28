@@ -360,3 +360,5 @@ router.get('/order-status/:orderId', async(req, res) => {
         });
     }
 });
+
+module.exports = router;

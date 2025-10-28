@@ -57,9 +57,7 @@ const io = socketIo(server, {
                 "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
                 "https://mauricios-cafe-bakery.onrender.com",
                 "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://192.168.88.54:5173", // Mobile LAN access
-                "http://192.168.88.87:5173" // Alternative LAN IP
+                "http://127.0.0.1:5173"
             ];
 
             try {
@@ -67,8 +65,7 @@ const io = socketIo(server, {
                 if (
                     allowedOrigins.includes(origin) ||
                     hostname.endsWith(".vercel.app") ||
-                    hostname.endsWith("vercel.app") ||
-                    hostname.startsWith("192.168.") // Allow any LAN IP
+                    hostname.endsWith("vercel.app")
                 ) {
                     console.log("✅ Socket.IO CORS allowed for origin:", origin);
                     return callback(null, true);
@@ -97,19 +94,16 @@ const corsOptions = {
             "https://mauricios-cafe-bakery.vercel.app",
             "https://mauricios-cafe-bakery.onrender.com",
             "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://192.168.88.54:5173", // Mobile LAN access
-            "http://192.168.88.87:5173" // Alternative LAN IP
+            "http://127.0.0.1:5173"
         ];
 
-        // ✅ Allow listed origins + any vercel.app preview domain + LAN IPs
+        // ✅ Allow listed origins + any vercel.app preview domain
         try {
             const hostname = new URL(origin).hostname;
             if (
                 allowedOrigins.includes(origin) ||
                 hostname.endsWith(".vercel.app") ||
-                hostname.endsWith("vercel.app") ||
-                hostname.startsWith("192.168.") // Allow any LAN IP
+                hostname.endsWith("vercel.app")
             ) {
                 console.log("✅ CORS allowed for origin:", origin);
                 callback(null, true);
@@ -195,9 +189,9 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Requires HTTPS in production
+        secure: process.env.NODE_ENV === 'production', // Requires HTTPS
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, lax in dev
+        sameSite: 'none', // Required for cross-origin cookies (frontend on Vercel, backend on Render)
         httpOnly: true,
         rolling: true, // Added: refresh cookie on each request
         domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
