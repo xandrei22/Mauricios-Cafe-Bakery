@@ -148,9 +148,9 @@ async function staffLogin(req, res) {
         );
 
         if (customers.length > 0) {
-            return res.status(403).json({
-                message: 'Not authorized to access staff portal',
-                errorType: 'unauthorized_access'
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
             });
         }
 
@@ -170,18 +170,18 @@ async function staffLogin(req, res) {
 
         // Check if user has proper staff/admin role
         if (!['staff', 'manager', 'admin'].includes(user.role)) {
-            return res.status(403).json({
-                message: 'Not authorized to access staff portal',
-                errorType: 'unauthorized_access'
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
             });
         }
 
         // Additional check: Ensure this is an admin-created staff account
-        // Admin-created staff should have specific fields that regular users don't have
-        if (!user.first_name || !user.last_name || !user.position) {
-            return res.status(403).json({
-                message: 'Not authorized to access staff portal',
-                errorType: 'unauthorized_access'
+        // Admin-created staff should have at least a position or full_name
+        if (!user.position && !user.full_name) {
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
             });
         }
 
