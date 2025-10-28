@@ -346,3 +346,101 @@ export default function GuestOrderForm({ cartItems, onOrderPlaced, onClose, tabl
     </div>
   );
 }
+
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={removeReceipt}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      {receiptPreview && (
+                        <div className="mt-3">
+                          <img
+                            src={receiptPreview}
+                            alt="Receipt preview"
+                            className="w-full h-32 object-cover rounded border"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Please upload a clear photo of your {customerInfo.paymentMethod.toUpperCase()} payment receipt for verification.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="notes" className="mb-1 block">Special Instructions (Optional)</Label>
+              <textarea
+                id="notes"
+                value={customerInfo.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+                placeholder="Any special instructions for your order"
+                className="w-full p-2 border border-gray-300 rounded-md h-20 resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Minimal Guest Inputs removed; captured above */}
+
+          {/* Order Summary */}
+          <div className="border-t pt-4">
+            <h3 className="font-semibold text-lg mb-2">Order Summary</h3>
+            <div className="space-y-2">
+              {cartItems.map((item, index) => (
+                <div key={index} className="flex justify-between text-sm">
+                  <span>{item.quantity}x {item.name}</span>
+                  <span>₱{((item.customPrice || item.price) * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between font-semibold text-lg border-t pt-2 mt-2">
+              <span>Total:</span>
+              <span>₱{calculateTotal().toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGuestCheckout}
+              disabled={isProcessing || !customerInfo.name.trim()}
+              className="flex-1 bg-[#a87437] hover:bg-[#8f652f]"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Place Order
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Guest Notice */}
+          <div className="text-xs text-gray-600 bg-yellow-50 p-3 rounded-md">
+            <strong>Guest Order Notice:</strong> As a guest, you won't earn loyalty points or have access to order history. 
+            Consider creating an account for a better experience!
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
