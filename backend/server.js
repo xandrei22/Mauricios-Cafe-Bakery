@@ -42,6 +42,8 @@ dotenv.config();
 
 // Create Express app and set port
 const app = express();
+// Behind Render/Vercel proxies, trust the proxy for correct protocol/WS handling
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ✅ FIX: Proper Socket.IO CORS configuration
@@ -85,40 +87,39 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 5001;
 
 // ✅ FIX: Apply CORS middleware early
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    "https://mauricios-cafe-bakery.vercel.app",
+    "https://mauricios-cafe-bakery.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+].filter(Boolean);
+
+function isAllowedOrigin(origin) {
+    if (!origin) return true;
+    try {
+        const hostname = new URL(origin).hostname;
+        return (
+            allowedOrigins.includes(origin) ||
+            hostname.endsWith('.vercel.app') ||
+            hostname.endsWith('vercel.app')
+        );
+    } catch (_) {
+        return false;
+    }
+}
+
 const corsOptions = {
     origin: function(origin, callback) {
-        if (!origin) return callback(null, true); // Allow mobile/postman
-
-        const allowedOrigins = [
-            process.env.FRONTEND_URL,
-            "https://mauricios-cafe-bakery.vercel.app",
-            "https://mauricios-cafe-bakery.onrender.com",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173"
-        ];
-
-        // ✅ Allow listed origins + any vercel.app preview domain
-        try {
-            const hostname = new URL(origin).hostname;
-            if (
-                allowedOrigins.includes(origin) ||
-                hostname.endsWith(".vercel.app") ||
-                hostname.endsWith("vercel.app")
-            ) {
-                console.log("✅ CORS allowed for origin:", origin);
-                callback(null, true);
-            } else {
-                console.error("❌ CORS blocked for origin:", origin);
-                callback(new Error('Not allowed by CORS'));
-            }
-        } catch (err) {
-            console.error("❌ CORS error:", err);
-            callback(new Error('Invalid origin'));
+        if (isAllowedOrigin(origin)) {
+            return callback(null, true);
         }
+        return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    optionsSuccessStatus: 204
 };
 
 // ✅ HTTPS redirection (keep this after cors)
@@ -142,6 +143,35 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 app.use(cors(corsOptions));
+// Ensure preflight handled for all routes
+app.options('*', cors(corsOptions));
+// Fallback explicit headers for some hosts/proxies
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (isAllowedOrigin(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Vary', 'Origin');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+});
+
+// Extra CORS guard specifically for Socket.IO polling/websocket endpoints
+app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
+    const origin = req.headers.origin;
+    if (isAllowedOrigin(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Vary', 'Origin');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        if (req.method === 'OPTIONS') return res.sendStatus(204);
+    }
+    next();
+});
 
 // Parse JSON and URL-encoded request bodies
 app.use(express.json());
