@@ -466,6 +466,20 @@ console.log({
     orderRoutesType: typeof orderRoutes
 });
 
+console.log({
+    eventRoutesType: typeof eventRoutes,
+    menuRoutesType: typeof menuRoutes,
+    loyaltyRoutesType: typeof loyaltyRoutes,
+    aiChatRoutesType: typeof aiChatRoutes,
+    feedbackRoutesType: typeof feedbackRoutes,
+    uploadRoutesType: typeof uploadRoutes,
+    receiptRoutesType: typeof receiptRoutes,
+    notificationRoutesType: typeof notificationRoutes,
+    lowStockRoutesType: typeof lowStockRoutes,
+    cleanupRoutesType: typeof cleanupRoutes,
+    dailyResetRoutesType: typeof dailyResetRoutes
+});
+
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
