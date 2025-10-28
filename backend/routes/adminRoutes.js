@@ -5442,4 +5442,78 @@ router.get('/event-sales/download', async(req, res) => {
     }
 });
 
+// Staff management endpoints
+router.get('/staff/stats', async(req, res) => {
+    try {
+        // Get staff statistics
+        const [totalStaff] = await db.query(`SELECT COUNT(*) as count FROM users WHERE role IN ('staff', 'manager', 'admin')`);
+        const [activeStaff] = await db.query(`SELECT COUNT(*) as count FROM users WHERE role IN ('staff', 'manager', 'admin') AND status = 'active'`);
+        const [staffByRole] = await db.query(`
+            SELECT role, COUNT(*) as count 
+            FROM users 
+            WHERE role IN ('staff', 'manager', 'admin') 
+            GROUP BY role
+        `);
+        
+        res.json({
+            success: true,
+            stats: {
+                totalStaff: totalStaff[0].count,
+                activeStaff: activeStaff[0].count,
+                staffByRole: staffByRole.reduce((acc, row) => {
+                    acc[row.role] = row.count;
+                    return acc;
+                }, {})
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching staff stats:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch staff stats' });
+    }
+});
+
+router.get('/staff', async(req, res) => {
+    try {
+        const { page = 1, limit = 10, search = '' } = req.query;
+        const offset = (page - 1) * limit;
+        
+        let whereClause = "WHERE role IN ('staff', 'manager', 'admin')";
+        let params = [];
+        
+        if (search) {
+            whereClause += " AND (full_name LIKE ? OR email LIKE ? OR username LIKE ?)";
+            const searchTerm = `%${search}%`;
+            params = [searchTerm, searchTerm, searchTerm];
+        }
+        
+        // Get total count
+        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM users ${whereClause}`, params);
+        
+        // Get staff members
+        const [staff] = await db.query(`
+            SELECT 
+                id, username, email, full_name, role, 
+                created_at, last_login_at, status
+            FROM users 
+            ${whereClause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        `, [...params, parseInt(limit), offset]);
+        
+        res.json({
+            success: true,
+            staff,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: countResult[0].total,
+                totalPages: Math.ceil(countResult[0].total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching staff:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch staff' });
+    }
+});
+
 module.exports = router;
