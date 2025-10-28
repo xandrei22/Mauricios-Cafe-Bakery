@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getApiUrl } from '../utils/apiConfig';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,7 +31,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   const checkAuthentication = async () => {
     try {
-      // Get the API base URL
       const API_URL = getApiUrl();
       
       // Determine which session check endpoint to use based on required role
