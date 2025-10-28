@@ -509,7 +509,9 @@ const AdminStaff: React.FC = () => {
                 {/* Account Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                     <Input
+                      id="username"
                       name="username"
                       value={form.username}
                       onChange={handleChange}
@@ -519,7 +521,9 @@ const AdminStaff: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <Input
+                      id="email"
                       name="email"
                       type="email"
                       value={form.email}
@@ -547,7 +551,9 @@ const AdminStaff: React.FC = () => {
                     </select>
                   </div>
                   <div>
+                    <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">Age</label>
                     <Input
+                      id="age"
                       name="age"
                       type="number"
                       value={form.age}
@@ -567,10 +573,38 @@ const AdminStaff: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Name - 2 columns */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                    <Input
+                      id="first_name"
+                      name="first_name"
+                      value={form.first_name}
+                      onChange={handleChange}
+                      placeholder="First name"
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                    <Input
+                      id="last_name"
+                      name="last_name"
+                      value={form.last_name}
+                      onChange={handleChange}
+                      placeholder="Last name"
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                </div>
+
                 {/* Contact Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                     <Input
+                      id="phone"
                       name="phone"
                       type="tel"
                       value={form.phone}
@@ -587,7 +621,9 @@ const AdminStaff: React.FC = () => {
                     <div className="text-xs text-gray-500 mt-1">Format: 11 digits</div>
                   </div>
                   <div>
+                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                     <Input
+                      id="address"
                       name="address"
                       value={form.address}
                       onChange={handleChange}
@@ -600,7 +636,9 @@ const AdminStaff: React.FC = () => {
                 {/* Work Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">Position/Job Title</label>
                     <Input
+                      id="position"
                       name="position"
                       value={form.position}
                       onChange={handleChange}
@@ -628,7 +666,9 @@ const AdminStaff: React.FC = () => {
                 {/* Date Hired and Employee ID - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="date_hired" className="block text-sm font-medium text-gray-700 mb-1">Date Hired</label>
                     <Input
+                      id="date_hired"
                       name="date_hired"
                       type="date"
                       value={form.date_hired}
@@ -638,7 +678,9 @@ const AdminStaff: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <label htmlFor="employee_id" className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
                     <Input
+                      id="employee_id"
                       name="employee_id"
                       value={form.employee_id}
                       onChange={handleChange}
@@ -670,7 +712,9 @@ const AdminStaff: React.FC = () => {
                 <div className="border-t pt-4 mt-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Account Security</h3>
                   <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                     <Input
+                      id="password"
                       name="password"
                       type="password"
                       value={form.password}
@@ -692,7 +736,9 @@ const AdminStaff: React.FC = () => {
                     )}
                   </div>
                   <div className="mt-3">
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
                     <Input
+                      id="confirmPassword"
                       name="confirmPassword"
                       type="password"
                       value={form.confirmPassword}
