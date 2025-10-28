@@ -540,16 +540,19 @@ const AdminStaff: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      id="role"
-                      name="role"
-                      value={form.role}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                      required
-                    >
-                      <option value="staff">Staff</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="role"
+                        name="role"
+                        value={form.role}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                        required
+                      >
+                        <option value="staff">Staff</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
                   </div>
                   <div>
                     <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">Age</label>
@@ -651,18 +654,21 @@ const AdminStaff: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor="work_schedule" className="block text-sm font-medium text-gray-700 mb-1">Work Schedule</label>
-                    <select
-                      id="work_schedule"
-                      name="work_schedule"
-                      value={form.work_schedule}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                    >
-                      <option value="flexible">Flexible</option>
-                      <option value="morning">Morning</option>
-                      <option value="mid">Mid</option>
-                      <option value="night">Night</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="work_schedule"
+                        name="work_schedule"
+                        value={form.work_schedule}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                      >
+                        <option value="flexible">Flexible</option>
+                        <option value="morning">Morning</option>
+                        <option value="mid">Mid</option>
+                        <option value="night">Night</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
                   </div>
                 </div>
 
@@ -710,19 +716,22 @@ const AdminStaff: React.FC = () => {
                   </div>
                   <div>
                     <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                    <select
-                      id="gender"
-                      name="gender"
-                      value={form.gender}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                      required
-                    >
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer_not_to_say">Prefer not to say</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="gender"
+                        name="gender"
+                        value={form.gender}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                        required
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
                   </div>
                 </div>
 
