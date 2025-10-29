@@ -5472,49 +5472,6 @@ router.get('/staff/stats', async(req, res) => {
     }
 });
 
-router.get('/staff', async(req, res) => {
-    try {
-        const { page = 1, limit = 10, search = '' } = req.query;
-        const offset = (page - 1) * limit;
-        
-        let whereClause = "WHERE role IN ('staff', 'manager', 'admin')";
-        let params = [];
-        
-        if (search) {
-            whereClause += " AND (full_name LIKE ? OR email LIKE ? OR username LIKE ?)";
-            const searchTerm = `%${search}%`;
-            params = [searchTerm, searchTerm, searchTerm];
-        }
-        
-        // Get total count
-        const [countResult] = await db.query(`SELECT COUNT(*) as total FROM users ${whereClause}`, params);
-        
-        // Get staff members
-        const [staff] = await db.query(`
-            SELECT 
-                id, username, email, full_name, role, 
-                created_at, last_login_at, status
-            FROM users 
-            ${whereClause}
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-        `, [...params, parseInt(limit), offset]);
-        
-        res.json({
-            success: true,
-            staff,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total: countResult[0].total,
-                totalPages: Math.ceil(countResult[0].total / limit)
-            }
-        });
-    } catch (error) {
-        console.error('Error fetching staff:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch staff' });
-    }
-});
 
 // Admin Loyalty endpoints to match frontend calls
 // GET /api/admin/loyalty/rewards

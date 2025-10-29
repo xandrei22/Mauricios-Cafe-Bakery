@@ -213,16 +213,17 @@ async function staffLogin(req, res) {
             providedPassword: password,
             storedPasswordHash: user.password ? 'EXISTS' : 'MISSING',
             isValidPassword,
-            passwordLength: user.password ? user.password.length : 0
+            passwordLength: user.password ? user.password.length : 0,
+            // DEBUG: Show first few characters of stored hash for debugging (remove in production)
+            storedHashPreview: user.password ? user.password.substring(0, 10) + '...' : 'NULL'
         });
 
-        // TEMPORARY: Allow login for debugging - REMOVE THIS AFTER TESTING
         if (!isValidPassword) {
-            console.log('⚠️ TEMPORARY: Bypassing password check for debugging');
-            // return res.status(401).json({
-            //     message: 'Invalid username or password',
-            //     errorType: 'invalid_credentials'
-            // });
+            console.log('❌ Invalid password for user:', username);
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         console.log('✅ Password valid for user:', username);
@@ -324,7 +325,13 @@ async function createStaff(req, res) {
         );
         console.log('createStaff: Insert result:', result);
 
-        res.status(201).json({ message: 'Staff account created successfully', userId: result.insertId });
+        res.status(201).json({
+            message: 'Staff account created successfully',
+            userId: result.insertId,
+            // Include the password for admin to communicate to staff (remove in production)
+            temporaryPassword: password,
+            note: 'Please communicate this password to the staff member securely'
+        });
     } catch (error) {
         console.error('Error creating staff account:', error);
         res.status(500).json({ message: 'Error creating staff account' });
