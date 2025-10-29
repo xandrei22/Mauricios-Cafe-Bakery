@@ -4,7 +4,7 @@ const db = require('../config/db');
 async function addStaffFields() {
     try {
         console.log('🔧 Adding missing staff fields to users table...');
-        
+
         // List of columns to add
         const columnsToAdd = [
             { name: 'first_name', type: 'VARCHAR(50)' },
@@ -25,7 +25,7 @@ async function addStaffFields() {
             { name: 'profile_picture', type: 'VARCHAR(255)' },
             { name: 'updated_at', type: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' }
         ];
-        
+
         // Add each column if it doesn't exist
         for (const column of columnsToAdd) {
             try {
@@ -39,7 +39,7 @@ async function addStaffFields() {
                 }
             }
         }
-        
+
         // Update the password column name if needed (some schemas use password_hash)
         try {
             await db.query('ALTER TABLE users CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL');
@@ -51,7 +51,7 @@ async function addStaffFields() {
                 console.error('❌ Error updating password column:', error.message);
             }
         }
-        
+
         // Update role enum to include all roles
         try {
             await db.query('ALTER TABLE users MODIFY COLUMN role ENUM("admin", "staff", "manager", "customer") DEFAULT "customer"');
@@ -59,9 +59,9 @@ async function addStaffFields() {
         } catch (error) {
             console.error('❌ Error updating role enum:', error.message);
         }
-        
+
         console.log('🎉 Migration completed successfully!');
-        
+
     } catch (error) {
         console.error('❌ Migration failed:', error);
     } finally {
@@ -70,4 +70,3 @@ async function addStaffFields() {
 }
 
 // Run the migration
-addStaffFields();

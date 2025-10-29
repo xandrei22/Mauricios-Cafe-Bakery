@@ -4,7 +4,7 @@ const db = require('../config/db');
 async function testStaffIdAssignment() {
     try {
         console.log('🧪 Testing staff_id assignment...');
-        
+
         // Check if there are any orders at all
         const [allOrders] = await db.query(`
             SELECT COUNT(*) as total_orders,
@@ -13,16 +13,16 @@ async function testStaffIdAssignment() {
                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders
             FROM orders
         `);
-        
+
         console.log('📊 Order Statistics:', allOrders[0]);
-        
+
         // Check if there are any staff users
         const [staffUsers] = await db.query(`
             SELECT id, username, email, role FROM users WHERE role IN ('admin', 'staff')
         `);
-        
+
         console.log('👥 Staff Users:', staffUsers);
-        
+
         // Show recent orders
         const [recentOrders] = await db.query(`
             SELECT 
@@ -37,15 +37,15 @@ async function testStaffIdAssignment() {
             ORDER BY order_time DESC 
             LIMIT 5
         `);
-        
+
         console.log('📋 Recent Orders:', recentOrders);
-        
+
         if (allOrders[0].orders_with_staff === 0 && allOrders[0].total_orders > 0) {
             console.log('⚠️  No orders have staff_id assigned. Need to run fix script.');
         } else if (allOrders[0].orders_with_staff > 0) {
             console.log('✅ Some orders have staff_id assigned.');
         }
-        
+
     } catch (error) {
         console.error('❌ Test failed:', error.message);
     } finally {
@@ -53,4 +53,3 @@ async function testStaffIdAssignment() {
     }
 }
 
-testStaffIdAssignment();

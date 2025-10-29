@@ -29,4 +29,3 @@ async function updateStaffToAdmin() {
 }
 
 // Run the script
-updateStaffToAdmin();

@@ -55,4 +55,3 @@ async function fixExistingOrdersStaffId() {
 }
 
 // Run the script
-fixExistingOrdersStaffId();
