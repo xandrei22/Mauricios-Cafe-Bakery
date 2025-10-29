@@ -175,7 +175,13 @@ function logout(req, res) {
         if (err) {
             return res.status(500).json({ message: 'Error logging out' });
         }
-        res.clearCookie('sessionId');
+        try {
+            res.clearCookie('connect.sid', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'none'
+            });
+        } catch (_) {}
         res.json({ message: 'Logged out successfully' });
     });
 }

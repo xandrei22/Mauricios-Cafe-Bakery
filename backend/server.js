@@ -259,9 +259,11 @@ app.use(session({
     rolling: true,
     cookie: {
         httpOnly: true,
-        secure: true, // ✅ required for HTTPS
-        sameSite: 'none', // ✅ allow cross-site cookies
-        maxAge: 1000 * 60 * 60 * 24 // 1 day
+        // Use secure cookies only in production. In dev (http), mobile devices will drop secure cookies.
+        secure: process.env.NODE_ENV === 'production',
+        // Keep SameSite none to support scenarios where API may be on a different subdomain in prod
+        sameSite: 'none',
+        maxAge: 1000 * 60 * 60 * 24
     }
 }));
 
