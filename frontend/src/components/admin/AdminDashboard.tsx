@@ -699,8 +699,7 @@ const AdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="h-64 sm:h-80 dashboard-chart-tablet">
-                {staffPerformanceData && staffPerformanceData.staff_performance && staffPerformanceData.staff_performance.length > 0 && 
-                 chartData.staffSales && chartData.staffSales.labels && chartData.staffSales.labels.length > 0 ? (
+                {chartData.staffSales && chartData.staffSales.labels && chartData.staffSales.labels.length > 0 ? (
                   <Bar 
                     data={chartData.staffSales} 
                     options={{
