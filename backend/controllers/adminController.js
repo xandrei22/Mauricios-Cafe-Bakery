@@ -182,17 +182,13 @@ async function staffLogin(req, res) {
         const { username, password } = req.body;
         console.log('🔍 Staff login attempt:', { username, passwordLength: password ? password.length : undefined });
 
-        // First check if this is a customer trying to access staff portal
+        // Check if this email exists as a customer (for logging purposes)
         const [customers] = await db.query(
             'SELECT * FROM customers WHERE email = ?', [username]
         );
 
         if (customers.length > 0) {
-            console.log('❌ Customer trying to access staff portal:', username);
-            return res.status(401).json({
-                message: 'Invalid username or password',
-                errorType: 'invalid_credentials'
-            });
+            console.log('ℹ️ Email exists as customer:', username);
         }
 
         // Find user by username or email in the users table
