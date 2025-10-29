@@ -57,7 +57,6 @@ export function CustomerNavbar() {
               <MapPin className="h-4 w-4 xl:h-5 xl:w-5" />
               <span className="text-sm xl:text-base">Location</span>
             </a>
-            {/* QR Codes link removed after testing */}
             <div className="flex items-center gap-2 xl:gap-3 ml-4 xl:ml-6">
               <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center gap-1 px-3 xl:px-4 py-1.5 text-[#a87437] bg-white text-xs xl:text-sm font-semibold rounded-full hover:bg-[#f6efe7] hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-[0_8px_16px_rgba(0,0,0,0.12)]">
                 <User className="h-3 w-3 xl:h-4 xl:w-4" />
@@ -90,7 +89,6 @@ export function CustomerNavbar() {
             <a href="#best-sellers" className="block px-1 py-3 text-lg text-white hover:text-white/80">Best Sellers</a>
             <a href="#why-love-us" className="block px-1 py-3 text-lg text-white hover:text-white/80">Offers</a>
             <a href="#location" className="block px-1 py-3 text-lg text-white hover:text-white/80">Location</a>
-            {/* QR Codes link removed after testing */}
             <div className="flex flex-col gap-3 my-4">
               <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
                 <User className="h-4 w-4" />
