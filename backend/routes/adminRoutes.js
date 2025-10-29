@@ -531,6 +531,8 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             interval = 'INTERVAL 6 MONTH';
         }
 
+        console.log('🔍 Admin performance query - period:', period, 'interval:', interval);
+
         // Get all staff performance data (admin view)
         const [staffData] = await db.query(`
             SELECT 
@@ -552,6 +554,21 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
             ORDER BY period DESC, total_sales DESC
         `);
+
+        console.log('🔍 Admin staff data query result:', staffData.length, 'records found');
+        if (staffData.length > 0) {
+            console.log('🔍 Sample admin staff data:', staffData[0]);
+        } else {
+            // Debug: Check if there are any paid orders at all
+            const [debugQuery] = await db.query(`
+                SELECT COUNT(*) as total_orders, 
+                       COUNT(CASE WHEN payment_status = 'paid' THEN 1 END) as paid_orders,
+                       COUNT(CASE WHEN staff_id IS NOT NULL THEN 1 END) as orders_with_staff
+                FROM orders 
+                WHERE order_time >= DATE_SUB(NOW(), ${interval})
+            `);
+            console.log('🔍 Debug - All orders:', debugQuery[0]);
+        }
 
         // Get daily sales trend for the last 7 days or monthly trend for last 6 months (all orders)
         const [trendData] = await db.query(`

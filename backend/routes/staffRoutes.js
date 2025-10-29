@@ -590,6 +590,9 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             });
         }
 
+        console.log('🔍 Staff performance query for staff ID:', currentStaffId);
+        console.log('🔍 Query period:', period, 'interval:', interval);
+
         const [staffData] = await db.query(`
             SELECT 
                 CASE 
@@ -610,6 +613,21 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
             ORDER BY period DESC, total_sales DESC
         `, [currentStaffId]);
+
+        console.log('🔍 Staff data query result:', staffData.length, 'records found');
+        if (staffData.length > 0) {
+            console.log('🔍 Sample staff data:', staffData[0]);
+        } else {
+            // Debug: Check if there are any orders for this staff member at all
+            const [debugQuery] = await db.query(`
+                SELECT COUNT(*) as total_orders, 
+                       COUNT(CASE WHEN payment_status = 'paid' THEN 1 END) as paid_orders,
+                       COUNT(CASE WHEN staff_id = ? THEN 1 END) as staff_orders
+                FROM orders 
+                WHERE order_time >= DATE_SUB(NOW(), ${interval})
+            `, [currentStaffId]);
+            console.log('🔍 Debug - Orders for staff:', debugQuery[0]);
+        }
 
         // Get daily sales trend for the last 7 days or monthly trend for last 6 months (current staff only)
         const [trendData] = await db.query(`
@@ -664,14 +682,70 @@ router.get('/dashboard/staff-performance', async(req, res) => {
 
         // If no data found for current staff, create a placeholder
         if (sortedStaff.length === 0) {
-            sortedStaff = [{
-                staff_name: 'No Sales Data',
-                staff_id: currentStaffId,
-                periods: [],
-                total_sales: 0,
-                total_orders: 0,
-                avg_order_value: 0
-            }];
+            console.log('⚠️ No performance data found for staff, creating placeholder');
+
+            // Try to get any orders processed by this staff member (even without proper staff_id)
+            const [fallbackData] = await db.query(`
+                SELECT 
+                    'My Performance' as staff_name,
+                    ? as staff_id,
+                    ${groupBy} as period,
+                    SUM(o.total_price) as total_sales,
+                    COUNT(o.id) as order_count,
+                    AVG(o.total_price) as avg_order_value
+                FROM orders o
+                WHERE o.payment_status = 'paid'
+                    AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                    AND (o.staff_id = ? OR o.staff_id IS NULL)
+                GROUP BY ${groupBy}
+                ORDER BY period DESC, total_sales DESC
+            `, [currentStaffId, currentStaffId]);
+
+            if (fallbackData.length > 0) {
+                console.log('✅ Found fallback data:', fallbackData.length, 'records');
+                // Process fallback data
+                const fallbackPerformance = {};
+                fallbackData.forEach(item => {
+                    const key = item.staff_id;
+                    if (!fallbackPerformance[key]) {
+                        fallbackPerformance[key] = {
+                            staff_name: item.staff_name,
+                            staff_id: item.staff_id,
+                            periods: [],
+                            total_sales: 0,
+                            total_orders: 0,
+                            avg_order_value: 0
+                        };
+                    }
+
+                    fallbackPerformance[key].periods.push({
+                        period: item.period,
+                        sales: parseFloat(item.total_sales) || 0,
+                        orders: parseInt(item.order_count) || 0,
+                        avg_order_value: parseFloat(item.avg_order_value) || 0
+                    });
+
+                    fallbackPerformance[key].total_sales += parseFloat(item.total_sales) || 0;
+                    fallbackPerformance[key].total_orders += parseInt(item.order_count) || 0;
+                });
+
+                // Calculate average order value
+                Object.values(fallbackPerformance).forEach(staff => {
+                    staff.avg_order_value = staff.total_orders > 0 ? staff.total_sales / staff.total_orders : 0;
+                });
+
+                sortedStaff = Object.values(fallbackPerformance)
+                    .sort((a, b) => b.total_sales - a.total_sales);
+            } else {
+                sortedStaff = [{
+                    staff_name: 'No Sales Data',
+                    staff_id: currentStaffId,
+                    periods: [],
+                    total_sales: 0,
+                    total_orders: 0,
+                    avg_order_value: 0
+                }];
+            }
         }
 
         // Process trend data

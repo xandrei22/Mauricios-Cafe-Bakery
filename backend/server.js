@@ -245,9 +245,9 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        secure: false, // Set to false for mobile compatibility - HTTPS will be handled by reverse proxy
+        secure: true, // Set to false for mobile compatibility - HTTPS will be handled by reverse proxy
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax', // Changed from 'none' to 'lax' for better mobile compatibility
+        sameSite: 'none', // Changed from 'none' to 'lax' for better mobile compatibility
         httpOnly: true,
         rolling: true, // Refresh cookie on each request
         domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
@@ -403,7 +403,7 @@ const orderProcessingService = require('./services/orderProcessingService');
 orderProcessingService.setupSocketConnection(io);
 
 // Setup low stock monitor
-//const lowStockMonitorService = require('./services/lowStockMonitorService');
+us //const lowStockMonitorService = require('./services/lowStockMonitorService');
 
 // Debug middleware to log all routes
 app.use((req, res, next) => {
