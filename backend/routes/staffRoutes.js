@@ -12,6 +12,20 @@ const ActivityLogger = require('../utils/activityLogger');
 
 // Lightweight session check for staff (placed after middleware to ensure session is present)
 router.get('/check-session', (req, res) => {
+    // Add mobile debugging
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+    if (isMobile) {
+        console.log('📱 Mobile staff session check:', {
+            sessionId: req.sessionID,
+            userAgent: userAgent.substring(0, 100),
+            hasSession: !!req.session,
+            hasStaffUser: !!req.session ? .staffUser,
+            staffUser: req.session ? .staffUser
+        });
+    }
+
     if (req.session && req.session.staffUser) {
         return res.json({
             authenticated: true,

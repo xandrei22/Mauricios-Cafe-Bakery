@@ -245,15 +245,15 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Requires HTTPS
+        secure: false, // Set to false for mobile compatibility - HTTPS will be handled by reverse proxy
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'none', // Required for cross-origin cookies (frontend on Vercel, backend on Render)
+        sameSite: 'lax', // Changed from 'none' to 'lax' for better mobile compatibility
         httpOnly: true,
-        rolling: true, // Added: refresh cookie on each request
+        rolling: true, // Refresh cookie on each request
         domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
     },
-    name: 'sessionId', // Added: custom session name
-    unset: 'destroy', // Added: properly destroy sessions
+    name: 'sessionId', // Custom session name
+    unset: 'destroy', // Properly destroy sessions
     proxy: true // Trust proxy for correct secure flag handling
 }));
 
@@ -265,6 +265,20 @@ app.use(passport.session());
 // Session refresh middleware - extend session on each request
 app.use((req, res, next) => {
     if (req.session) {
+        // Add debugging for mobile devices
+        const userAgent = req.headers['user-agent'] || '';
+        const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+        if (isMobile) {
+            console.log('📱 Mobile device detected:', {
+                userAgent: userAgent.substring(0, 100),
+                sessionId: req.sessionID,
+                hasAdminUser: !!req.session.adminUser,
+                hasStaffUser: !!req.session.staffUser,
+                hasCustomerUser: !!req.session.customerUser
+            });
+        }
+
         // Refresh session for admin users
         if (req.session.adminUser) {
             req.session.touch();
@@ -282,6 +296,24 @@ app.use((req, res, next) => {
         }
     }
     next();
+});
+
+// Debug endpoint for mobile session testing
+app.get('/api/debug/session', (req, res) => {
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+    res.json({
+        sessionId: req.sessionID,
+        hasSession: !!req.session,
+        hasAdminUser: !!req.session ? .adminUser,
+        hasStaffUser: !!req.session ? .staffUser,
+        hasCustomerUser: !!req.session ? .customerUser,
+        isMobile,
+        userAgent: userAgent.substring(0, 100),
+        cookies: req.headers.cookie,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Socket.IO connection handling

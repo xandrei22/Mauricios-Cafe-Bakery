@@ -269,6 +269,17 @@ async function staffLogin(req, res) {
         };
         console.log('✅ Staff login successful. Session staffUser set:', req.session.staffUser);
 
+        // Add mobile debugging
+        const userAgent = req.headers['user-agent'] || '';
+        const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+        if (isMobile) {
+            console.log('📱 Mobile staff login:', {
+                sessionId: req.sessionID,
+                userAgent: userAgent.substring(0, 100),
+                staffUser: req.session.staffUser
+            });
+        }
+
         res.json({
             success: true,
             user: {
