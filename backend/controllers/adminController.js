@@ -50,16 +50,51 @@ async function login(req, res) {
             });
         }
 
-        // Check if this is a staff trying to access admin portal
+        // Check if this is a staff member with admin privileges
         const [staff] = await db.query(
-            'SELECT * FROM users WHERE email = ? AND role IN ("staff", "manager")', [username]
+            'SELECT * FROM users WHERE email = ? AND role IN ("staff", "manager", "admin")', [username]
         );
 
         if (staff.length > 0) {
-            return res.status(403).json({
-                message: 'Not authorized to access admin portal',
-                errorType: 'unauthorized_access'
-            });
+            const user = staff[0];
+
+            // Allow admin role staff to access admin portal
+            if (user.role === 'admin') {
+                // Compare password for admin staff
+                const isValidPassword = await bcrypt.compare(password, user.password);
+                if (!isValidPassword) {
+                    return res.status(401).json({
+                        message: 'Invalid username or password',
+                        errorType: 'invalid_credentials'
+                    });
+                }
+
+                // Set admin session
+                req.session.adminUser = {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.full_name,
+                    role: 'admin'
+                };
+
+                return res.json({
+                    success: true,
+                    user: {
+                        id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        fullName: user.full_name,
+                        role: 'admin'
+                    }
+                });
+            } else {
+                // Block regular staff from admin portal
+                return res.status(403).json({
+                    message: 'Not authorized to access admin portal',
+                    errorType: 'unauthorized_access'
+                });
+            }
         }
 
         // Find admin by username or email
