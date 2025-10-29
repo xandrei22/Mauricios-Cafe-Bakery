@@ -65,6 +65,10 @@ async function login(req, res) {
 
         // Persist the session cookie before responding (improves reliability on mobile browsers)
         req.session.save(() => {
+            try {
+                const setCookieHeader = res.getHeader('set-cookie');
+                console.log('🔒 Login Set-Cookie header:', setCookieHeader);
+            } catch (_) {}
             res.json({
                 success: true,
                 user: {

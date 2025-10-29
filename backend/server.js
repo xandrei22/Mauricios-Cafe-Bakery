@@ -263,6 +263,9 @@ app.use(session({
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'none',
+        // If COOKIE_DOMAIN is provided (e.g., mauricios-cafe-bakery.vercel.app), set it explicitly
+        // Otherwise omit to default to current host
+        domain: process.env.COOKIE_DOMAIN || undefined,
         maxAge: 1000 * 60 * 60 * 24
     }
 }));
@@ -324,6 +327,15 @@ app.get('/api/debug/session', (req, res) => {
         userAgent: userAgent.substring(0, 100),
         cookies: req.headers.cookie,
         timestamp: new Date().toISOString()
+    });
+});
+
+// Echo request headers and cookies to verify proxy/cookie behavior
+app.get('/api/debug/headers', (req, res) => {
+    res.json({
+        headers: req.headers,
+        cookies: req.headers.cookie || null,
+        sessionId: req.sessionID || null
     });
 });
 
