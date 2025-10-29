@@ -439,6 +439,7 @@ const AdminDashboard: React.FC = () => {
     const refreshAll = () => {
       fetchDashboardData();
       fetchChartData();
+      fetchStaffPerformanceData(performancePeriod);
     };
 
     newSocket.on('order-updated', (data) => {

@@ -112,10 +112,10 @@ const StaffDashboard: React.FC = () => {
   // Session validation - will automatically redirect if session expires
   const { user, isLoading: sessionLoading, isValid: sessionValid, checkSession } = useSessionValidation('staff');
 
-  // Fetch staff performance data
+  // Fetch staff performance data (only current staff member)
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
-      const response = await fetch(`${API_URL}/api/admin/dashboard/staff-performance?period=${period}`, {
+      const response = await fetch(`${API_URL}/api/staff/dashboard/staff-performance?period=${period}`, {
         credentials: 'include'
       });
       
@@ -124,9 +124,9 @@ const StaffDashboard: React.FC = () => {
         console.log('Staff performance data received:', data);
         setStaffPerformanceData(data);
         
-        // Process data for chart
+        // Process data for chart (current staff member only)
         if (data.staff_performance && data.staff_performance.length > 0) {
-          const labels = data.staff_performance.map(staff => staff.staff_name || 'Unknown Staff');
+          const labels = data.staff_performance.map(staff => staff.staff_name || 'My Performance');
           const salesData = data.staff_performance.map(staff => Number(staff.total_sales) || 0);
           
           console.log('Staff performance chart data:', { labels, salesData });
@@ -138,12 +138,9 @@ const StaffDashboard: React.FC = () => {
               staffSales: {
                 labels: labels,
                 datasets: [{
-                  label: 'Sales (₱)',
+                  label: 'My Sales (₱)',
                   data: salesData,
-                  backgroundColor: [
-                    '#a87437', '#8B4513', '#D2691E', '#CD853F', '#DEB887', '#F5DEB3',
-                    '#D2B48C', '#F4A460', '#BC8F8F', '#DDA0DD'
-                  ],
+                  backgroundColor: ['#a87437'], // Single color for individual performance
                   borderColor: '#8f652f',
                   borderWidth: 1,
                 }]
@@ -155,9 +152,9 @@ const StaffDashboard: React.FC = () => {
             setChartData(prev => ({
               ...prev,
               staffSales: {
-                labels: ['No Data'],
+                labels: ['No Sales Data'],
                 datasets: [{
-                  label: 'Sales (₱)',
+                  label: 'My Sales (₱)',
                   data: [0],
                   backgroundColor: ['#a87437'],
                   borderColor: '#8f652f',
@@ -172,9 +169,9 @@ const StaffDashboard: React.FC = () => {
           setChartData(prev => ({
             ...prev,
             staffSales: {
-              labels: ['No Data'],
+              labels: ['No Sales Data'],
               datasets: [{
-                label: 'Sales (₱)',
+                label: 'My Sales (₱)',
                 data: [0],
                 backgroundColor: ['#a87437'],
                 borderColor: '#8f652f',
@@ -480,6 +477,7 @@ const StaffDashboard: React.FC = () => {
         // Refresh main metrics and charts
         fetchDashboardData();
         fetchChartData();
+        fetchStaffPerformanceData(performancePeriod);
       };
 
       socket.on('new-order-received', refreshAll);
@@ -702,11 +700,11 @@ const StaffDashboard: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Staff Performance Card */}
+            {/* My Performance Card */}
             <Card className="border-2 border-gray-200 shadow-xl hover:shadow-2xl transition-shadow duration-300">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Staff Performance</CardTitle>
+                  <CardTitle>My Performance</CardTitle>
                   <div className="flex gap-2">
                     <Button
                       variant={performancePeriod === 'day' ? 'default' : 'outline'}

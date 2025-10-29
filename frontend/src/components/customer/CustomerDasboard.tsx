@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { Star, ShoppingBag, Monitor } from "lucide-react";
 import { useCart } from "../../contexts/CartContext";
+import { io, Socket } from 'socket.io-client';
 
 interface DashboardData {
   loyaltyPoints: number;
@@ -41,6 +42,7 @@ export default function CustomerDasboard() {
   const [popularItems, setPopularItems] = useState<any[]>([]);
   const [redeemableItems, setRedeemableItems] = useState<any[]>([]);
   const [redeeming, setRedeeming] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -49,9 +51,53 @@ export default function CustomerDasboard() {
     }
 
     if (authenticated && user?.id) {
+      // Initialize Socket.IO connection for real-time updates
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const newSocket = io(API_URL, {
+        transports: ['polling', 'websocket'],
+        path: '/socket.io',
+        withCredentials: true,
+        timeout: 30000,
+        forceNew: true,
+        autoConnect: true
+      });
+      setSocket(newSocket);
+
+      // Join customer room for real-time updates
+      const joinRoom = () => newSocket.emit('join-customer-room', { customerEmail: user.email });
+      joinRoom();
+      newSocket.on('connect', joinRoom);
+
+      // Listen for real-time updates
+      const refreshAll = () => {
+        fetchDashboardData();
+        fetchPopularItems();
+        fetchRedeemableItems();
+      };
+
+      newSocket.on('order-updated', (data) => {
+        console.log('Order updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      newSocket.on('payment-updated', (data) => {
+        console.log('Payment updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      newSocket.on('loyalty-updated', (data) => {
+        console.log('Loyalty updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      // Initial data fetch
       fetchDashboardData();
       fetchPopularItems();
       fetchRedeemableItems();
+
+      return () => {
+        newSocket.close();
+      };
     }
   }, [loading, authenticated, user?.id, navigate]); // Changed from 'user' to 'user?.id'
 
