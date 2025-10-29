@@ -145,7 +145,7 @@ function logout(req, res) {
 async function staffLogin(req, res) {
     try {
         const { username, password } = req.body;
-        console.log('🔍 Staff login attempt:', { username, passwordLength: password ? .length });
+        console.log('🔍 Staff login attempt:', { username, passwordLength: password ? password.length : undefined });
 
         // First check if this is a customer trying to access staff portal
         const [customers] = await db.query(
@@ -213,7 +213,7 @@ async function staffLogin(req, res) {
             providedPassword: password,
             storedPasswordHash: user.password ? 'EXISTS' : 'MISSING',
             isValidPassword,
-            passwordLength: user.password ? .length
+            passwordLength: user.password ? user.password.length : 0
         });
 
         // TEMPORARY: Allow login for debugging - REMOVE THIS AFTER TESTING
