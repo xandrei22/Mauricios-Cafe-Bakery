@@ -21,8 +21,8 @@ router.get('/check-session', (req, res) => {
             sessionId: req.sessionID,
             userAgent: userAgent.substring(0, 100),
             hasSession: !!req.session,
-            hasStaffUser: !!req.session ? .staffUser,
-            staffUser: req.session ? .staffUser
+            hasStaffUser: !!(req.session && req.session.staffUser),
+            staffUser: req.session && req.session.staffUser ? req.session.staffUser : null
         });
     }
 

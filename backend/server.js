@@ -306,9 +306,9 @@ app.get('/api/debug/session', (req, res) => {
     res.json({
         sessionId: req.sessionID,
         hasSession: !!req.session,
-        hasAdminUser: !!req.session ? .adminUser,
-        hasStaffUser: !!req.session ? .staffUser,
-        hasCustomerUser: !!req.session ? .customerUser,
+        hasAdminUser: !!(req.session && req.session.adminUser),
+        hasStaffUser: !!(req.session && req.session.staffUser),
+        hasCustomerUser: !!(req.session && req.session.customerUser),
         isMobile,
         userAgent: userAgent.substring(0, 100),
         cookies: req.headers.cookie,
