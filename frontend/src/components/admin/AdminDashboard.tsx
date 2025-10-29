@@ -261,14 +261,9 @@ const AdminDashboard: React.FC = () => {
         console.log('Menu items data loaded from API:', menuItemsData);
       }
 
-      // Fetch staff sales data
-      const staffSalesResponse = await fetch('/api/admin/dashboard/staff-sales', {
-        credentials: 'include'
-      });
-      const staffSalesData = staffSalesResponse.ok ? await staffSalesResponse.json() : null;
-
-      // Process and set chart data with fallbacks
-      setChartData({
+      // Note: staffSales is fetched separately by fetchStaffPerformanceData()
+      // Process and set chart data with fallbacks, preserving existing staffSales
+      setChartData(prev => ({
         sales: {
           labels: salesData.labels || [],
           datasets: [{
@@ -304,28 +299,12 @@ const AdminDashboard: React.FC = () => {
           }]
         },
         
-        staffSales: staffSalesData ? {
-          labels: staffSalesData.labels || [],
-          datasets: [{
-            label: 'Sales (₱)',
-            data: staffSalesData.data || [],
-            backgroundColor: [
-              '#a87437', '#8B4513', '#D2691E', '#CD853F', '#DEB887', '#F5DEB3'
-            ],
-            borderColor: '#8f652f',
-            borderWidth: 1,
-          }]
-        } : {
-          labels: ['No Data'],
-          datasets: [{
-            label: 'Sales (₱)',
-            data: [0],
-            backgroundColor: ['#a87437'],
-            borderColor: '#8f652f',
-            borderWidth: 1,
-          }]
+        // Preserve staffSales from fetchStaffPerformanceData() or set empty
+        staffSales: (prev?.staffSales?.labels && prev.staffSales.labels.length > 0) ? prev.staffSales : {
+          labels: [],
+          datasets: []
         }
-      });
+      }));
     } catch (err) {
       console.error('Error fetching chart data:', err);
     }
@@ -406,11 +385,11 @@ const AdminDashboard: React.FC = () => {
       
       setDashboardData(transformedData);
       
-      // Also fetch chart data
-      await fetchChartData();
-      
-      // Fetch staff performance data
+      // Fetch staff performance data first (sets chartData.staffSales)
       await fetchStaffPerformanceData(performancePeriod);
+      
+      // Then fetch other chart data (preserves staffSales)
+      await fetchChartData();
     } catch (err) {
       if (err instanceof Error && err.message.includes('Network error')) {
         // Network error might be session related
@@ -449,8 +428,11 @@ const AdminDashboard: React.FC = () => {
     // Listen for real-time updates
     const refreshAll = () => {
       fetchDashboardData();
-      fetchChartData();
-      fetchStaffPerformanceData(performancePeriod);
+      // Fetch staff performance first to set chart data
+      fetchStaffPerformanceData(performancePeriod).then(() => {
+        // Then fetch other charts (preserves staffSales)
+        fetchChartData();
+      });
     };
 
     newSocket.on('order-updated', (data) => {
