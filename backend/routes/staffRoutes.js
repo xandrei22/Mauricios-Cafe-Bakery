@@ -567,7 +567,7 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         }
 
         // Get current staff member's performance data only
-        const currentStaffId = req.session.staffUser ? .id;
+        const currentStaffId = req.session.staffUser ? req.session.staffUser.id : null;
 
         if (!currentStaffId) {
             return res.status(401).json({
