@@ -246,7 +246,7 @@ app.use(session({
     store: sessionStore,
     cookie: {
         secure: true,
-        sameSite: 'none',
+        sameSite: 'lax',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
         rolling: true
