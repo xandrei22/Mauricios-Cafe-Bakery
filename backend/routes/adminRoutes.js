@@ -531,34 +531,37 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             interval = 'INTERVAL 6 MONTH';
         }
 
-        // Get staff performance data - include all orders regardless of payment status for now
+        // Get all staff performance data (admin view)
         const [staffData] = await db.query(`
             SELECT 
                 CASE 
+                    WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
                     WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
                     THEN CONCAT('Staff ', u.id)
                     ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
                 END as staff_name,
-                u.id as staff_id,
+                COALESCE(u.id, 0) as staff_id,
                 ${groupBy} as period,
                 SUM(o.total_price) as total_sales,
                 COUNT(o.id) as order_count,
                 AVG(o.total_price) as avg_order_value
             FROM orders o
             LEFT JOIN users u ON o.staff_id = u.id
-            WHERE o.order_time >= DATE_SUB(NOW(), ${interval})
+            WHERE o.payment_status = 'paid'
+                AND o.order_time >= DATE_SUB(NOW(), ${interval})
             GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
             ORDER BY period DESC, total_sales DESC
         `);
 
-        // Get daily sales trend for the last 7 days or monthly trend for last 6 months
+        // Get daily sales trend for the last 7 days or monthly trend for last 6 months (all orders)
         const [trendData] = await db.query(`
             SELECT 
                 ${groupBy} as period,
                 SUM(o.total_price) as total_sales,
                 COUNT(o.id) as order_count
             FROM orders o
-            WHERE o.order_time >= DATE_SUB(NOW(), ${interval})
+            WHERE o.payment_status = 'paid'
+                AND o.order_time >= DATE_SUB(NOW(), ${interval})
             GROUP BY ${groupBy}
             ORDER BY period ASC
         `);

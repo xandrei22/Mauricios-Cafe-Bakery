@@ -566,7 +566,16 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             interval = 'INTERVAL 6 MONTH';
         }
 
-        // Get staff performance data
+        // Get current staff member's performance data only
+        const currentStaffId = req.session.staffUser ? .id;
+
+        if (!currentStaffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Staff session required'
+            });
+        }
+
         const [staffData] = await db.query(`
             SELECT 
                 CASE 
@@ -583,22 +592,25 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             JOIN users u ON o.staff_id = u.id
             WHERE o.payment_status = 'paid'
                 AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                AND u.id = ?
             GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
             ORDER BY period DESC, total_sales DESC
-        `);
+        `, [currentStaffId]);
 
-        // Get daily sales trend for the last 7 days or monthly trend for last 6 months
+        // Get daily sales trend for the last 7 days or monthly trend for last 6 months (current staff only)
         const [trendData] = await db.query(`
             SELECT 
                 ${groupBy} as period,
                 SUM(o.total_price) as total_sales,
                 COUNT(o.id) as order_count
             FROM orders o
+            JOIN users u ON o.staff_id = u.id
             WHERE o.payment_status = 'paid'
                 AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                AND u.id = ?
             GROUP BY ${groupBy}
             ORDER BY period ASC
-        `);
+        `, [currentStaffId]);
 
         // Process staff data
         const staffPerformance = {};
@@ -632,9 +644,21 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         });
 
         // Sort staff by total sales
-        const sortedStaff = Object.values(staffPerformance)
+        let sortedStaff = Object.values(staffPerformance)
             .sort((a, b) => b.total_sales - a.total_sales)
             .slice(0, 10); // Top 10 staff
+
+        // If no data found for current staff, create a placeholder
+        if (sortedStaff.length === 0) {
+            sortedStaff = [{
+                staff_name: 'No Sales Data',
+                staff_id: currentStaffId,
+                periods: [],
+                total_sales: 0,
+                total_orders: 0,
+                avg_order_value: 0
+            }];
+        }
 
         // Process trend data
         const trend = {
@@ -837,6 +861,22 @@ router.put('/orders/:orderId/status', async(req, res) => {
                                 (customer_id, order_id, points_earned, transaction_type, description) 
                                 VALUES (?, ?, ?, 'earn', ?)
                             `, [order.customer_id, order.id, pointsEarned, `Earned ${pointsEarned} points from order #${order.order_id} (₱${order.total_price})`]);
+
+                            // Emit loyalty update event
+                            const io = req.app.get('io');
+                            if (io) {
+                                // Get customer email for room targeting
+                                const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                                if (customer.length > 0) {
+                                    io.to(`customer-${customer[0].email}`).emit('loyalty-updated', {
+                                        customerId: order.customer_id,
+                                        pointsEarned,
+                                        newBalance: pointsEarned, // This will be updated by frontend fetch
+                                        orderId: order.order_id,
+                                        timestamp: new Date()
+                                    });
+                                }
+                            }
                         }
                     }
                 } catch (pointsErr) {

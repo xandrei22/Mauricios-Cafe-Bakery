@@ -119,6 +119,22 @@ router.post('/earn', async(req, res) => {
                 SELECT loyalty_points FROM customers WHERE id = ?
             `, [customerId]);
 
+            // Emit loyalty update event
+            const io = req.app.get('io');
+            if (io) {
+                // Get customer email for room targeting
+                const [customerEmail] = await db.query('SELECT email FROM customers WHERE id = ?', [customerId]);
+                if (customerEmail.length > 0) {
+                    io.to(`customer-${customerEmail[0].email}`).emit('loyalty-updated', {
+                        customerId,
+                        pointsEarned,
+                        newBalance: customers[0].loyalty_points,
+                        orderId,
+                        timestamp: new Date()
+                    });
+                }
+            }
+
             res.json({
                 success: true,
                 pointsEarned,
