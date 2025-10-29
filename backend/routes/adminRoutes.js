@@ -480,7 +480,7 @@ router.get('/dashboard/menu-items', async(req, res) => {
 // Staff sales performance data for horizontal bar chart
 router.get('/dashboard/staff-sales', async(req, res) => {
     try {
-        const [staffData] = await db.query(`
+        let [staffData] = await db.query(`
             SELECT 
                 CASE 
                     WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
@@ -489,13 +489,33 @@ router.get('/dashboard/staff-sales', async(req, res) => {
                 END as staff_name,
                 SUM(o.total_price) as total_sales
             FROM orders o
-            JOIN users u ON o.staff_id = u.id
+            LEFT JOIN users u ON o.staff_id = u.id
             WHERE o.payment_status = 'paid'
-                AND o.order_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                AND o.order_time >= DATE_SUB(NOW(), INTERVAL 90 DAY)
             GROUP BY u.id, u.first_name, u.last_name
             ORDER BY total_sales DESC
             LIMIT 6
         `);
+
+        // Fallback: if no data in last 90 days, look back 12 months
+        if (!staffData || staffData.length === 0) {
+            ;[staffData] = await db.query(`
+                SELECT 
+                    CASE 
+                        WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
+                        THEN CONCAT('Staff ', u.id)
+                        ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
+                    END as staff_name,
+                    SUM(o.total_price) as total_sales
+                FROM orders o
+                LEFT JOIN users u ON o.staff_id = u.id
+                WHERE o.payment_status = 'paid'
+                    AND o.order_time >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+                GROUP BY u.id, u.first_name, u.last_name
+                ORDER BY total_sales DESC
+                LIMIT 6
+            `);
+        }
 
         const labels = staffData.map(item => item.staff_name);
         const data = staffData.map(item => parseFloat(item.total_sales) || 0);
@@ -534,7 +554,7 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         console.log('🔍 Admin performance query - period:', period, 'interval:', interval);
 
         // Get all staff performance data (admin view)
-        const [staffData] = await db.query(`
+        let [staffData] = await db.query(`
             SELECT 
                 CASE 
                     WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
@@ -559,6 +579,50 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         if (staffData.length > 0) {
             console.log('🔍 Sample admin staff data:', staffData[0]);
         } else {
+            // Fallback: expand time window to 12 months, then all time
+            ;[staffData] = await db.query(`
+                SELECT 
+                    CASE 
+                        WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
+                        WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
+                        THEN CONCAT('Staff ', u.id)
+                        ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
+                    END as staff_name,
+                    COALESCE(u.id, 0) as staff_id,
+                    ${groupBy} as period,
+                    SUM(o.total_price) as total_sales,
+                    COUNT(o.id) as order_count,
+                    AVG(o.total_price) as avg_order_value
+                FROM orders o
+                LEFT JOIN users u ON o.staff_id = u.id
+                WHERE o.payment_status = 'paid'
+                    AND o.order_time >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+                GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
+                ORDER BY period DESC, total_sales DESC
+            `);
+
+            if (staffData.length === 0) {
+                ;[staffData] = await db.query(`
+                    SELECT 
+                        CASE 
+                            WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
+                            WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
+                            THEN CONCAT('Staff ', u.id)
+                            ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
+                        END as staff_name,
+                        COALESCE(u.id, 0) as staff_id,
+                        ${groupBy} as period,
+                        SUM(o.total_price) as total_sales,
+                        COUNT(o.id) as order_count,
+                        AVG(o.total_price) as avg_order_value
+                    FROM orders o
+                    LEFT JOIN users u ON o.staff_id = u.id
+                    WHERE o.payment_status = 'paid'
+                    GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
+                    ORDER BY period DESC, total_sales DESC
+                `);
+            }
+
             // Debug: Check if there are any paid orders at all
             const [debugQuery] = await db.query(`
                 SELECT COUNT(*) as total_orders, 
