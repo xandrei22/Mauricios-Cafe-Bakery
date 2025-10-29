@@ -97,15 +97,18 @@ const AdminDashboard: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Admin staff performance data received:', data);
         setStaffPerformanceData(data);
         
         // Process data for chart
-        if (data.staff_performance && data.staff_performance.length > 0) {
+        if (data.staff_performance && Array.isArray(data.staff_performance) && data.staff_performance.length > 0) {
           const labels = data.staff_performance.map((staff: any) => staff.staff_name || 'Unknown Staff');
           const salesData = data.staff_performance.map((staff: any) => Number(staff.total_sales) || 0);
           
+          console.log('Admin staff performance chart data:', { labels, salesData });
+          
           // Ensure we have valid data before setting chart data
-          if (labels.length > 0 && salesData.length > 0) {
+          if (labels.length > 0 && salesData.length > 0 && salesData.some((val: number) => val > 0)) {
             setChartData(prev => ({
               ...prev,
               staffSales: {
@@ -123,40 +126,48 @@ const AdminDashboard: React.FC = () => {
               }
             }));
           } else {
-            // Set empty chart data to prevent undefined errors
+            console.log('No valid sales data, setting empty state');
+            // Set empty chart data
             setChartData(prev => ({
               ...prev,
               staffSales: {
-                labels: ['No Data'],
-                datasets: [{
-                  label: 'Sales (₱)',
-                  data: [0],
-                  backgroundColor: ['#a87437'],
-                  borderColor: '#8f652f',
-                  borderWidth: 1,
-                }]
+                labels: [],
+                datasets: []
               }
             }));
           }
         } else {
-          // Set empty chart data to prevent undefined errors
+          console.log('No staff performance data found or invalid format');
+          // Set empty chart data
           setChartData(prev => ({
             ...prev,
             staffSales: {
-              labels: ['No Data'],
-              datasets: [{
-                label: 'Sales (₱)',
-                data: [0],
-                backgroundColor: ['#a87437'],
-                borderColor: '#8f652f',
-                borderWidth: 1,
-              }]
+              labels: [],
+              datasets: []
             }
           }));
         }
+      } else {
+        console.error('Admin staff performance API error:', response.status, await response.text());
+        // Set empty chart data on error
+        setChartData(prev => ({
+          ...prev,
+          staffSales: {
+            labels: [],
+            datasets: []
+          }
+        }));
       }
     } catch (error) {
       console.error('Error fetching staff performance data:', error);
+      // Set empty chart data on error
+      setChartData(prev => ({
+        ...prev,
+        staffSales: {
+          labels: [],
+          datasets: []
+        }
+      }));
     }
   };
 
@@ -699,7 +710,13 @@ const AdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="h-64 sm:h-80 dashboard-chart-tablet">
-                {chartData.staffSales && chartData.staffSales.labels && chartData.staffSales.labels.length > 0 ? (
+                {chartData.staffSales && 
+                 chartData.staffSales.labels && 
+                 chartData.staffSales.labels.length > 0 && 
+                 chartData.staffSales.datasets && 
+                 chartData.staffSales.datasets.length > 0 &&
+                 chartData.staffSales.datasets[0].data && 
+                 chartData.staffSales.datasets[0].data.length > 0 ? (
                   <Bar 
                     data={chartData.staffSales} 
                     options={{
@@ -728,12 +745,17 @@ const AdminDashboard: React.FC = () => {
                         tooltip: {
                           callbacks: {
                             label: function(context) {
-                              const staff = staffPerformanceData.staff_performance[context.dataIndex];
-                              return [
-                                `Sales: ₱${staff.total_sales.toLocaleString()}`,
-                                `Orders: ${staff.total_orders}`,
-                                `Avg Order: ₱${staff.avg_order_value.toFixed(2)}`
-                              ];
+                              if (staffPerformanceData && 
+                                  staffPerformanceData.staff_performance && 
+                                  staffPerformanceData.staff_performance[context.dataIndex]) {
+                                const staff = staffPerformanceData.staff_performance[context.dataIndex];
+                                return [
+                                  `Sales: ₱${(staff.total_sales || 0).toLocaleString()}`,
+                                  `Orders: ${staff.total_orders || 0}`,
+                                  `Avg Order: ₱${(staff.avg_order_value || 0).toFixed(2)}`
+                                ];
+                              }
+                              return `Sales: ₱${context.parsed.x.toLocaleString()}`;
                             }
                           }
                         }
