@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, Users, Plus, Edit, Trash, RefreshCw, Search } from 'lucide-react';
+import { CheckCircle, XCircle, Users, Plus, Edit, Trash, RefreshCw, Search, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -44,6 +44,10 @@ const AdminStaff: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [, setStaffCount] = useState(0);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false);
 
   const [form, setForm] = useState({
     username: '', email: '', password: '', confirmPassword: '', 
@@ -740,16 +744,29 @@ const AdminStaff: React.FC = () => {
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Account Security</h3>
                   <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      value={form.password}
-                      onChange={handleChange}
-                      placeholder="Password"
-                      required
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        value={form.password}
+                        onChange={handleChange}
+                        placeholder="Password"
+                        required
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password checklist */}
                     {form.password.length > 0 && (
                       <div className="mt-2 space-y-1 text-sm">
@@ -764,16 +781,29 @@ const AdminStaff: React.FC = () => {
                   </div>
                   <div className="mt-3">
                     <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                    <Input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type="password"
-                      value={form.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Confirm Password"
-                      required
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={form.confirmPassword}
+                        onChange={handleChange}
+                        placeholder="Confirm Password"
+                        required
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password match indicator */}
                     {form.confirmPassword.length > 0 && (
                       <div className={passwordsMatch ? 'text-green-600 flex items-center mt-1' : 'text-red-600 flex items-center mt-1'}>
@@ -839,14 +869,27 @@ const AdminStaff: React.FC = () => {
                 {/* Password Section - 2 columns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Input
-                      name="password"
-                      type="password"
-                      value={editForm.password}
-                      onChange={handleEditChange}
-                      placeholder="New Password (leave blank to keep current)"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        name="password"
+                        type={showEditPassword ? "text" : "password"}
+                        value={editForm.password}
+                        onChange={handleEditChange}
+                        placeholder="New Password (leave blank to keep current)"
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showEditPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password checklist for edit */}
                     {editForm.password && editForm.password.length > 0 && (
                       <div className="mt-2 space-y-1 text-sm">
@@ -860,14 +903,27 @@ const AdminStaff: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <Input
-                      name="confirmPassword"
-                      type="password"
-                      value={editForm.confirmPassword}
-                      onChange={handleEditChange}
-                      placeholder="Confirm Password"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        name="confirmPassword"
+                        type={showEditConfirmPassword ? "text" : "password"}
+                        value={editForm.confirmPassword}
+                        onChange={handleEditChange}
+                        placeholder="Confirm Password"
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditConfirmPassword(!showEditConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showEditConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password match indicator for edit */}
                     {editForm.confirmPassword && (
                       <div className={editPasswordsMatch ? 'text-green-600 flex items-center mt-1' : 'text-red-600 flex items-center mt-1'}>
