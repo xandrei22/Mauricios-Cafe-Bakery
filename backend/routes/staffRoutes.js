@@ -826,7 +826,7 @@ router.put('/orders/:orderId/status', async(req, res) => {
             ]);
         } else {
             // Regular status update - also update staff_id to track who processed this order
-            const currentStaffId = req.session.staffUser ? .id;
+            const currentStaffId = req.session.staffUser ? req.session.staffUser.id : null;
             let updateQuery = 'UPDATE orders SET status = ?, updated_at = NOW()';
             let updateParams = [status];
 
