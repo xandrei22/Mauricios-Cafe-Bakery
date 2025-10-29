@@ -825,9 +825,16 @@ router.put('/orders/:orderId/status', async(req, res) => {
                 orderId
             ]);
         } else {
-            // Regular status update
+            // Regular status update - also update staff_id to track who processed this order
+            const currentStaffId = req.session.staffUser ? .id;
             let updateQuery = 'UPDATE orders SET status = ?, updated_at = NOW()';
             let updateParams = [status];
+
+            // Update staff_id if staff member is processing this order
+            if (currentStaffId) {
+                updateQuery += ', staff_id = ?';
+                updateParams.push(currentStaffId);
+            }
 
             // Automatically set payment status to 'paid' when order is completed
             if (status === 'completed') {

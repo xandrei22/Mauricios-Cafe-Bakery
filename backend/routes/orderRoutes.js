@@ -570,6 +570,16 @@ router.put('/:orderId/status', async(req, res) => {
             params.push('paid');
         }
 
+        // Update staff_id if admin/staff member is processing this order
+        const currentStaffId = (req.session.adminUser && req.session.adminUser.id) ||
+            (req.session.staffUser && req.session.staffUser.id) ||
+            null;
+
+        if (currentStaffId) {
+            updateFields.push('staff_id = ?');
+            params.push(currentStaffId);
+        }
+
         if (updateFields.length === 0) {
             return res.status(400).json({ success: false, error: 'No fields to update' });
         }
@@ -984,6 +994,16 @@ router.put('/:orderId/payment-status', async(req, res) => {
         if (payment_status === 'paid') {
             updateFields.push('status = ?');
             updateValues.push('pending');
+        }
+
+        // Update staff_id if admin/staff member is processing this payment
+        const currentStaffId = (req.session.adminUser && req.session.adminUser.id) ||
+            (req.session.staffUser && req.session.staffUser.id) ||
+            null;
+
+        if (currentStaffId) {
+            updateFields.push('staff_id = ?');
+            updateValues.push(currentStaffId);
         }
 
         updateValues.push(orderId);
