@@ -326,8 +326,8 @@ const AdminDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch unified metrics for 30 days (month view)
-      const metricsResponse = await fetch('/api/admin/metrics/summary?range=30d', {
+      // Fetch unified metrics for 365 days (year view) for total revenue
+      const metricsResponse = await fetch('/api/admin/metrics/summary?range=365d', {
         credentials: 'include'
       });
       
@@ -337,9 +337,9 @@ const AdminDashboard: React.FC = () => {
         return;
       }
       
-      let monthMetrics: any = null;
+      let yearMetrics: any = null;
       if (metricsResponse.ok) {
-        monthMetrics = await metricsResponse.json();
+        yearMetrics = await metricsResponse.json();
       } else {
         // Fallback to legacy dashboard endpoint to avoid blank screen
         const legacyResponse = await fetch('/api/admin/dashboard', { credentials: 'include' });
@@ -348,8 +348,8 @@ const AdminDashboard: React.FC = () => {
         }
         const legacy = await legacyResponse.json();
         // Map legacy data to the new structure expected below
-        monthMetrics = {
-          revenue: legacy?.data?.revenue?.month ?? 0,
+        yearMetrics = {
+          revenue: legacy?.data?.revenue?.year ?? 0, // Use year revenue for total
           growthPercent: legacy?.data?.revenue?.growth ?? 0,
           orders: legacy?.data?.orders ?? { total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 },
           inventory: legacy?.data?.inventory ?? { in_stock: 0, low_stock: 0, out_of_stock: 0 }
@@ -375,20 +375,20 @@ const AdminDashboard: React.FC = () => {
         data: {
           revenue: {
             today: n(todayMetrics.revenue),
-            week: n(monthMetrics.revenue),
-            month: n(monthMetrics.revenue),
-            growth: n(monthMetrics.growthPercent || 0)
+            week: n(yearMetrics.revenue),
+            month: n(yearMetrics.revenue), // Use year revenue for total revenue display
+            growth: n(yearMetrics.growthPercent || 0)
           },
           orders: {
-            pending: n(monthMetrics.orders.pending),
-            processing: n(monthMetrics.orders.processing),
-            completed: n(monthMetrics.orders.completed),
-            total: n(monthMetrics.orders.total)
+            pending: n(yearMetrics.orders.pending),
+            processing: n(yearMetrics.orders.processing),
+            completed: n(yearMetrics.orders.completed),
+            total: n(yearMetrics.orders.total)
           },
           inventory: {
-            total: n(monthMetrics.inventory.in_stock) + n(monthMetrics.inventory.low_stock) + n(monthMetrics.inventory.out_of_stock),
-            low_stock: n(monthMetrics.inventory.low_stock),
-            out_of_stock: n(monthMetrics.inventory.out_of_stock)
+            total: n(yearMetrics.inventory.in_stock) + n(yearMetrics.inventory.low_stock) + n(yearMetrics.inventory.out_of_stock),
+            low_stock: n(yearMetrics.inventory.low_stock),
+            out_of_stock: n(yearMetrics.inventory.out_of_stock)
           }
         }
       };

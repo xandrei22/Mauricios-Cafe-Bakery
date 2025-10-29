@@ -378,7 +378,7 @@ const StaffDashboard: React.FC = () => {
         const staffData = await staffResponse.json();
         console.log('Staff dashboard data received:', staffData);
         metricsData = {
-          revenue: staffData?.data?.revenue?.month ?? 0, // Use month revenue for total
+          revenue: staffData?.data?.revenue?.year ?? 0, // Use year revenue for total (all-time)
           todayRevenue: staffData?.data?.revenue?.today ?? 0, // Today's revenue
           growthPercent: staffData?.data?.revenue?.growth ?? 0,
           orders: staffData?.data?.orders ?? { total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 },
@@ -569,7 +569,7 @@ const StaffDashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -611,18 +611,6 @@ const StaffDashboard: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboardData.data.customers.total}</div>
-            <p className="text-xs text-muted-foreground">
-              +{dashboardData.data.customers.new} new today
-            </p>
-          </CardContent>
-        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
