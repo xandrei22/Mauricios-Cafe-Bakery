@@ -245,16 +245,15 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        secure: true, // Set to false for mobile compatibility - HTTPS will be handled by reverse proxy
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'none', // Changed from 'none' to 'lax' for better mobile compatibility
+        secure: true,
+        sameSite: 'none',
         httpOnly: true,
-        rolling: true, // Refresh cookie on each request
-        domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
+        maxAge: 24 * 60 * 60 * 1000,
+        rolling: true
     },
-    name: 'sessionId', // Custom session name
-    unset: 'destroy', // Properly destroy sessions
-    proxy: true // Trust proxy for correct secure flag handling
+    name: 'sessionId',
+    unset: 'destroy',
+    proxy: true
 }));
 
 // Initialize Passport.js for authentication
