@@ -403,7 +403,7 @@ const orderProcessingService = require('./services/orderProcessingService');
 orderProcessingService.setupSocketConnection(io);
 
 // Setup low stock monitor
-us //const lowStockMonitorService = require('./services/lowStockMonitorService');
+//const lowStockMonitorService = require('./services/lowStockMonitorService');
 
 // Debug middleware to log all routes
 app.use((req, res, next) => {
