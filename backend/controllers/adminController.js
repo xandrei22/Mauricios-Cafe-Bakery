@@ -78,15 +78,17 @@ async function login(req, res) {
                     role: 'admin'
                 };
 
-                return res.json({
-                    success: true,
-                    user: {
-                        id: user.id,
-                        username: user.username,
-                        email: user.email,
-                        fullName: user.full_name,
-                        role: 'admin'
-                    }
+                return req.session.save(() => {
+                    res.json({
+                        success: true,
+                        user: {
+                            id: user.id,
+                            username: user.username,
+                            email: user.email,
+                            fullName: user.full_name,
+                            role: 'admin'
+                        }
+                    });
                 });
             } else {
                 // Block regular staff from admin portal
@@ -139,15 +141,17 @@ async function login(req, res) {
         };
         console.log('Admin login successful. Session adminUser set:', req.session.adminUser);
 
-        res.json({
-            success: true,
-            user: {
-                id: admin.id,
-                username: admin.username,
-                email: admin.email,
-                fullName: admin.full_name,
-                role: 'admin'
-            }
+        req.session.save(() => {
+            res.json({
+                success: true,
+                user: {
+                    id: admin.id,
+                    username: admin.username,
+                    email: admin.email,
+                    fullName: admin.full_name,
+                    role: 'admin'
+                }
+            });
         });
 
     } catch (error) {
@@ -280,15 +284,17 @@ async function staffLogin(req, res) {
             });
         }
 
-        res.json({
-            success: true,
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                fullName: user.full_name,
-                role: user.role
-            }
+        req.session.save(() => {
+            res.json({
+                success: true,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.full_name,
+                    role: user.role
+                }
+            });
         });
 
     } catch (error) {

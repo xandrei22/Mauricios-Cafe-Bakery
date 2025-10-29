@@ -63,16 +63,19 @@ async function login(req, res) {
             req.session.postLoginRedirect = postLoginRedirect;
         }
 
-        res.json({
-            success: true,
-            user: {
-                id: customer.id,
-                username: customer.username,
-                email: customer.email,
-                name: customer.full_name,
-                role: 'customer'
-            },
-            redirect: postLoginRedirect || null
+        // Persist the session cookie before responding (improves reliability on mobile browsers)
+        req.session.save(() => {
+            res.json({
+                success: true,
+                user: {
+                    id: customer.id,
+                    username: customer.username,
+                    email: customer.email,
+                    name: customer.full_name,
+                    role: 'customer'
+                },
+                redirect: postLoginRedirect || null
+            });
         });
 
     } catch (error) {

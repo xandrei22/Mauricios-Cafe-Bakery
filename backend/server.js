@@ -245,13 +245,11 @@ app.use(session({
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-        // Mobile-safe defaults: rely on reverse proxy/host for HTTPS enforcement
-        secure: false,
-        sameSite: 'lax',
+        secure: true,
+        sameSite: 'none',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        rolling: true,
-        domain: process.env.COOKIE_DOMAIN || undefined
+        rolling: true
     },
     name: 'sessionId',
     unset: 'destroy',
