@@ -50,7 +50,20 @@ dotenv.config();
 
 // Create Express app and set port
 const app = express();
-// Behind Render/Vercel proxies, trust the proxy for correct protocol/WS handling
+app.use(cors({
+    origin: [
+        "https://mauricios-cafe-bakery.vercel.app",
+        "http://localhost:5173"
+    ],
+    credentials: true
+}));
+app.options("*", cors({
+    origin: [
+        "https://mauricios-cafe-bakery.vercel.app",
+        "http://localhost:5173"
+    ],
+    credentials: true
+}));
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
@@ -240,21 +253,18 @@ sessionStore.on('connect', () => {
 });
 
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: sessionStore,
+    rolling: true,
     cookie: {
-        secure: true,
-        sameSite: 'lax',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
-        rolling: true
-    },
-    name: 'sessionId',
-    unset: 'destroy',
-    proxy: true
+        secure: true, // ✅ required for HTTPS
+        sameSite: 'none', // ✅ allow cross-site cookies
+        maxAge: 1000 * 60 * 60 * 24 // 1 day
+    }
 }));
+
 
 // Initialize Passport.js for authentication
 passportConfig(passport, db);
