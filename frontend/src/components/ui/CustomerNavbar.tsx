@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Home, Info, Star, MapPin, Heart, User, QrCode } from "lucide-react";
+import { Home, Info, Star, MapPin, Heart, User } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export function CustomerNavbar() {
@@ -57,10 +57,7 @@ export function CustomerNavbar() {
               <MapPin className="h-4 w-4 xl:h-5 xl:w-5" />
               <span className="text-sm xl:text-base">Location</span>
             </a>
-            <Link to="/qr-codes" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <QrCode className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">QR Codes</span>
-            </Link>
+            {/* QR Codes link removed as requested */}
             <div className="flex items-center gap-2 xl:gap-3 ml-4 xl:ml-6">
               <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center gap-1 px-3 xl:px-4 py-1.5 text-[#a87437] bg-white text-xs xl:text-sm font-semibold rounded-full hover:bg-[#f6efe7] hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-[0_8px_16px_rgba(0,0,0,0.12)]">
                 <User className="h-3 w-3 xl:h-4 xl:w-4" />
@@ -93,7 +90,7 @@ export function CustomerNavbar() {
             <a href="#best-sellers" className="block px-1 py-3 text-lg text-white hover:text-white/80">Best Sellers</a>
             <a href="#why-love-us" className="block px-1 py-3 text-lg text-white hover:text-white/80">Offers</a>
             <a href="#location" className="block px-1 py-3 text-lg text-white hover:text-white/80">Location</a>
-            <Link to="/qr-codes" className="block px-1 py-3 text-lg text-white hover:text-white/80">QR Codes</Link>
+            {/* QR Codes link removed as requested */}
             <div className="flex flex-col gap-3 my-4">
               <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
                 <User className="h-4 w-4" />
