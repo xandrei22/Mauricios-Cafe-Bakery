@@ -1,4 +1,8 @@
 {
+    "rewrites": [
+        { "source": "/api/:path*", "destination": "https://mauricios-cafe-bakery.onrender.com/api/:path*" }
+    ]
+} {
     "rewrites": [{
             "source": "/api/(.*)",
             "destination": "https://mauricios-cafe-bakery.onrender.com/api/$1"
