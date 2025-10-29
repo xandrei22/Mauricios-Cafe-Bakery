@@ -254,14 +254,14 @@ sessionStore.on('connect', () => {
 
 app.use(session({
     secret: process.env.SESSION_SECRET,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     rolling: true,
+    proxy: true,
     cookie: {
         httpOnly: true,
-        // Use secure cookies only in production. In dev (http), mobile devices will drop secure cookies.
         secure: process.env.NODE_ENV === 'production',
-        // Keep SameSite none to support scenarios where API may be on a different subdomain in prod
         sameSite: 'none',
         maxAge: 1000 * 60 * 60 * 24
     }
