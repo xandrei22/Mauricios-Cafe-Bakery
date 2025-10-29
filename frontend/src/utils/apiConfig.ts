@@ -4,24 +4,19 @@
  */
 
 export const getApiUrl = (): string => {
-  // First, try to use the explicit VITE_API_URL if provided
-  const envApiUrl = import.meta.env.VITE_API_URL;
-  
-  if (envApiUrl && envApiUrl.trim() !== '') {
-    return envApiUrl;
-  }
-  
-  // Check if we're in development (localhost)
-  const isLocalhost = window.location.hostname === 'localhost' || 
+  // Detect localhost development
+  const isLocalhost = window.location.hostname === 'localhost' ||
                       window.location.hostname === '127.0.0.1';
-  
+
   if (isLocalhost) {
-    // In development, use localhost backend
+    // In development, allow explicit override or fall back to local backend
+    const envApiUrl = import.meta.env.VITE_API_URL;
+    if (envApiUrl && envApiUrl.trim() !== '') return envApiUrl;
     return 'http://localhost:5001';
   }
 
-  // In production, route through the same origin using Vercel rewrite to avoid 3rd-party cookie blocking
-  // All frontend code will call relative paths like `/api/...`
+  // In production (any non-localhost), ALWAYS use same-origin and rely on Vercel rewrites
+  // This avoids third-party cookie blocking on mobile browsers
   return '';
 };
 
