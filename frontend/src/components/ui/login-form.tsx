@@ -92,15 +92,15 @@ export function LoginForm({
   }
 
   return (
-    <div className={cn("flex flex-col gap-3 sm:gap-6 max-w-md w-full mx-auto p-3 sm:p-0", className)} {...props}>
+    <div className={cn("flex flex-col gap-3 sm:gap-6 max-w-xs sm:max-w-sm md:max-w-md w-full mx-auto p-3 sm:p-4 md:p-0", className)} {...props}>
       <Card>
-        <CardHeader className="px-3 pt-3 pb-1 sm:px-6 sm:pt-6 sm:pb-2">
+        <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6 sm:pb-2">
           <CardTitle className="text-lg sm:text-2xl">Login to your account</CardTitle>
-          <CardDescription className="text-sm sm:text-base">
+          <CardDescription className="text-xs sm:text-sm md:text-base">
             Enter your email below to login to your account
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-3 pt-1 pb-3 sm:px-6 sm:pt-2 sm:pb-6">
+        <CardContent className="px-4 pt-2 pb-4 sm:px-6 sm:pt-2 sm:pb-6">
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col gap-2 sm:gap-6">
               <div className="grid gap-2 sm:gap-3">

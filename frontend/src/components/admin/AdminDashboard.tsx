@@ -73,7 +73,15 @@ const AdminDashboard: React.FC = () => {
 
   const [staffPerformanceData, setStaffPerformanceData] = useState<any>(null);
   const [performancePeriod, setPerformancePeriod] = useState('month');
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const navigate = useNavigate();
+
+  // Track window width for responsive chart options
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const chartOptions = {
     responsive: true,
@@ -81,6 +89,31 @@ const AdminDashboard: React.FC = () => {
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          boxWidth: windowWidth < 640 ? 10 : 12,
+          padding: windowWidth < 640 ? 6 : 8,
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+          maxRotation: windowWidth < 640 ? 45 : 0,
+          minRotation: windowWidth < 640 ? 45 : 0,
+        },
+      },
+      y: {
+        ticks: {
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+        },
       },
     },
   };
@@ -527,7 +560,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-4">
+    <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-2 sm:p-4 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
         <div className="min-w-0 flex-1">
@@ -537,7 +570,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -600,8 +633,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Sales Trend</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.sales && chartData.sales.labels && chartData.sales.labels.length > 0 ? (
                   <Line data={chartData.sales} options={chartOptions} />
                 ) : (
@@ -621,8 +654,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Most Used Ingredients</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.ingredients && chartData.ingredients.labels && chartData.ingredients.labels.length > 0 ? (
                   <Pie data={chartData.ingredients} options={chartOptions} />
                 ) : (
@@ -645,8 +678,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Most Bought Menu Items</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.menuItems && chartData.menuItems.labels && chartData.menuItems.labels.length > 0 ? (
                   <Bar data={chartData.menuItems} options={chartOptions} />
                 ) : (
@@ -690,8 +723,8 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.staffSales && 
                  chartData.staffSales.labels && 
                  chartData.staffSales.labels.length > 0 && 
@@ -711,14 +744,25 @@ const AdminDashboard: React.FC = () => {
                             color: 'rgba(0, 0, 0, 0.1)',
                           },
                           ticks: {
+                            font: {
+                              size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+                            },
                             callback: function(value) {
                               return '₱' + value.toLocaleString();
-                            }
+                            },
+                            maxTicksLimit: windowWidth < 640 ? 5 : 10,
                           }
                         },
                         y: {
                           grid: {
                             display: false,
+                          },
+                          ticks: {
+                            font: {
+                              size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+                            },
+                            maxRotation: windowWidth < 640 ? 0 : 0,
+                            minRotation: 0,
                           },
                         },
                       },

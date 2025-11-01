@@ -135,15 +135,15 @@ export function SignupForm({
 
 
   return (
-    <div className={cn("flex flex-col gap-2 sm:gap-4 max-w-md w-full mx-auto p-3 sm:p-0", className)} {...props}>
+    <div className={cn("flex flex-col gap-2 sm:gap-4 max-w-xs sm:max-w-sm md:max-w-md w-full mx-auto p-3 sm:p-4 md:p-0", className)} {...props}>
       <Card>
-        <CardHeader className="px-3 pt-3 pb-1 sm:px-6 sm:pt-5 sm:pb-1">
+        <CardHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-5 sm:pb-1">
           <CardTitle className="text-lg sm:text-2xl">Create an account</CardTitle>
-          <CardDescription className="text-sm sm:text-base">
+          <CardDescription className="text-xs sm:text-sm md:text-base">
             Enter your information below to create your account
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-3 pt-1 pb-3 sm:px-6 sm:pt-2 sm:pb-4">
+        <CardContent className="px-4 pt-2 pb-4 sm:px-6 sm:pt-2 sm:pb-4">
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col gap-2 sm:gap-4">
               <div className="grid gap-2 sm:gap-3">

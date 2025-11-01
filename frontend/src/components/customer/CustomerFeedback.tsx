@@ -267,7 +267,7 @@ export default function CustomerFeedback() {
             {/* Filter Bar and Share Button */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4">
               {/* Filter Bar */}
-              <div className="flex flex-wrap gap-3 rounded-xl p-4" style={{ backgroundColor: '#f5f5f5' }}>
+              <div className="flex flex-wrap gap-3 rounded-xl p-4 bg-[#f5f5f5]">
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger className="w-40 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-3">
                     <SelectValue placeholder="All categories" />

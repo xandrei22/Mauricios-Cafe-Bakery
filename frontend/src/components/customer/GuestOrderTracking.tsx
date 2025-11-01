@@ -436,26 +436,43 @@ const GuestOrderTracking: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {/* Progress Bar */}
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Progress</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[#a87437]">{getProgressPercentage(order.status)}% Complete</span>
-                      {isConnected && (
-                        <div className="flex items-center gap-1 text-xs text-green-600">
-                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>Live</span>
+                {(() => {
+                  const progressPercentage = getProgressPercentage(order.status);
+                  const progressWidth = `${progressPercentage}%`;
+                  const ariaLabel = `Order progress: ${progressPercentage}%`;
+                  const ariaValueNow = progressPercentage;
+                  const ariaValueMin = 0;
+                  const ariaValueMax = 100;
+                  
+                  return (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">Progress</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-[#a87437]">{progressPercentage}% Complete</span>
+                          {isConnected && (
+                            <div className="flex items-center gap-1 text-xs text-green-600">
+                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                              <span>Live</span>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                        {/* eslint-disable-next-line react/forbid-dom-props */}
+                        <div 
+                          className="bg-[#a87437] h-3 rounded-full transition-all duration-500 ease-in-out"
+                          role="progressbar"
+                          aria-label={ariaLabel}
+                          aria-valuenow={ariaValueNow}
+                          aria-valuemin={ariaValueMin}
+                          aria-valuemax={ariaValueMax}
+                          style={{ width: progressWidth } as React.CSSProperties}
+                        ></div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-[#a87437] h-3 rounded-full transition-all duration-500 ease-in-out"
-                      style={{ width: `${getProgressPercentage(order.status)}%` }}
-                    ></div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Progress Steps */}
                 <div className="space-y-4">
