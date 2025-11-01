@@ -64,11 +64,27 @@ async function login(req, res) {
         }
 
         // Persist the session cookie before responding (improves reliability on mobile browsers)
-        req.session.save(() => {
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ message: 'Error saving session' });
+            }
+
+            // Log session and cookie info for debugging
             try {
                 const setCookieHeader = res.getHeader('set-cookie');
                 console.log('🔒 Login Set-Cookie header:', setCookieHeader);
-            } catch (_) {}
+                console.log('🔒 Session ID:', req.sessionID);
+                console.log('🔒 Session customerUser set:', !!req.session.customerUser);
+                console.log('🔒 Cookie secure:', process.env.NODE_ENV === 'production');
+                console.log('🔒 Cookie sameSite: none');
+            } catch (logErr) {
+                console.error('Error logging cookie info:', logErr);
+            }
+
+            // Ensure response headers allow cookie setting
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+
             res.json({
                 success: true,
                 user: {

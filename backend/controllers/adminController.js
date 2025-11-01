@@ -78,7 +78,13 @@ async function login(req, res) {
                     role: 'admin'
                 };
 
-                return req.session.save(() => {
+                return req.session.save((err) => {
+                    if (err) {
+                        console.error('Admin session save error:', err);
+                        return res.status(500).json({ message: 'Error saving session' });
+                    }
+
+                    res.setHeader('Access-Control-Allow-Credentials', 'true');
                     res.json({
                         success: true,
                         user: {
@@ -141,7 +147,25 @@ async function login(req, res) {
         };
         console.log('Admin login successful. Session adminUser set:', req.session.adminUser);
 
-        req.session.save(() => {
+        req.session.save((err) => {
+            if (err) {
+                console.error('Admin session save error:', err);
+                return res.status(500).json({ message: 'Error saving session' });
+            }
+
+            // Log session and cookie info for debugging
+            try {
+                const setCookieHeader = res.getHeader('set-cookie');
+                console.log('🔒 Admin Login Set-Cookie header:', setCookieHeader);
+                console.log('🔒 Admin Session ID:', req.sessionID);
+                console.log('🔒 Admin Session adminUser set:', !!req.session.adminUser);
+            } catch (logErr) {
+                console.error('Error logging cookie info:', logErr);
+            }
+
+            // Ensure response headers allow cookie setting
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+
             res.json({
                 success: true,
                 user: {
@@ -290,7 +314,27 @@ async function staffLogin(req, res) {
             });
         }
 
-        req.session.save(() => {
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ message: 'Error saving session' });
+            }
+
+            // Log session and cookie info for debugging
+            try {
+                const setCookieHeader = res.getHeader('set-cookie');
+                console.log('🔒 Staff Login Set-Cookie header:', setCookieHeader);
+                console.log('🔒 Staff Session ID:', req.sessionID);
+                console.log('🔒 Staff Session staffUser set:', !!req.session.staffUser);
+                console.log('🔒 Cookie secure:', process.env.NODE_ENV === 'production');
+                console.log('🔒 Cookie sameSite: none');
+            } catch (logErr) {
+                console.error('Error logging cookie info:', logErr);
+            }
+
+            // Ensure response headers allow cookie setting
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+
             res.json({
                 success: true,
                 user: {

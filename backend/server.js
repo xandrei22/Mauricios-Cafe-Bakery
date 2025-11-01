@@ -252,6 +252,25 @@ sessionStore.on('connect', () => {
     console.log('Session store connected successfully');
 });
 
+// Build cookie config - mobile Safari requires no domain for cross-origin
+const cookieConfig = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // Must be true for sameSite: 'none'
+    sameSite: 'none', // Required for cross-origin cookies (mobile Safari needs this)
+    maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    path: '/'
+};
+
+// Only add domain if explicitly set AND not on mobile/cross-origin
+// Mobile Safari and cross-origin scenarios work better WITHOUT domain
+if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim() !== '') {
+    console.log('⚠️ COOKIE_DOMAIN is set:', process.env.COOKIE_DOMAIN);
+    console.log('⚠️ This may cause issues with mobile Safari - consider unsetting it');
+    cookieConfig.domain = process.env.COOKIE_DOMAIN;
+} else {
+    console.log('✅ Cookie domain not set - using default (better for mobile Safari)');
+}
+
 app.use(session({
     secret: process.env.SESSION_SECRET,
     store: sessionStore,
@@ -259,15 +278,8 @@ app.use(session({
     saveUninitialized: false,
     rolling: true,
     proxy: true,
-    cookie: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
-        // If COOKIE_DOMAIN is provided (e.g., mauricios-cafe-bakery.vercel.app), set it explicitly
-        // Otherwise omit to default to current host
-        domain: process.env.COOKIE_DOMAIN || undefined,
-        maxAge: 1000 * 60 * 60 * 24
-    }
+    name: 'connect.sid', // Explicit session cookie name
+    cookie: cookieConfig
 }));
 
 
@@ -284,13 +296,24 @@ app.use((req, res, next) => {
         const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 
         if (isMobile) {
+            // Log cookie header to see if it's being sent
+            const cookieHeader = req.headers.cookie || 'NO COOKIES';
+            const hasSessionCookie = cookieHeader.includes('connect.sid');
+
             console.log('📱 Mobile device detected:', {
                 userAgent: userAgent.substring(0, 100),
                 sessionId: req.sessionID,
+                hasSessionCookie: hasSessionCookie,
+                cookieHeader: cookieHeader.substring(0, 150),
                 hasAdminUser: !!req.session.adminUser,
                 hasStaffUser: !!req.session.staffUser,
                 hasCustomerUser: !!req.session.customerUser
             });
+
+            // If no session cookie is being sent, log warning
+            if (!hasSessionCookie && req.path !== '/api/debug/session') {
+                console.warn('⚠️ WARNING: No connect.sid cookie received from mobile device!');
+            }
         }
 
         // Refresh session for admin users
