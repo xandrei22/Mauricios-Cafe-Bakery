@@ -84,6 +84,18 @@ async function login(req, res) {
                         return res.status(500).json({ message: 'Error saving session' });
                     }
 
+                    // Explicitly set cookie for mobile Safari
+                    const cookieValue = req.sessionID;
+                    const cookieOptions = {
+                        httpOnly: true,
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: 'none',
+                        maxAge: 1000 * 60 * 60 * 24,
+                        path: '/'
+                    };
+                    // Don't set domain - mobile Safari rejects cross-origin cookies with explicit domains
+                    res.cookie('connect.sid', cookieValue, cookieOptions);
+
                     res.setHeader('Access-Control-Allow-Credentials', 'true');
                     res.json({
                         success: true,
@@ -152,6 +164,22 @@ async function login(req, res) {
                 console.error('Admin session save error:', err);
                 return res.status(500).json({ message: 'Error saving session' });
             }
+
+            // Explicitly set cookie for mobile Safari - express-session might not be setting it
+            const cookieValue = req.sessionID;
+            const cookieOptions = {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'none',
+                maxAge: 1000 * 60 * 60 * 24, // 24 hours
+                path: '/'
+            };
+
+            // NEVER set domain for cross-origin cookies - mobile Safari rejects them
+            // Even if COOKIE_DOMAIN is set, don't use it for mobile Safari compatibility
+            // console.log('ℹ️ Cookie domain intentionally not set for mobile Safari compatibility');
+
+            res.cookie('connect.sid', cookieValue, cookieOptions);
 
             // Log session and cookie info for debugging
             try {
@@ -319,6 +347,22 @@ async function staffLogin(req, res) {
                 console.error('Session save error:', err);
                 return res.status(500).json({ message: 'Error saving session' });
             }
+
+            // Explicitly set cookie for mobile Safari - express-session might not be setting it
+            const cookieValue = req.sessionID;
+            const cookieOptions = {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'none',
+                maxAge: 1000 * 60 * 60 * 24, // 24 hours
+                path: '/'
+            };
+
+            // NEVER set domain for cross-origin cookies - mobile Safari rejects them
+            // Even if COOKIE_DOMAIN is set, don't use it for mobile Safari compatibility
+            // console.log('ℹ️ Cookie domain intentionally not set for mobile Safari compatibility');
+
+            res.cookie('connect.sid', cookieValue, cookieOptions);
 
             // Log session and cookie info for debugging
             try {

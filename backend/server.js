@@ -253,22 +253,25 @@ sessionStore.on('connect', () => {
 });
 
 // Build cookie config - mobile Safari requires no domain for cross-origin
+// IMPORTANT: NEVER set domain for cross-origin cookies (frontend Vercel → backend Render)
+// Mobile Safari's ITP (Intelligent Tracking Prevention) rejects cookies with explicit domains
 const cookieConfig = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production', // Must be true for sameSite: 'none'
     sameSite: 'none', // Required for cross-origin cookies (mobile Safari needs this)
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
     path: '/'
+        // Intentionally NOT setting domain - mobile Safari works better without it for cross-origin
 };
 
-// Only add domain if explicitly set AND not on mobile/cross-origin
-// Mobile Safari and cross-origin scenarios work better WITHOUT domain
+// Log warning if COOKIE_DOMAIN is set (but ignore it for cookie compatibility)
 if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim() !== '') {
-    console.log('⚠️ COOKIE_DOMAIN is set:', process.env.COOKIE_DOMAIN);
-    console.log('⚠️ This may cause issues with mobile Safari - consider unsetting it');
-    cookieConfig.domain = process.env.COOKIE_DOMAIN;
+    console.log('⚠️ WARNING: COOKIE_DOMAIN is set to:', process.env.COOKIE_DOMAIN);
+    console.log('⚠️ This environment variable is being IGNORED for mobile Safari compatibility');
+    console.log('⚠️ Mobile Safari rejects cross-origin cookies with explicit domains');
+    console.log('⚠️ To remove this warning, delete COOKIE_DOMAIN from Render environment variables');
 } else {
-    console.log('✅ Cookie domain not set - using default (better for mobile Safari)');
+    console.log('✅ Cookie domain not set - optimal for mobile Safari cross-origin cookies');
 }
 
 app.use(session({
