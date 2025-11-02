@@ -36,6 +36,10 @@ function adminArea(req, res) {
 // Admin login controller
 async function login(req, res) {
     try {
+        console.log('🔐 ADMIN LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+
         const { username, password } = req.body;
 
         // First check if this is a customer trying to access admin portal
@@ -241,6 +245,10 @@ function logout(req, res) {
 // Staff login controller (can be used by both admin and staff)
 async function staffLogin(req, res) {
     try {
+        console.log('🔐 STAFF LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+
         const { username, password } = req.body;
         console.log('🔍 Staff login attempt:', { username, passwordLength: password ? password.length : undefined });
 

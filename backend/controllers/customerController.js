@@ -7,6 +7,16 @@ const crypto = require('crypto');
 // Customer login controller
 async function login(req, res) {
     try {
+        console.log('🔐 CUSTOMER LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+        console.log('🔐 Request body received:', {
+            email: req.body ? .email ? '***' : 'MISSING',
+            password: req.body ? .password ? '***' : 'MISSING',
+            hasTable: !!req.body ? .table,
+            hasRedirect: !!req.body ? .redirect
+        });
+
         const { email, password, table, redirect } = req.body;
 
         // Find customer by email
@@ -87,12 +97,21 @@ async function login(req, res) {
 
             // Log session and cookie info for debugging
             try {
-                const setCookieHeader = res.getHeader('set-cookie');
-                console.log('🔒 Login Set-Cookie header:', setCookieHeader);
+                // Get ALL set-cookie headers (res.cookie adds to array)
+                const setCookieHeaders = res.getHeader('set-cookie') || [];
+                const setCookieArray = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+
+                console.log('🔒 Login Set-Cookie headers:', setCookieArray);
+                console.log('🔒 Number of Set-Cookie headers:', setCookieArray.length);
                 console.log('🔒 Session ID:', req.sessionID);
                 console.log('🔒 Session customerUser set:', !!req.session.customerUser);
                 console.log('🔒 Cookie secure:', process.env.NODE_ENV === 'production');
                 console.log('🔒 Cookie sameSite: none');
+                console.log('🔒 Response headers before sending:', {
+                    'Access-Control-Allow-Origin': res.getHeader('access-control-allow-origin'),
+                    'Access-Control-Allow-Credentials': res.getHeader('access-control-allow-credentials'),
+                    'Set-Cookie': setCookieArray.length
+                });
             } catch (logErr) {
                 console.error('Error logging cookie info:', logErr);
             }

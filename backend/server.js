@@ -460,9 +460,28 @@ app.use((req, res, next) => {
     next();
 });
 
-// Add before route registrations
+// Add before route registrations - comprehensive request logging
 app.use((req, res, next) => {
-    console.log('Request URL:', req.url);
+    const origin = req.headers.origin || 'no-origin';
+    const method = req.method;
+    const path = req.url;
+    const hasCookies = req.headers.cookie ? 'YES' : 'NO';
+
+    // Only log API routes and login attempts
+    if (path.includes('/api/') || path.includes('/auth/')) {
+        console.log(`🌐 ${method} ${path} | Origin: ${origin.substring(0, 50)} | Cookies: ${hasCookies}`);
+
+        // Log login attempts with more detail
+        if (path.includes('/login') && method === 'POST') {
+            console.log('🔐 LOGIN ATTEMPT DETECTED:', {
+                path,
+                origin,
+                hasCookies,
+                contentType: req.headers['content-type'],
+                bodySize: req.headers['content-length']
+            });
+        }
+    }
     next();
 });
 
