@@ -92,6 +92,7 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
   }
 
   // Check if we have localStorage fallback for recent login (works for ALL iOS versions)
+  // This check happens on EVERY render to catch localStorage immediately
   const loginTimestamp = localStorage.getItem('loginTimestamp');
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
   const recentLoginWindow = isIOS ? 30000 : 10000;
@@ -99,9 +100,23 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
   const storedUser = localStorage.getItem('customerUser');
   const hasLocalStorageFallback = isRecentLogin && storedUser;
 
+  // Debug logging for iOS
+  if (isIOS && !authenticated) {
+    console.log('CustomerLayoutInner render - iOS device, authenticated:', authenticated);
+    console.log('CustomerLayoutInner render - hasLocalStorageFallback:', hasLocalStorageFallback);
+    console.log('CustomerLayoutInner render - loginTimestamp:', loginTimestamp);
+    console.log('CustomerLayoutInner render - storedUser exists:', !!storedUser);
+  }
+
   // Allow access if authenticated OR if we have localStorage fallback (works for ALL iOS versions and browsers)
   if (!authenticated && !hasLocalStorageFallback) {
+    console.log('CustomerLayoutInner: No auth and no localStorage, will redirect to login');
     return null; // Will redirect
+  }
+  
+  // If we have localStorage but not authenticated, log it (should be handled by AuthContext, but this is backup)
+  if (!authenticated && hasLocalStorageFallback) {
+    console.log('✅ CustomerLayoutInner: Allowing access via localStorage fallback (should have been set by AuthContext)');
   }
 
   const handleLogout = async (e: React.MouseEvent) => {

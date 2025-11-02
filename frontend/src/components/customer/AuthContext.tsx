@@ -25,23 +25,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const API_URL = getApiUrl();
 
   const checkSession = useCallback(async () => {
+    // FIRST: Check localStorage BEFORE any network call (critical for iOS)
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const recentLoginWindow = isIOS ? 30000 : 10000;
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+    
+    // If we have localStorage and it's a recent login, use it IMMEDIATELY (don't even check session)
+    if (isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          setAuthenticated(true);
+          setUser(user);
+          setLoading(false);
+          console.log('✅ AuthContext: Using localStorage FIRST (iOS cookie workaround - before session check)');
+          
+          // Do session check in background to see if cookies eventually work
+          setTimeout(async () => {
+            try {
+              const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.authenticated && data.user) {
+                  console.log('✅ AuthContext: Cookies eventually worked, updating user from server');
+                  setUser(data.user);
+                  const currentTimestamp = localStorage.getItem('loginTimestamp');
+                  if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                    localStorage.removeItem('loginTimestamp');
+                  }
+                }
+              }
+            } catch (retryErr) {
+              console.log('AuthContext: Background session check failed, continuing with localStorage');
+            }
+          }, 3000);
+          
+          return; // EXIT EARLY - don't do session check at all if localStorage exists
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+          // Continue to session check below
+        }
+      }
+    }
+    
     // Debounce: prevent rapid successive calls (minimum 2 seconds between checks)
     const now = Date.now();
     if (now - lastSessionCheck < 2000) {
       return;
     }
     setLastSessionCheck(now);
-
-    // Check if we just logged in - ALL iOS versions and browsers can have cookie issues
-    // iOS 12-18+ all have ITP that blocks cross-origin cookies (Safari, Chrome, Firefox, etc.)
-    const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    // Use longer window for ALL iOS devices regardless of browser or version
-    const recentLoginWindow = isIOS ? 30000 : 10000; // 30 seconds for ALL iOS devices, 10 for others
-    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
     
     // If recent login, add a delay to let iOS process cookies
-    // ALL iOS versions often block cross-origin cookies
     if (isRecentLogin) {
       const delay = isIOS ? 1500 : 500;
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -70,28 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const user = JSON.parse(storedUser);
               setAuthenticated(true);
               setUser(user);
-              console.log('AuthContext: Using localStorage fallback (mobile Safari cookie delay)');
-              
-              // For ALL iOS devices, schedule a retry to check if cookies eventually work
-              const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-              if (isIOS) {
-                setTimeout(async () => {
-                  try {
-                    const retryRes = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
-                    if (retryRes.ok) {
-                      const retryData = await retryRes.json();
-                      if (retryData && retryData.authenticated && retryData.user) {
-                        console.log('AuthContext: Cookie eventually accepted by iOS Safari');
-                        setUser(retryData.user);
-                        localStorage.removeItem('loginTimestamp');
-                      }
-                    }
-                  } catch (retryErr) {
-                    console.log('AuthContext: Retry check failed, continuing with localStorage fallback');
-                  }
-                }, 5000); // Retry after 5 seconds
-              }
-              
+              console.log('✅ AuthContext: Session failed, using localStorage fallback');
               return; // Don't clear - let it persist
             } catch (e) {
               console.error('Failed to parse stored user:', e);
@@ -117,7 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const user = JSON.parse(storedUser);
             setAuthenticated(true);
             setUser(user);
-            console.log('AuthContext: Using localStorage fallback after error (mobile Safari cookie delay)');
+            console.log('✅ AuthContext: Session check error, using localStorage fallback');
           } catch (parseErr) {
             console.error('Failed to parse stored user:', parseErr);
             setAuthenticated(false);
@@ -179,19 +194,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log('✅ AuthContext: User from localStorage:', user.email);
             // Still do session check in background to see if cookies eventually work
             // But don't let it override our localStorage fallback
-            setTimeout(() => {
-              checkSession().then(() => {
-                // If session check succeeds, we can clear the localStorage fallback
-                const currentTimestamp = localStorage.getItem('loginTimestamp');
-                if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
-                  // Cookie is working now, we can rely on it
-                  console.log('✅ AuthContext: Cookies eventually worked, switching from localStorage to cookies');
-                  localStorage.removeItem('loginTimestamp');
+            setTimeout(async () => {
+              try {
+                const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.authenticated && data.user) {
+                    console.log('✅ AuthContext: Cookies eventually worked, updating user from server');
+                    setUser(data.user);
+                    const currentTimestamp = localStorage.getItem('loginTimestamp');
+                    if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                      localStorage.removeItem('loginTimestamp');
+                    }
+                  }
                 }
-              }).catch(() => {
-                // Session check failed, but we already have localStorage fallback - that's fine
-                console.log('AuthContext: Session check failed, continuing with localStorage fallback');
-              });
+              } catch (err) {
+                console.log('AuthContext: Background session check failed, continuing with localStorage fallback');
+              }
             }, 3000); // Wait 3 seconds before checking
           }
         } catch (e) {

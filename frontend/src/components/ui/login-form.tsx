@@ -70,16 +70,42 @@ export function LoginForm({
         setError(data.message || "Login failed");
       } else {
         // Successful login - store user info in localStorage as backup for mobile Safari
+        // CRITICAL: This MUST work on iOS, so we verify it multiple times
         if (data.user) {
           try {
             const userJson = JSON.stringify(data.user);
             const timestamp = Date.now().toString();
             localStorage.setItem('customerUser', userJson);
             localStorage.setItem('loginTimestamp', timestamp);
+            
+            // IMMEDIATE verification (critical for iOS)
+            const verifyUser = localStorage.getItem('customerUser');
+            const verifyTimestamp = localStorage.getItem('loginTimestamp');
+            
             console.log('✅ localStorage set - customerUser:', data.user.email, 'timestamp:', timestamp);
-            console.log('✅ localStorage verification - stored:', localStorage.getItem('customerUser') ? 'YES' : 'NO');
+            console.log('✅ localStorage verification - stored:', verifyUser ? 'YES' : 'NO');
+            console.log('✅ localStorage verification - timestamp:', verifyTimestamp ? 'YES' : 'NO');
+            
+            if (!verifyUser || !verifyTimestamp) {
+              console.error('❌ CRITICAL: localStorage write failed! This will cause iOS login issues!');
+              // Try one more time
+              try {
+                localStorage.setItem('customerUser', userJson);
+                localStorage.setItem('loginTimestamp', timestamp);
+                console.log('✅ Retry: localStorage set again');
+              } catch (retryErr) {
+                console.error('❌ CRITICAL: localStorage retry also failed!', retryErr);
+              }
+            }
           } catch (e) {
             console.error('❌ Could not store user in localStorage:', e);
+            console.error('❌ Error details:', {
+              name: e?.name,
+              message: e?.message,
+              code: (e as any)?.code,
+              stack: e?.stack
+            });
+            alert('Warning: Could not save login session. You may need to log in again if you refresh the page.');
           }
         } else {
           console.warn('⚠️ No user data in login response to store in localStorage');

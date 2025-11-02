@@ -33,13 +33,48 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     try {
       const API_URL = getApiUrl();
       
-      // Check if we just logged in - ALL iOS versions and browsers can have cookie issues
-      // iOS 12-18+ all have ITP that blocks cross-origin cookies (Safari, Chrome, Firefox, etc.)
+      // FIRST: Check localStorage BEFORE any network call (critical for iOS)
       const loginTimestamp = localStorage.getItem('loginTimestamp');
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      // Use longer window for ALL iOS devices regardless of browser or version
-      const recentLoginWindow = isIOS ? 30000 : 5000; // 30 seconds for ALL iOS devices, 5 for others
+      const recentLoginWindow = isIOS ? 30000 : 5000;
       const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+      
+      // If we have localStorage for customer and it's a recent login, use it IMMEDIATELY
+      if (requiredRole === 'customer' && isRecentLogin) {
+        const storedUser = localStorage.getItem('customerUser');
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            setIsAuthenticated(true);
+            setUserRole('customer');
+            setIsLoading(false);
+            console.log('✅ ProtectedRoute: Using localStorage FIRST (iOS cookie workaround - before session check)');
+            
+            // Do session check in background
+            setTimeout(async () => {
+              try {
+                const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.authenticated && data.user) {
+                    console.log('✅ ProtectedRoute: Cookies eventually worked');
+                    if (Date.now() - parseInt(loginTimestamp) > 10000) {
+                      localStorage.removeItem('loginTimestamp');
+                    }
+                  }
+                }
+              } catch (err) {
+                console.log('ProtectedRoute: Background session check failed, continuing with localStorage');
+              }
+            }, 3000);
+            
+            return; // EXIT EARLY - don't do session check at all
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
+            // Continue to session check below
+          }
+        }
+      }
       
       // Determine which session check endpoint to use based on required role
       let sessionEndpoint = `${API_URL}/api/admin/check-session`;
@@ -50,7 +85,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
 
       // If recent login, add a delay to let iOS process cookies
-      // ALL iOS versions often block cross-origin cookies
       if (isRecentLogin) {
         const delay = isIOS ? 1500 : 300;
         await new Promise(resolve => setTimeout(resolve, delay));
