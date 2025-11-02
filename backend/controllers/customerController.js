@@ -11,10 +11,10 @@ async function login(req, res) {
         console.log('🔐 Request origin:', req.headers.origin);
         console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
         console.log('🔐 Request body received:', {
-            email: req.body ? .email ? '***' : 'MISSING',
-            password: req.body ? .password ? '***' : 'MISSING',
-            hasTable: !!req.body ? .table,
-            hasRedirect: !!req.body ? .redirect
+            email: req.body && typeof req.body.email !== 'undefined' ? '***' : 'MISSING',
+            password: req.body && typeof req.body.password !== 'undefined' ? '***' : 'MISSING',
+            hasTable: !!(req.body && req.body.table),
+            hasRedirect: !!(req.body && req.body.redirect)
         });
 
         const { email, password, table, redirect } = req.body;
