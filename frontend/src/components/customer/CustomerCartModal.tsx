@@ -97,30 +97,46 @@ export default function CustomerCartModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-6xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* BRIGHT RED TESTING BANNER */}
-        <div className="bg-red-500 text-white p-2 text-center font-bold">
+        <div className="bg-red-500 text-white p-2 text-center font-bold text-xs sm:text-sm">
           TESTING: CustomerCartModal.tsx - Upload Receipt Fix
         </div>
-        <div className="flex h-full min-h-[600px]">
-          {/* LEFT SIDE - Cart Title */}
-          <div className="flex flex-col justify-center items-center bg-gray-50 px-8 py-12 min-w-[280px] border-r">
+        <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+          {/* LEFT SIDE - Cart Title - Hidden on mobile, shown on tablet+ */}
+          <div className="hidden md:flex flex-col justify-center items-center bg-gray-50 px-4 lg:px-8 py-8 lg:py-12 min-w-[200px] lg:min-w-[280px] border-r shrink-0">
             <div className="flex flex-col items-center gap-4">
-              <svg className="w-12 h-12 text-[#a87437]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-10 h-10 lg:w-12 lg:h-12 text-[#a87437]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m6 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
               </svg>
-              <div className="text-2xl font-bold text-[#a87437]">Cart</div>
-              <div className="text-3xl font-bold text-gray-700">({cart.length})</div>
+              <div className="text-xl lg:text-2xl font-bold text-[#a87437]">Cart</div>
+              <div className="text-2xl lg:text-3xl font-bold text-gray-700">({cart.length})</div>
             </div>
-            <button onClick={onClose} className="mt-8 p-3 hover:bg-gray-200 rounded-full" aria-label="Close cart">
+            <button onClick={onClose} className="mt-6 lg:mt-8 p-2 lg:p-3 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
+              <X className="w-5 h-5 lg:w-6 lg:h-6" />
+            </button>
+          </div>
+
+          {/* MOBILE HEADER - Shown on mobile only */}
+          <div className="md:hidden flex items-center justify-between p-4 border-b bg-gray-50">
+            <div className="flex items-center gap-3">
+              <svg className="w-8 h-8 text-[#a87437]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m6 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+              </svg>
+              <div>
+                <div className="text-lg font-bold text-[#a87437]">Cart</div>
+                <div className="text-sm text-gray-600">({cart.length} items)</div>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
               <X className="w-6 h-6" />
             </button>
           </div>
 
           {/* RIGHT SIDE - Cart Content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="p-6 space-y-4 flex-1 overflow-auto">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto overflow-x-hidden">
               {cart.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-gray-500 py-20">
                   <div className="text-9xl mb-8">☕</div>
@@ -160,15 +176,15 @@ export default function CustomerCartModal({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1)} className="h-8 w-8 p-0">
-                          <Minus className="w-3 h-3" />
+                        <Button size="sm" variant="outline" onClick={() => onUpdateQuantity(item.cartItemId, item.quantity - 1)} className="h-11 w-11 sm:h-10 sm:w-10 p-0 min-h-[44px] min-w-[44px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center">
+                          <Minus className="w-4 h-4 sm:w-3 sm:h-3" />
                         </Button>
-                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                        <Button size="sm" variant="outline" onClick={() => onUpdateQuantity(item.cartItemId, item.quantity + 1)} className="h-8 w-8 p-0">
-                          <Plus className="w-3 h-3" />
+                        <span className="w-10 sm:w-8 text-center text-sm font-medium">{item.quantity}</span>
+                        <Button size="sm" variant="outline" onClick={() => onUpdateQuantity(item.cartItemId, item.quantity + 1)} className="h-11 w-11 sm:h-10 sm:w-10 p-0 min-h-[44px] min-w-[44px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center">
+                          <Plus className="w-4 h-4 sm:w-3 sm:h-3" />
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => onRemove(item.cartItemId)} className="h-8 w-8 p-0 text-red-600 hover:text-red-700">
-                          <Trash2 className="w-3 h-3" />
+                        <Button size="sm" variant="outline" onClick={() => onRemove(item.cartItemId)} className="h-11 w-11 sm:h-10 sm:w-10 p-0 min-h-[44px] min-w-[44px] sm:min-h-[40px] sm:min-w-[40px] flex items-center justify-center text-red-600 hover:text-red-700">
+                          <Trash2 className="w-4 h-4 sm:w-3 sm:h-3" />
                         </Button>
                       </div>
                     </div>
@@ -178,7 +194,7 @@ export default function CustomerCartModal({
             </div>
 
             {/* Footer - Order Details and Actions */}
-            <div className="p-6 border-t bg-gray-50 space-y-4">
+            <div className="p-3 sm:p-4 lg:p-6 border-t bg-gray-50 space-y-3 sm:space-y-4 overflow-y-auto max-h-[60vh] sm:max-h-none">
               {/* DEBUG INFO */}
               <div className="bg-yellow-200 p-3 rounded-lg border-2 border-yellow-400">
                 <div className="text-sm font-bold text-yellow-800">
@@ -189,11 +205,11 @@ export default function CustomerCartModal({
               {cart.length > 0 && (
                 <>
                   {/* Authentication Status */}
-                  <div className="bg-white p-4 rounded-lg border">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${user ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className="text-sm font-medium text-gray-700">
+                  <div className="bg-white p-3 sm:p-4 rounded-lg border">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`w-3 h-3 rounded-full shrink-0 ${user ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">
                           {user ? `Logged in as: ${user.name || user.email}` : 'Not logged in'}
                         </span>
                       </div>
@@ -207,7 +223,7 @@ export default function CustomerCartModal({
                             const loginUrl = tableFromUrl ? `/customer-login?table=${tableFromUrl}` : '/customer-login';
                             window.location.href = loginUrl;
                           }}
-                          className="text-xs h-7 px-2"
+                          className="text-xs sm:text-sm h-10 sm:h-8 px-3 sm:px-2 min-h-[44px] sm:min-h-[32px] w-full sm:w-auto"
                         >
                           Log In
                         </Button>
@@ -243,17 +259,17 @@ export default function CustomerCartModal({
 
                   {/* Order Type */}
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-3 block">Order Type</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 block">Order Type</label>
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                       {(['dine_in', 'takeout'] as const).map((type) => (
                         <button
                           key={type}
                           type="button"
                           onClick={() => setOrderType(type)}
-                          className={`p-3 rounded-lg border-2 transition-all ${orderType === type ? 'border-[#a87437] bg-[#a87437]/10 text-[#a87437]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                          className={`p-2 sm:p-3 rounded-lg border-2 transition-all min-h-[44px] sm:min-h-[48px] flex items-center justify-center ${orderType === type ? 'border-[#a87437] bg-[#a87437]/10 text-[#a87437]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
                         >
                           <div className="text-center">
-                            <div className="text-sm font-medium capitalize">{type === 'dine_in' ? 'Dine In' : 'Takeout'}</div>
+                            <div className="text-xs sm:text-sm font-medium capitalize">{type === 'dine_in' ? 'Dine In' : 'Takeout'}</div>
                           </div>
                         </button>
                       ))}
@@ -262,17 +278,17 @@ export default function CustomerCartModal({
 
                   {/* Payment Method */}
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-3 block">Payment Method - TESTING</label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 block">Payment Method - TESTING</label>
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       {(['cash','gcash','paymaya'] as const).map((m) => (
                         <button
                           key={m}
                           type="button"
                           onClick={() => setPaymentMethod(m)}
-                          className={`p-3 rounded-lg border-2 transition-all ${paymentMethod === m ? 'border-[#a87437] bg-[#a87437]/10 text-[#a87437]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                          className={`p-2 sm:p-3 rounded-lg border-2 transition-all min-h-[44px] sm:min-h-[48px] flex items-center justify-center ${paymentMethod === m ? 'border-[#a87437] bg-[#a87437]/10 text-[#a87437]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
                         >
                           <div className="text-center">
-                            <div className="text-sm font-medium capitalize">{m}</div>
+                            <div className="text-xs sm:text-sm font-medium capitalize">{m}</div>
                           </div>
                         </button>
                       ))}
@@ -385,8 +401,8 @@ export default function CustomerCartModal({
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3">
-                    <Button onClick={onClear} variant="outline" className="flex-1 h-12 border-[#a87437] text-[#a87437] hover:bg-[#a87437]/10">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <Button onClick={onClear} variant="outline" className="flex-1 h-12 sm:h-12 min-h-[44px] border-[#a87437] text-[#a87437] hover:bg-[#a87437]/10 text-sm sm:text-base">
                       <Trash2 className="w-4 h-4 mr-2" />
                       Clear Cart
                     </Button>
@@ -413,7 +429,7 @@ export default function CustomerCartModal({
                         onCheckout(paymentMethod, receiptFile);
                       }} 
                       disabled={orderType === 'dine_in' && (!hasTableAccess || !tableNumber.trim())}
-                      className={`flex-1 h-12 font-semibold ${
+                      className={`flex-1 h-12 sm:h-12 min-h-[44px] font-semibold text-sm sm:text-base ${
                         orderType === 'dine_in' && (!hasTableAccess || !tableNumber.trim())
                           ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
                           : 'bg-[#a87437] hover:bg-[#8f652f] text-white'

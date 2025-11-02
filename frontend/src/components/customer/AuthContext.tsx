@@ -32,6 +32,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLastSessionCheck(now);
 
+    // Check if we just logged in (within last 10 seconds) - give mobile Safari time to process cookies
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 10000;
+    
+    // If recent login, add a delay to let mobile Safari process cookies
+    if (isRecentLogin) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
@@ -42,13 +51,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data && data.authenticated && data.user) {
         setAuthenticated(true);
         setUser(data.user);
+        // Clear login timestamp on successful auth check
+        if (isRecentLogin) {
+          localStorage.removeItem('loginTimestamp');
+        }
+      } else {
+        // If session check fails but we have localStorage backup and recent login, use it temporarily
+        if (isRecentLogin) {
+          const storedUser = localStorage.getItem('customerUser');
+          if (storedUser) {
+            try {
+              const user = JSON.parse(storedUser);
+              setAuthenticated(true);
+              setUser(user);
+              console.log('AuthContext: Using localStorage fallback (mobile Safari cookie delay)');
+              return; // Don't clear - let it persist
+            } catch (e) {
+              console.error('Failed to parse stored user:', e);
+              setAuthenticated(false);
+              setUser(null);
+            }
+          } else {
+            setAuthenticated(false);
+            setUser(null);
+          }
+        } else {
+          setAuthenticated(false);
+          setUser(null);
+        }
+      }
+    } catch (e) {
+      console.error('Session check error:', e);
+      // On error during recent login, allow localStorage fallback
+      if (isRecentLogin) {
+        const storedUser = localStorage.getItem('customerUser');
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            setAuthenticated(true);
+            setUser(user);
+            console.log('AuthContext: Using localStorage fallback after error (mobile Safari cookie delay)');
+          } catch (parseErr) {
+            console.error('Failed to parse stored user:', parseErr);
+            setAuthenticated(false);
+            setUser(null);
+          }
+        } else {
+          setAuthenticated(false);
+          setUser(null);
+        }
       } else {
         setAuthenticated(false);
         setUser(null);
       }
-    } catch (e) {
-      setAuthenticated(false);
-      setUser(null);
     } finally {
       clearTimeout(timeout);
       setLoading(false);
@@ -60,6 +115,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetch(`${API_URL}/api/customer/logout`, { method: 'POST', credentials: 'include' });
     } catch {}
     // Clear all local storage and session storage
+    localStorage.removeItem('customerUser');
+    localStorage.removeItem('loginTimestamp');
     localStorage.clear();
     sessionStorage.clear();
     setAuthenticated(false);

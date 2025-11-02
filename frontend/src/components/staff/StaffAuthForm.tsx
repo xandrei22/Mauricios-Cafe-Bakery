@@ -61,8 +61,18 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
           console.error('Failed to check low stock alert:', err);
           // Continue with navigation even if alert check fails
         });
-        // Navigate immediately, don't wait for alert check
-        navigate("/staff/dashboard");
+        // Store login timestamp for mobile Safari cookie handling
+        try {
+          localStorage.setItem('loginTimestamp', Date.now().toString());
+        } catch (e) {
+          console.warn('Could not store login timestamp:', e);
+        }
+        
+        // Give mobile Safari a moment to process the cookie before redirecting
+        // This helps with cookie persistence on mobile Safari
+        setTimeout(() => {
+          navigate("/staff/dashboard");
+        }, 500); // 500ms delay for mobile Safari cookie processing
       }
     } catch (err) {
       console.error('Staff login error:', err);

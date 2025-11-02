@@ -69,14 +69,27 @@ export function LoginForm({
         // Handle successful HTTP response but failed login
         setError(data.message || "Login failed");
       } else {
-        // Successful login - redirect
-        if (data && data.redirect) {
-          window.location.href = data.redirect;
-        } else if (tableFromUrl) {
-          window.location.href = `/customer/dashboard?table=${tableFromUrl}`;
-        } else {
-          window.location.href = "/customer/dashboard";
+        // Successful login - store user info in localStorage as backup for mobile Safari
+        if (data.user) {
+          try {
+            localStorage.setItem('customerUser', JSON.stringify(data.user));
+            localStorage.setItem('loginTimestamp', Date.now().toString());
+          } catch (e) {
+            console.warn('Could not store user in localStorage:', e);
+          }
         }
+        
+        // Give mobile Safari a moment to process the cookie before redirecting
+        // This helps with cookie persistence on mobile Safari
+        setTimeout(() => {
+          if (data && data.redirect) {
+            window.location.href = data.redirect;
+          } else if (tableFromUrl) {
+            window.location.href = `/customer/dashboard?table=${tableFromUrl}`;
+          } else {
+            window.location.href = "/customer/dashboard";
+          }
+        }, 500); // 500ms delay for mobile Safari cookie processing
       }
     } catch (err) {
       console.error('Login error:', err);

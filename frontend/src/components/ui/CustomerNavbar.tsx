@@ -68,7 +68,7 @@ export function CustomerNavbar() {
 
           {/* Mobile menu button */}
           <button
-            className="lg:hidden inline-flex items-center justify-center w-11 h-11 rounded-md text-white hover:bg-white/20 shrink-0"
+            className="lg:hidden inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] rounded-md text-white hover:bg-white/20 shrink-0"
             onClick={() => setOpen(!open)}
             aria-label="Toggle menu"
           >
@@ -84,17 +84,17 @@ export function CustomerNavbar() {
       {open && (
         <div className="lg:hidden fixed top-16 left-0 right-0 bg-[#a87437] border-b shadow-xl z-50">
           <div className="mx-auto max-w-[1600px] px-6 sm:px-10 lg:px-12 py-2 divide-y divide-white/20">
-            <a href="/" className="block px-1 py-3 text-lg text-white hover:text-white/80">Home</a>
-            <a href="#about" className="block px-1 py-3 text-lg text-white hover:text-white/80">About</a>
-            <a href="#best-sellers" className="block px-1 py-3 text-lg text-white hover:text-white/80">Best Sellers</a>
-            <a href="#why-love-us" className="block px-1 py-3 text-lg text-white hover:text-white/80">Offers</a>
-            <a href="#location" className="block px-1 py-3 text-lg text-white hover:text-white/80">Location</a>
+            <a href="/" className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center">Home</a>
+            <a href="#about" className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center">About</a>
+            <a href="#best-sellers" className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center">Best Sellers</a>
+            <a href="#why-love-us" className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center">Offers</a>
+            <a href="#location" className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center">Location</a>
             <div className="flex flex-col gap-3 my-4">
-              <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
+              <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
                 <User className="h-4 w-4" />
                 Login
               </Link>
-              <Link to={`/customer-signup${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-transparent text-white border border-white text-base font-semibold hover:bg-white/10 shadow-[0_8px_16px_rgba(0,0,0,0.08)] w-full">Signup</Link>
+              <Link to={`/customer-signup${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center px-4 py-3 min-h-[44px] rounded-full bg-transparent text-white border border-white text-base font-semibold hover:bg-white/10 shadow-[0_8px_16px_rgba(0,0,0,0.08)] w-full">Signup</Link>
             </div>
           </div>
         </div>

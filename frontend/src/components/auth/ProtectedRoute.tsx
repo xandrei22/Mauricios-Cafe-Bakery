@@ -33,12 +33,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     try {
       const API_URL = getApiUrl();
       
+      // Check if we just logged in (within last 5 seconds) - give mobile Safari time to process cookies
+      const loginTimestamp = localStorage.getItem('loginTimestamp');
+      const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000;
+      
       // Determine which session check endpoint to use based on required role
       let sessionEndpoint = `${API_URL}/api/admin/check-session`;
       if (requiredRole === 'staff') {
         sessionEndpoint = `${API_URL}/api/staff/check-session`;
       } else if (requiredRole === 'customer') {
         sessionEndpoint = `${API_URL}/api/customer/check-session`;
+      }
+
+      // If recent login, add a small delay to let mobile Safari process cookies
+      if (isRecentLogin) {
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
       // Check if user is logged in by calling the appropriate session check endpoint
@@ -51,15 +60,76 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         if (data.authenticated && data.user) {
           setIsAuthenticated(true);
           setUserRole(data.user.role);
+          // Clear login timestamp on successful auth check
+          if (isRecentLogin) {
+            localStorage.removeItem('loginTimestamp');
+          }
+        } else {
+          // If session check fails but we have localStorage backup for customer, allow access temporarily
+          if (requiredRole === 'customer' && isRecentLogin) {
+            const storedUser = localStorage.getItem('customerUser');
+            if (storedUser) {
+              try {
+                const user = JSON.parse(storedUser);
+                setIsAuthenticated(true);
+                setUserRole('customer');
+                console.log('Using localStorage fallback for customer auth (mobile Safari cookie delay)');
+              } catch (e) {
+                setIsAuthenticated(false);
+              }
+            } else {
+              setIsAuthenticated(false);
+            }
+          } else {
+            setIsAuthenticated(false);
+          }
+        }
+      } else {
+        // On 401/403, if recent login, try localStorage fallback for customer
+        if (requiredRole === 'customer' && isRecentLogin && response.status === 401) {
+          const storedUser = localStorage.getItem('customerUser');
+          if (storedUser) {
+            try {
+              const user = JSON.parse(storedUser);
+              setIsAuthenticated(true);
+              setUserRole('customer');
+              console.log('Using localStorage fallback for customer auth (cookie not set yet)');
+            } catch (e) {
+              setIsAuthenticated(false);
+            }
+          } else {
+            setIsAuthenticated(false);
+          }
+        } else {
+          setIsAuthenticated(false);
+        }
+      }
+    } catch (error) {
+      console.error('Authentication check failed:', error);
+      // On error during recent login, allow localStorage fallback for customer
+      if (requiredRole === 'customer') {
+        const loginTimestamp = localStorage.getItem('loginTimestamp');
+        const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000;
+        if (isRecentLogin) {
+          const storedUser = localStorage.getItem('customerUser');
+          if (storedUser) {
+            try {
+              const user = JSON.parse(storedUser);
+              setIsAuthenticated(true);
+              setUserRole('customer');
+              console.log('Using localStorage fallback after auth check error (mobile Safari cookie delay)');
+            } catch (e) {
+              setIsAuthenticated(false);
+            }
+          } else {
+            setIsAuthenticated(false);
+          }
         } else {
           setIsAuthenticated(false);
         }
       } else {
         setIsAuthenticated(false);
       }
-    } catch (error) {
-      console.error('Authentication check failed:', error);
-      setIsAuthenticated(false);
     } finally {
       setIsLoading(false);
     }

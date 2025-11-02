@@ -81,6 +81,13 @@ async function handleLogin(e: React.FormEvent) {
       }
     } catch {}
 
+    // Store login timestamp for mobile Safari cookie handling
+    try {
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+    } catch (e) {
+      console.warn('Could not store login timestamp:', e);
+    }
+
     // Check for alerts immediately after successful login
     // Don't await - let it fail silently if there's an error
     checkLowStockAlert().catch(err => {
@@ -88,8 +95,11 @@ async function handleLogin(e: React.FormEvent) {
       // Continue with navigation even if alert check fails
     });
     
-    // Navigate immediately, don't wait for alert check
-    navigate("/admin/dashboard");
+    // Give mobile Safari a moment to process the cookie before redirecting
+    // This helps with cookie persistence on mobile Safari
+    setTimeout(() => {
+      navigate("/admin/dashboard");
+    }, 500); // 500ms delay for mobile Safari cookie processing
 
   } catch (err) {
     console.error("Admin login error:", err);

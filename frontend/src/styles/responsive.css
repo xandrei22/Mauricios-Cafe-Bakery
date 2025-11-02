@@ -172,10 +172,47 @@ table {
     .space-mobile-base {
         gap: 1rem !important;
     }
-    /* Button adjustments */
+    /* Button adjustments - Ensure minimum 44px touch targets on mobile */
     .btn-mobile {
-        padding: 0.5rem 1rem !important;
+        padding: 0.75rem 1rem !important;
         font-size: 0.875rem !important;
+        min-height: 44px !important;
+    }
+    /* Ensure all buttons meet touch target minimum on mobile */
+    button,
+    [role="button"],
+    .btn,
+    [class*="button"] {
+        min-height: 44px !important;
+        min-width: 44px !important;
+    }
+    /* Exception for icon buttons in larger containers */
+    @media (min-width: 640px) {
+        button[class*="icon"],
+        [role="button"][class*="icon"] {
+            min-height: 32px !important;
+            min-width: 32px !important;
+        }
+    }
+    /* Ensure inputs are mobile-friendly - minimum 44px height */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    textarea,
+    select {
+        min-height: 44px !important;
+        font-size: 16px !important;
+        /* Prevents zoom on iOS when focusing inputs */
+    }
+    /* Larger tap targets for links on mobile */
+    a {
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
     }
     /* Staff forms */
     .staff-form-container {
