@@ -33,9 +33,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     try {
       const API_URL = getApiUrl();
       
-      // Check if we just logged in (within last 5 seconds) - give mobile Safari time to process cookies
+      // Check if we just logged in - give mobile Safari time to process cookies
+      // iOS 15.8 needs longer windows due to aggressive cookie blocking
       const loginTimestamp = localStorage.getItem('loginTimestamp');
-      const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000;
+      const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
+      const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
+      const recentLoginWindow = (isIOSSafari && isOldIOS) ? 30000 : 5000; // 30 seconds for old iOS, 5 for others
+      const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
       
       // Determine which session check endpoint to use based on required role
       let sessionEndpoint = `${API_URL}/api/admin/check-session`;
@@ -45,9 +49,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = `${API_URL}/api/customer/check-session`;
       }
 
-      // If recent login, add a small delay to let mobile Safari process cookies
+      // If recent login, add a delay to let mobile Safari process cookies
+      // iOS 15.8 needs longer delays
       if (isRecentLogin) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        const delay = (isIOSSafari && isOldIOS) ? 1500 : 300;
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
 
       // Check if user is logged in by calling the appropriate session check endpoint

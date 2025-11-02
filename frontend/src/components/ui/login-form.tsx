@@ -79,17 +79,36 @@ export function LoginForm({
           }
         }
         
+        // Detect iOS Safari for extended delay (iOS 15.8 and below have aggressive cookie blocking)
+        const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
+        const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
+        const delay = (isIOSSafari && isOldIOS) ? 2000 : 500; // 2 seconds for old iOS, 500ms for others
+        
         // Give mobile Safari a moment to process the cookie before redirecting
-        // This helps with cookie persistence on mobile Safari
+        // iOS 15.8 requires longer delay due to aggressive ITP cookie blocking
         setTimeout(() => {
           if (data && data.redirect) {
-            window.location.href = data.redirect;
+            // Use full page reload for iOS Safari to force cookie acceptance
+            if (isIOSSafari && isOldIOS) {
+              window.location.replace(data.redirect);
+            } else {
+              window.location.href = data.redirect;
+            }
           } else if (tableFromUrl) {
-            window.location.href = `/customer/dashboard?table=${tableFromUrl}`;
+            const url = `/customer/dashboard?table=${tableFromUrl}`;
+            if (isIOSSafari && isOldIOS) {
+              window.location.replace(url);
+            } else {
+              window.location.href = url;
+            }
           } else {
-            window.location.href = "/customer/dashboard";
+            if (isIOSSafari && isOldIOS) {
+              window.location.replace("/customer/dashboard");
+            } else {
+              window.location.href = "/customer/dashboard";
+            }
           }
-        }, 500); // 500ms delay for mobile Safari cookie processing
+        }, delay);
       }
     } catch (err) {
       console.error('Login error:', err);

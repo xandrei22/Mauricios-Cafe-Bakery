@@ -32,13 +32,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLastSessionCheck(now);
 
-    // Check if we just logged in (within last 10 seconds) - give mobile Safari time to process cookies
+    // Check if we just logged in (within last 30 seconds for iOS Safari) - give mobile Safari time to process cookies
     const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 10000;
+    const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
+    const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
+    const recentLoginWindow = (isIOSSafari && isOldIOS) ? 30000 : 10000; // 30 seconds for old iOS, 10 for others
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
     
     // If recent login, add a delay to let mobile Safari process cookies
+    // iOS 15.8 needs longer delays due to aggressive cookie blocking
     if (isRecentLogin) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const delay = (isIOSSafari && isOldIOS) ? 1500 : 500;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
     const controller = new AbortController();
@@ -65,6 +70,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setAuthenticated(true);
               setUser(user);
               console.log('AuthContext: Using localStorage fallback (mobile Safari cookie delay)');
+              
+              // For iOS Safari, schedule a retry to check if cookies eventually work
+              if (isIOSSafari && isOldIOS) {
+                setTimeout(async () => {
+                  try {
+                    const retryRes = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+                    if (retryRes.ok) {
+                      const retryData = await retryRes.json();
+                      if (retryData && retryData.authenticated && retryData.user) {
+                        console.log('AuthContext: Cookie eventually accepted by iOS Safari');
+                        setUser(retryData.user);
+                        localStorage.removeItem('loginTimestamp');
+                      }
+                    }
+                  } catch (retryErr) {
+                    console.log('AuthContext: Retry check failed, continuing with localStorage fallback');
+                  }
+                }, 5000); // Retry after 5 seconds
+              }
+              
               return; // Don't clear - let it persist
             } catch (e) {
               console.error('Failed to parse stored user:', e);
