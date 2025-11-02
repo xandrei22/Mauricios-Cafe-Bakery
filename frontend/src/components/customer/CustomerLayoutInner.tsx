@@ -16,11 +16,13 @@ import { useAuth } from "./AuthContext";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
 import AIChatbot from "./AIChatbot";
 import { useEffect } from "react";
+import * as React from "react";
 
 export default function CustomerLayoutInner({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, authenticated, loading } = useAuth();
+  const [checkingLocalStorage, setCheckingLocalStorage] = React.useState(true);
 
   // Helper function to preserve table parameter in navigation
   const getUrlWithTableParam = (path: string) => {
@@ -29,9 +31,32 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     return tableFromUrl ? `${path}?table=${tableFromUrl}` : path;
   };
 
+  // IMMEDIATE localStorage check for iOS Safari users who just logged in
+  useEffect(() => {
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000; // 30 seconds
+    
+    if (isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          // User exists in localStorage from recent login - this is iOS Safari cookie workaround
+          console.log('CustomerLayoutInner: Found recent login in localStorage, allowing access');
+          setCheckingLocalStorage(false);
+          return; // Don't redirect - let AuthContext handle it
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+        }
+      }
+    }
+    setCheckingLocalStorage(false);
+  }, []);
+
   // Check authentication and redirect if needed
   useEffect(() => {
-    if (!loading && !authenticated) {
+    // Wait for both loading states to complete
+    if (!loading && !checkingLocalStorage && !authenticated) {
       // Get table parameter from current URL if present
       const urlParams = new URLSearchParams(location.search);
       const tableFromUrl = urlParams.get('table');
@@ -43,10 +68,10 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
         navigate('/login');
       }
     }
-  }, [authenticated, loading, location.search]);
+  }, [authenticated, loading, checkingLocalStorage, location.search, navigate]);
 
-  // Show loading while checking authentication
-  if (loading) {
+  // Show loading while checking authentication or localStorage
+  if (loading || checkingLocalStorage) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -57,9 +82,15 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     );
   }
 
-  // Don't render anything if not authenticated (will redirect)
-  if (!authenticated) {
-    return null;
+  // Check if we have localStorage fallback for recent login (iOS Safari workaround)
+  const loginTimestamp = localStorage.getItem('loginTimestamp');
+  const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000;
+  const storedUser = localStorage.getItem('customerUser');
+  const hasLocalStorageFallback = isRecentLogin && storedUser;
+
+  // Allow access if authenticated OR if we have localStorage fallback (iOS Safari)
+  if (!authenticated && !hasLocalStorageFallback) {
+    return null; // Will redirect
   }
 
   const handleLogout = async (e: React.MouseEvent) => {

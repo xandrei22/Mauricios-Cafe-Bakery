@@ -151,8 +151,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
     
-    // Only check customer session on routes that need it
+    // IMMEDIATE localStorage check for iOS Safari users who just logged in
+    // This must happen BEFORE session check to prevent redirect loops
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000;
+    let hasLocalStorageFallback = false;
+    
+    if (isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          if (isMounted) {
+            setAuthenticated(true);
+            setUser(user);
+            setLoading(false);
+            hasLocalStorageFallback = true;
+            console.log('AuthContext: Immediately using localStorage fallback (iOS Safari cookie workaround)');
+            // Still do session check in background to see if cookies eventually work
+            // But don't let it override our localStorage fallback
+            setTimeout(() => {
+              checkSession().then(() => {
+                // If session check succeeds, we can clear the localStorage fallback
+                const currentTimestamp = localStorage.getItem('loginTimestamp');
+                if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                  // Cookie is working now, we can rely on it
+                  localStorage.removeItem('loginTimestamp');
+                }
+              }).catch(() => {
+                // Session check failed, but we already have localStorage fallback - that's fine
+              });
+            }, 3000); // Wait 3 seconds before checking
+          }
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+        }
+      }
+    }
+    
+    // Only check customer session on routes that need it (unless we already have localStorage fallback)
     const checkSessionIfNeeded = async () => {
+      // If we already set authenticated via localStorage, skip immediate session check
+      if (hasLocalStorageFallback) {
+        return;
+      }
+      
       const currentPath = window.location.pathname;
       
       // Skip auth checking on staff/admin routes and public pages
@@ -180,7 +223,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
     
-    checkSessionIfNeeded();
+    // Only run session check if we don't have localStorage fallback
+    if (!hasLocalStorageFallback) {
+      checkSessionIfNeeded();
+    }
     
     const onVisibility = () => { 
       const currentPath = window.location.pathname;
