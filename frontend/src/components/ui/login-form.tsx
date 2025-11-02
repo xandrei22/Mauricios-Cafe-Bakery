@@ -72,41 +72,45 @@ export function LoginForm({
         // Successful login - store user info in localStorage as backup for mobile Safari
         if (data.user) {
           try {
-            localStorage.setItem('customerUser', JSON.stringify(data.user));
-            localStorage.setItem('loginTimestamp', Date.now().toString());
+            const userJson = JSON.stringify(data.user);
+            const timestamp = Date.now().toString();
+            localStorage.setItem('customerUser', userJson);
+            localStorage.setItem('loginTimestamp', timestamp);
+            console.log('✅ localStorage set - customerUser:', data.user.email, 'timestamp:', timestamp);
+            console.log('✅ localStorage verification - stored:', localStorage.getItem('customerUser') ? 'YES' : 'NO');
           } catch (e) {
-            console.warn('Could not store user in localStorage:', e);
+            console.error('❌ Could not store user in localStorage:', e);
           }
+        } else {
+          console.warn('⚠️ No user data in login response to store in localStorage');
         }
         
-        // Detect iOS Safari for extended delay (iOS 15.8 and below have aggressive cookie blocking)
-        const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
-        const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
-        const delay = (isIOSSafari && isOldIOS) ? 2000 : 500; // 2 seconds for old iOS, 500ms for others
+        // Detect iOS - ALL iOS versions (including ALL browsers on iOS) can have cookie blocking issues
+        // iOS 12, 13, 14, 15, 16, 17, 18+ all have ITP that blocks cross-origin cookies
+        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+        // Use localStorage fallback for ALL iOS devices regardless of browser (Safari, Chrome, Firefox, etc.)
+        const delay = isIOS ? 2000 : 500; // 2 seconds for ALL iOS devices, 500ms for others
+        
+        console.log('Login successful - iOS device detected:', isIOS, 'User stored in localStorage:', !!data.user);
+        console.log('User Agent:', navigator.userAgent);
         
         // Give mobile Safari a moment to process the cookie before redirecting
         // iOS 15.8 requires longer delay due to aggressive ITP cookie blocking
         setTimeout(() => {
-          if (data && data.redirect) {
-            // Use full page reload for iOS Safari to force cookie acceptance
-            if (isIOSSafari && isOldIOS) {
-              window.location.replace(data.redirect);
-            } else {
-              window.location.href = data.redirect;
-            }
-          } else if (tableFromUrl) {
-            const url = `/customer/dashboard?table=${tableFromUrl}`;
-            if (isIOSSafari && isOldIOS) {
-              window.location.replace(url);
-            } else {
-              window.location.href = url;
-            }
+          const redirectUrl = data && data.redirect 
+            ? data.redirect 
+            : tableFromUrl 
+              ? `/customer/dashboard?table=${tableFromUrl}` 
+              : "/customer/dashboard";
+          
+          console.log('Redirecting to:', redirectUrl, 'using localStorage fallback for iOS:', isIOS);
+          
+          // Use full page reload for ALL iOS devices to potentially help with cookie acceptance
+          // But localStorage fallback will handle it if cookies don't work on ANY iOS version
+          if (isIOS) {
+            window.location.replace(redirectUrl);
           } else {
-            if (isIOSSafari && isOldIOS) {
-              window.location.replace("/customer/dashboard");
-            } else {
-              window.location.href = "/customer/dashboard";
-            }
+            window.location.href = redirectUrl;
           }
         }, delay);
       }

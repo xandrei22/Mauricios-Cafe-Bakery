@@ -33,12 +33,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     try {
       const API_URL = getApiUrl();
       
-      // Check if we just logged in - give mobile Safari time to process cookies
-      // iOS 15.8 needs longer windows due to aggressive cookie blocking
+      // Check if we just logged in - ALL iOS versions and browsers can have cookie issues
+      // iOS 12-18+ all have ITP that blocks cross-origin cookies (Safari, Chrome, Firefox, etc.)
       const loginTimestamp = localStorage.getItem('loginTimestamp');
-      const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
-      const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
-      const recentLoginWindow = (isIOSSafari && isOldIOS) ? 30000 : 5000; // 30 seconds for old iOS, 5 for others
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      // Use longer window for ALL iOS devices regardless of browser or version
+      const recentLoginWindow = isIOS ? 30000 : 5000; // 30 seconds for ALL iOS devices, 5 for others
       const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
       
       // Determine which session check endpoint to use based on required role
@@ -49,10 +49,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = `${API_URL}/api/customer/check-session`;
       }
 
-      // If recent login, add a delay to let mobile Safari process cookies
-      // iOS 15.8 needs longer delays
+      // If recent login, add a delay to let iOS process cookies
+      // ALL iOS versions often block cross-origin cookies
       if (isRecentLogin) {
-        const delay = (isIOSSafari && isOldIOS) ? 1500 : 300;
+        const delay = isIOS ? 1500 : 300;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 

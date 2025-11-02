@@ -32,17 +32,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLastSessionCheck(now);
 
-    // Check if we just logged in (within last 30 seconds for iOS Safari) - give mobile Safari time to process cookies
+    // Check if we just logged in - ALL iOS versions and browsers can have cookie issues
+    // iOS 12-18+ all have ITP that blocks cross-origin cookies (Safari, Chrome, Firefox, etc.)
     const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const isIOSSafari = /iPhone.*Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent);
-    const isOldIOS = /OS 1[0-5]_/.test(navigator.userAgent);
-    const recentLoginWindow = (isIOSSafari && isOldIOS) ? 30000 : 10000; // 30 seconds for old iOS, 10 for others
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    // Use longer window for ALL iOS devices regardless of browser or version
+    const recentLoginWindow = isIOS ? 30000 : 10000; // 30 seconds for ALL iOS devices, 10 for others
     const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
     
-    // If recent login, add a delay to let mobile Safari process cookies
-    // iOS 15.8 needs longer delays due to aggressive cookie blocking
+    // If recent login, add a delay to let iOS process cookies
+    // ALL iOS versions often block cross-origin cookies
     if (isRecentLogin) {
-      const delay = (isIOSSafari && isOldIOS) ? 1500 : 500;
+      const delay = isIOS ? 1500 : 500;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
@@ -71,8 +72,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(user);
               console.log('AuthContext: Using localStorage fallback (mobile Safari cookie delay)');
               
-              // For iOS Safari, schedule a retry to check if cookies eventually work
-              if (isIOSSafari && isOldIOS) {
+              // For ALL iOS devices, schedule a retry to check if cookies eventually work
+              const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+              if (isIOS) {
                 setTimeout(async () => {
                   try {
                     const retryRes = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
@@ -151,14 +153,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
     
-    // IMMEDIATE localStorage check for iOS Safari users who just logged in
+    // IMMEDIATE localStorage check for ALL iOS users who just logged in (any version, any browser)
     // This must happen BEFORE session check to prevent redirect loops
+    // Works for iOS 12, 13, 14, 15, 16, 17, 18+ and all browsers (Safari, Chrome, Firefox, etc.)
     const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000;
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const recentLoginWindow = isIOS ? 30000 : 10000; // 30 seconds for ALL iOS, 10 for others
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
     let hasLocalStorageFallback = false;
+    
+    console.log('AuthContext mount - loginTimestamp:', loginTimestamp, 'isRecentLogin:', isRecentLogin);
     
     if (isRecentLogin) {
       const storedUser = localStorage.getItem('customerUser');
+      console.log('AuthContext - storedUser exists:', !!storedUser);
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
@@ -167,7 +175,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(user);
             setLoading(false);
             hasLocalStorageFallback = true;
-            console.log('AuthContext: Immediately using localStorage fallback (iOS Safari cookie workaround)');
+            console.log('✅ AuthContext: Immediately using localStorage fallback (iOS cookie workaround - works for ALL iOS versions)');
+            console.log('✅ AuthContext: User from localStorage:', user.email);
             // Still do session check in background to see if cookies eventually work
             // But don't let it override our localStorage fallback
             setTimeout(() => {
@@ -176,10 +185,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const currentTimestamp = localStorage.getItem('loginTimestamp');
                 if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
                   // Cookie is working now, we can rely on it
+                  console.log('✅ AuthContext: Cookies eventually worked, switching from localStorage to cookies');
                   localStorage.removeItem('loginTimestamp');
                 }
               }).catch(() => {
                 // Session check failed, but we already have localStorage fallback - that's fine
+                console.log('AuthContext: Session check failed, continuing with localStorage fallback');
               });
             }, 3000); // Wait 3 seconds before checking
           }

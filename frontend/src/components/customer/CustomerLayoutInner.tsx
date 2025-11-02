@@ -31,23 +31,32 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     return tableFromUrl ? `${path}?table=${tableFromUrl}` : path;
   };
 
-  // IMMEDIATE localStorage check for iOS Safari users who just logged in
+  // IMMEDIATE localStorage check for ALL iOS users who just logged in (any version, any browser)
+  // Works for iOS 12, 13, 14, 15, 16, 17, 18+ and all browsers (Safari, Chrome, Firefox, etc.)
   useEffect(() => {
     const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000; // 30 seconds
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const recentLoginWindow = isIOS ? 30000 : 10000; // 30 seconds for ALL iOS, 10 for others
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+    
+    console.log('CustomerLayoutInner mount - loginTimestamp:', loginTimestamp, 'isRecentLogin:', isRecentLogin);
     
     if (isRecentLogin) {
       const storedUser = localStorage.getItem('customerUser');
+      console.log('CustomerLayoutInner - storedUser exists:', !!storedUser);
       if (storedUser) {
         try {
           const user = JSON.parse(storedUser);
           // User exists in localStorage from recent login - this is iOS Safari cookie workaround
-          console.log('CustomerLayoutInner: Found recent login in localStorage, allowing access');
+          console.log('✅ CustomerLayoutInner: Found recent login in localStorage, allowing access (works for ALL iOS versions)');
+          console.log('✅ CustomerLayoutInner: User from localStorage:', user.email);
           setCheckingLocalStorage(false);
           return; // Don't redirect - let AuthContext handle it
         } catch (e) {
-          console.error('Failed to parse stored user:', e);
+          console.error('❌ Failed to parse stored user:', e);
         }
+      } else {
+        console.warn('⚠️ CustomerLayoutInner: Recent login but no storedUser found');
       }
     }
     setCheckingLocalStorage(false);
@@ -82,13 +91,15 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     );
   }
 
-  // Check if we have localStorage fallback for recent login (iOS Safari workaround)
+  // Check if we have localStorage fallback for recent login (works for ALL iOS versions)
   const loginTimestamp = localStorage.getItem('loginTimestamp');
-  const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 30000;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const recentLoginWindow = isIOS ? 30000 : 10000;
+  const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
   const storedUser = localStorage.getItem('customerUser');
   const hasLocalStorageFallback = isRecentLogin && storedUser;
 
-  // Allow access if authenticated OR if we have localStorage fallback (iOS Safari)
+  // Allow access if authenticated OR if we have localStorage fallback (works for ALL iOS versions and browsers)
   if (!authenticated && !hasLocalStorageFallback) {
     return null; // Will redirect
   }
