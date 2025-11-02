@@ -15,9 +15,16 @@ export const getApiUrl = (): string => {
     return 'http://localhost:5001';
   }
 
-  // In production (any non-localhost), ALWAYS use same-origin and rely on Vercel rewrites
-  // This avoids third-party cookie blocking on mobile browsers
-  return '';
+  // In production, use direct Render backend URL
+  // Cookies will work because we set sameSite: 'none' and secure: true without domain
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  if (envApiUrl && envApiUrl.trim() !== '') {
+    // Remove trailing slash if present
+    return envApiUrl.trim().replace(/\/+$/, '');
+  }
+  
+  // Fallback to Render URL if VITE_API_URL not set
+  return 'https://mauricios-cafe-bakery.onrender.com';
 };
 
 // Export for use in components
