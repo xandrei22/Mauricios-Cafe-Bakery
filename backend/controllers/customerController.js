@@ -166,15 +166,19 @@ function checkSession(req, res) {
         // Fallback: validate Bearer token for clients using localStorage
         try {
             const authHeader = (req.headers && req.headers.authorization) || '';
+            console.log('🔑 Session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 20) + '...' : '');
             const parts = authHeader.split(' ');
             const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
             const token = hasBearer ? parts[1] : null;
+            console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO');
             if (token) {
                 const secret = process.env.JWT_SECRET || 'change-me-in-prod';
                 const payload = jwt.verify(token, secret);
+                console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
                 return res.json({ authenticated: true, user: payload });
             }
         } catch (e) {
+            console.log('🔑 Session check - JWT verification failed:', e.message);
             // ignore and fall through to unauthenticated
         }
         console.log('Session check - not authenticated');
