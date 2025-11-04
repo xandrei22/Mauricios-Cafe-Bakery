@@ -1,6 +1,7 @@
 const { ensureAuthenticated } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const saltRounds = 10; // For bcrypt hashing
 const { sendResetPasswordEmail } = require('../utils/emailService');
@@ -101,6 +102,22 @@ async function login(req, res) {
                     res.cookie('connect.sid', cookieValue, cookieOptions);
 
                     res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+                    // Issue JWT for admin
+                    let token = null;
+                    try {
+                        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                        token = jwt.sign({
+                            id: user.id,
+                            username: user.username,
+                            email: user.email,
+                            fullName: user.full_name,
+                            role: 'admin'
+                        }, secret, { expiresIn: '1d' });
+                    } catch (signErr) {
+                        console.error('Error signing admin JWT:', signErr);
+                    }
+
                     res.json({
                         success: true,
                         user: {
@@ -109,7 +126,8 @@ async function login(req, res) {
                             email: user.email,
                             fullName: user.full_name,
                             role: 'admin'
-                        }
+                        },
+                        token
                     });
                 });
             } else {
@@ -198,6 +216,21 @@ async function login(req, res) {
             // Ensure response headers allow cookie setting
             res.setHeader('Access-Control-Allow-Credentials', 'true');
 
+            // Issue JWT for admin
+            let token = null;
+            try {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                token = jwt.sign({
+                    id: admin.id,
+                    username: admin.username,
+                    email: admin.email,
+                    fullName: admin.full_name,
+                    role: 'admin'
+                }, secret, { expiresIn: '1d' });
+            } catch (signErr) {
+                console.error('Error signing admin JWT:', signErr);
+            }
+
             res.json({
                 success: true,
                 user: {
@@ -206,7 +239,8 @@ async function login(req, res) {
                     email: admin.email,
                     fullName: admin.full_name,
                     role: 'admin'
-                }
+                },
+                token
             });
         });
 
@@ -219,10 +253,21 @@ async function login(req, res) {
 // Admin session check controller
 function checkSession(req, res) {
     if (req.session.adminUser && req.session.adminUser.role === 'admin') {
-        res.json({ authenticated: true, user: req.session.adminUser });
-    } else {
-        res.json({ authenticated: false });
+        return res.json({ authenticated: true, user: req.session.adminUser });
     }
+    // Fallback: Bearer token
+    try {
+        const authHeader = (req.headers && req.headers.authorization) || '';
+        const parts = authHeader.split(' ');
+        const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+        const token = hasBearer ? parts[1] : null;
+        if (token) {
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            const payload = jwt.verify(token, secret);
+            return res.json({ authenticated: true, user: payload });
+        }
+    } catch (_) {}
+    return res.json({ authenticated: false });
 }
 
 // Admin logout controller
@@ -387,6 +432,21 @@ async function staffLogin(req, res) {
             // Ensure response headers allow cookie setting
             res.setHeader('Access-Control-Allow-Credentials', 'true');
 
+            // Issue JWT for staff
+            let token = null;
+            try {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                token = jwt.sign({
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.full_name,
+                    role: user.role
+                }, secret, { expiresIn: '1d' });
+            } catch (signErr) {
+                console.error('Error signing staff JWT:', signErr);
+            }
+
             res.json({
                 success: true,
                 user: {
@@ -395,7 +455,8 @@ async function staffLogin(req, res) {
                     email: user.email,
                     fullName: user.full_name,
                     role: user.role
-                }
+                },
+                token
             });
         });
 
@@ -408,10 +469,21 @@ async function staffLogin(req, res) {
 // Staff session check controller
 function checkStaffSession(req, res) {
     if (req.session.staffUser && (req.session.staffUser.role === 'admin' || req.session.staffUser.role === 'staff')) {
-        res.json({ authenticated: true, user: req.session.staffUser });
-    } else {
-        res.json({ authenticated: false });
+        return res.json({ authenticated: true, user: req.session.staffUser });
     }
+    // Fallback: Bearer token
+    try {
+        const authHeader = (req.headers && req.headers.authorization) || '';
+        const parts = authHeader.split(' ');
+        const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+        const token = hasBearer ? parts[1] : null;
+        if (token) {
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            const payload = jwt.verify(token, secret);
+            return res.json({ authenticated: true, user: payload });
+        }
+    } catch (_) {}
+    return res.json({ authenticated: false });
 }
 
 // Staff logout controller
