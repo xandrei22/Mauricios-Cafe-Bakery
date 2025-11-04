@@ -1,5 +1,6 @@
 const { ensureAuthenticated } = require('../middleware/authMiddleware');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const { sendWelcomeEmail, sendResetPasswordEmail } = require('../utils/emailService');
 const crypto = require('crypto');
@@ -119,6 +120,21 @@ async function login(req, res) {
             // Ensure response headers allow cookie setting
             res.setHeader('Access-Control-Allow-Credentials', 'true');
 
+            // Issue JWT for clients that prefer localStorage (iOS Safari compatibility)
+            let token = null;
+            try {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                token = jwt.sign({
+                    id: customer.id,
+                    username: customer.username,
+                    email: customer.email,
+                    name: customer.full_name,
+                    role: 'customer'
+                }, secret, { expiresIn: '1d' });
+            } catch (signErr) {
+                console.error('Error signing JWT:', signErr);
+            }
+
             res.json({
                 success: true,
                 user: {
@@ -128,7 +144,8 @@ async function login(req, res) {
                     name: customer.full_name,
                     role: 'customer'
                 },
-                redirect: postLoginRedirect || null
+                redirect: postLoginRedirect || null,
+                token: token
             });
         });
 
@@ -146,6 +163,20 @@ function checkSession(req, res) {
         console.log('Session check - returning authenticated user:', req.session.customerUser);
         res.json({ authenticated: true, user: req.session.customerUser });
     } else {
+        // Fallback: validate Bearer token for clients using localStorage
+        try {
+            const authHeader = (req.headers && req.headers.authorization) || '';
+            const parts = authHeader.split(' ');
+            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+            const token = hasBearer ? parts[1] : null;
+            if (token) {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                const payload = jwt.verify(token, secret);
+                return res.json({ authenticated: true, user: payload });
+            }
+        } catch (e) {
+            // ignore and fall through to unauthenticated
+        }
         console.log('Session check - not authenticated');
         res.json({ authenticated: false });
     }
