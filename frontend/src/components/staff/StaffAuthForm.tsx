@@ -54,6 +54,9 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
           } else if (data?.email) {
             localStorage.setItem('staffUser', JSON.stringify({ email: data.email }));
           }
+          if (data?.token) {
+            localStorage.setItem('authToken', data.token);
+          }
         } catch {}
         // Check for alerts immediately after successful login
         // Don't await - let it fail silently if there's an error

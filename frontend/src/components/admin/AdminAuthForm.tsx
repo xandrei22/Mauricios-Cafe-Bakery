@@ -77,7 +77,10 @@ async function handleLogin(e: React.FormEvent) {
       if (data.user) {
         localStorage.setItem("adminUser", JSON.stringify(data.user));
       } else if (data.email) {
-        localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
+      localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
+      }
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
       }
     } catch {}
 

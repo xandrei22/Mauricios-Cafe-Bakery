@@ -69,7 +69,7 @@ export function LoginForm({
         // Handle successful HTTP response but failed login
         setError(data.message || "Login failed");
       } else {
-        // Successful login - store user info in localStorage as backup for mobile Safari
+        // Successful login - store user info and JWT in localStorage (for iOS without cookies)
         // CRITICAL: This MUST work on iOS, so we verify it multiple times
         if (data.user) {
           try {
@@ -77,14 +77,19 @@ export function LoginForm({
             const timestamp = Date.now().toString();
             localStorage.setItem('customerUser', userJson);
             localStorage.setItem('loginTimestamp', timestamp);
+            if (data.token) {
+              localStorage.setItem('authToken', data.token);
+            }
             
             // IMMEDIATE verification (critical for iOS)
             const verifyUser = localStorage.getItem('customerUser');
             const verifyTimestamp = localStorage.getItem('loginTimestamp');
+            const verifyToken = localStorage.getItem('authToken');
             
             console.log('✅ localStorage set - customerUser:', data.user.email, 'timestamp:', timestamp);
             console.log('✅ localStorage verification - stored:', verifyUser ? 'YES' : 'NO');
             console.log('✅ localStorage verification - timestamp:', verifyTimestamp ? 'YES' : 'NO');
+            console.log('✅ localStorage verification - token:', verifyToken ? 'YES' : 'NO');
             
             if (!verifyUser || !verifyTimestamp) {
               console.error('❌ CRITICAL: localStorage write failed! This will cause iOS login issues!');
@@ -92,6 +97,9 @@ export function LoginForm({
               try {
                 localStorage.setItem('customerUser', userJson);
                 localStorage.setItem('loginTimestamp', timestamp);
+                if (data.token) {
+                  localStorage.setItem('authToken', data.token);
+                }
                 console.log('✅ Retry: localStorage set again');
               } catch (retryErr) {
                 console.error('❌ CRITICAL: localStorage retry also failed!', retryErr);

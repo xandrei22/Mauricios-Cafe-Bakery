@@ -45,7 +45,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Do session check in background to see if cookies eventually work
           setTimeout(async () => {
             try {
-              const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+              const token = localStorage.getItem('authToken');
+              const res = await fetch(`${API_URL}/api/customer/check-session`, {
+                credentials: 'include',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+              });
               if (res.ok) {
                 const data = await res.json();
                 if (data && data.authenticated && data.user) {
@@ -87,7 +91,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const timeout = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include', signal: controller.signal as any });
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(`${API_URL}/api/customer/check-session`, {
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
+        signal: controller.signal as any
+      });
       if (!res.ok) throw new Error('Session check failed');
       const data = await res.json();
       if (data && data.authenticated && data.user) {
@@ -154,11 +163,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await fetch(`${API_URL}/api/customer/logout`, { method: 'POST', credentials: 'include' });
+      const token = localStorage.getItem('authToken');
+      await fetch(`${API_URL}/api/customer/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+      });
     } catch {}
     // Clear all local storage and session storage
     localStorage.removeItem('customerUser');
     localStorage.removeItem('loginTimestamp');
+    localStorage.removeItem('authToken');
     localStorage.clear();
     sessionStorage.clear();
     setAuthenticated(false);
@@ -196,7 +211,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // But don't let it override our localStorage fallback
             setTimeout(async () => {
               try {
-                const res = await fetch(`${API_URL}/api/customer/check-session`, { credentials: 'include' });
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`${API_URL}/api/customer/check-session`, {
+                  credentials: 'include',
+                  headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+                });
                 if (res.ok) {
                   const data = await res.json();
                   if (data && data.authenticated && data.user) {
