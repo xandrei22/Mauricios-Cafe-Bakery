@@ -46,9 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setTimeout(async () => {
             try {
               const token = localStorage.getItem('authToken');
+              const headers: HeadersInit = { 'Content-Type': 'application/json' };
+              if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+              }
               const res = await fetch(`${API_URL}/api/customer/check-session`, {
                 credentials: 'include',
-                headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+                headers
               });
               if (res.ok) {
                 const data = await res.json();
@@ -92,9 +96,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const token = localStorage.getItem('authToken');
+      console.log('🔑 AuthContext checkSession - Token from localStorage:', token ? 'PRESENT' : 'MISSING');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log('🔑 AuthContext checkSession - Sending Authorization header');
+      } else {
+        console.log('⚠️ AuthContext checkSession - No token in localStorage, not sending Authorization header');
+      }
       const res = await fetch(`${API_URL}/api/customer/check-session`, {
         credentials: 'include',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined,
+        headers,
         signal: controller.signal as any
       });
       if (!res.ok) throw new Error('Session check failed');
@@ -164,10 +176,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       await fetch(`${API_URL}/api/customer/logout`, {
         method: 'POST',
         credentials: 'include',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+        headers
       });
     } catch {}
     // Clear all local storage and session storage
@@ -212,9 +228,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setTimeout(async () => {
               try {
                 const token = localStorage.getItem('authToken');
+                const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                if (token) {
+                  headers['Authorization'] = `Bearer ${token}`;
+                }
                 const res = await fetch(`${API_URL}/api/customer/check-session`, {
                   credentials: 'include',
-                  headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+                  headers
                 });
                 if (res.ok) {
                   const data = await res.json();
