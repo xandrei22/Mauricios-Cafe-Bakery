@@ -7,22 +7,18 @@ const jwt = require('jsonwebtoken');
  */
 function authenticateJWT(req, res, next) {
     try {
-        // Log all headers for debugging
-        console.log('🔍 JWT Middleware - All headers:', Object.keys(req.headers));
-        console.log('🔍 JWT Middleware - Authorization header:', req.headers.authorization || 'MISSING');
-        console.log('🔍 JWT Middleware - Request path:', req.path);
-        console.log('🔍 JWT Middleware - Request method:', req.method);
-
-        // Get Authorization header
-        const authHeader = req.headers.authorization;
+        console.log('🔍 JWT Middleware - Headers:', Object.keys(req.headers));
+        const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
         if (!authHeader) {
-            console.error('❌ JWT Middleware: No Authorization header found');
-            console.error('❌ JWT Middleware: Available headers:', Object.keys(req.headers));
+            console.warn('❌ JWT Middleware: No Authorization header found');
+            console.warn('❌ JWT Middleware: Available headers:', Object.keys(req.headers));
             return res.status(401).json({
                 success: false,
                 message: 'No authorization token provided'
             });
+        } else {
+            console.log('✅ JWT Middleware: Authorization header received:', authHeader.substring(0, 50) + '...');
         }
 
         // Extract token from "Bearer <token>"

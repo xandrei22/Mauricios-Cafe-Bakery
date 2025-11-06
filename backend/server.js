@@ -126,9 +126,9 @@ const corsOptions = {
         }
         return callback(new Error('Not allowed by CORS'));
     },
-    credentials: true,
+    credentials: false, // ✅ JWT-only mode: No cookies needed
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // ✅ Must include Authorization
     optionsSuccessStatus: 204
 };
 
@@ -161,7 +161,7 @@ app.use((req, res, next) => {
     if (isAllowedOrigin(origin)) {
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Vary', 'Origin');
-        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -170,12 +170,13 @@ app.use((req, res, next) => {
 });
 
 // Extra CORS guard specifically for Socket.IO polling/websocket endpoints
+// Note: Socket.IO may need credentials for its own auth, but API routes use JWT
 app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
     const origin = req.headers.origin;
     if (isAllowedOrigin(origin)) {
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Vary', 'Origin');
-        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies for API
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         if (req.method === 'OPTIONS') return res.sendStatus(204);
