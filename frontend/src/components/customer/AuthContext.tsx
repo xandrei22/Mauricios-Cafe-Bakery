@@ -119,47 +119,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('loginTimestamp');
         }
       } else {
-        // If session check fails but we have localStorage backup and recent login, use it temporarily
-        if (isRecentLogin) {
-          const storedUser = localStorage.getItem('customerUser');
-          if (storedUser) {
-            try {
-              const user = JSON.parse(storedUser);
+        // If session check fails, fall back to localStorage (especially important for iOS Safari)
+        // On iOS, cookies may never work, so we should always check localStorage if we have a token
+        const storedUser = localStorage.getItem('customerUser');
+        const storedToken = localStorage.getItem('authToken');
+        if (storedUser && storedToken) {
+          try {
+            const user = JSON.parse(storedUser);
+            // For iOS, always use localStorage fallback if cookies don't work
+            // For other devices, only use it if it's a recent login
+            if (isIOS || isRecentLogin) {
               setAuthenticated(true);
               setUser(user);
-              console.log('✅ AuthContext: Session failed, using localStorage fallback');
+              console.log('✅ AuthContext: Session failed, using localStorage fallback (iOS cookie workaround)');
               return; // Don't clear - let it persist
-            } catch (e) {
-              console.error('Failed to parse stored user:', e);
-              setAuthenticated(false);
-              setUser(null);
             }
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
+          }
+        }
+        // Only set authenticated to false if we don't have a valid localStorage fallback
+        setAuthenticated(false);
+        setUser(null);
+      }
+    } catch (e) {
+      console.error('Session check error:', e);
+      // On error, always try localStorage fallback if we have token and user (especially for iOS)
+      const storedUser = localStorage.getItem('customerUser');
+      const storedToken = localStorage.getItem('authToken');
+      if (storedUser && storedToken) {
+        try {
+          const user = JSON.parse(storedUser);
+          // For iOS, always use localStorage fallback if cookies don't work
+          // For other devices, only use it if it's a recent login
+          if (isIOS || isRecentLogin) {
+            setAuthenticated(true);
+            setUser(user);
+            console.log('✅ AuthContext: Session check error, using localStorage fallback (iOS cookie workaround)');
           } else {
             setAuthenticated(false);
             setUser(null);
           }
-        } else {
-          setAuthenticated(false);
-          setUser(null);
-        }
-      }
-    } catch (e) {
-      console.error('Session check error:', e);
-      // On error during recent login, allow localStorage fallback
-      if (isRecentLogin) {
-        const storedUser = localStorage.getItem('customerUser');
-        if (storedUser) {
-          try {
-            const user = JSON.parse(storedUser);
-            setAuthenticated(true);
-            setUser(user);
-            console.log('✅ AuthContext: Session check error, using localStorage fallback');
-          } catch (parseErr) {
-            console.error('Failed to parse stored user:', parseErr);
-            setAuthenticated(false);
-            setUser(null);
-          }
-        } else {
+        } catch (parseErr) {
+          console.error('Failed to parse stored user:', parseErr);
           setAuthenticated(false);
           setUser(null);
         }
