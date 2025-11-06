@@ -84,9 +84,20 @@ async function handleLogin(e: React.FormEvent) {
       }
     } catch {}
 
-    // Store login timestamp for mobile Safari cookie handling
+    // Store login timestamp for mobile device authentication
+    // On mobile devices (especially iOS), cookies don't work, so we use localStorage + token
     try {
       localStorage.setItem('loginTimestamp', Date.now().toString());
+      
+      // Verify token was saved (critical for mobile)
+      const savedToken = localStorage.getItem('authToken');
+      const savedUser = localStorage.getItem('adminUser');
+      console.log('✅ Admin login - Token saved:', savedToken ? 'YES' : 'NO');
+      console.log('✅ Admin login - User saved:', savedUser ? 'YES' : 'NO');
+      
+      if (!savedToken) {
+        console.error('❌ CRITICAL: Admin token not saved to localStorage! This will fail on mobile devices!');
+      }
     } catch (e) {
       console.warn('Could not store login timestamp:', e);
     }
@@ -98,11 +109,16 @@ async function handleLogin(e: React.FormEvent) {
       // Continue with navigation even if alert check fails
     });
     
-    // Give mobile Safari a moment to process the cookie before redirecting
-    // This helps with cookie persistence on mobile Safari
+    // Detect mobile device
+    const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+    
+    // For mobile devices, redirect immediately (cookies don't work anyway)
+    // For desktop, small delay to let cookies process
+    const delay = isMobile ? 100 : 500;
     setTimeout(() => {
+      console.log(`Admin login redirect - Device: ${isMobile ? 'mobile' : 'desktop'}, Using: ${isMobile ? 'localStorage/token' : 'cookies'}`);
       navigate("/admin/dashboard");
-    }, 500); // 500ms delay for mobile Safari cookie processing
+    }, delay);
 
   } catch (err) {
     console.error("Admin login error:", err);

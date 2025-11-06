@@ -64,18 +64,34 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
           console.error('Failed to check low stock alert:', err);
           // Continue with navigation even if alert check fails
         });
-        // Store login timestamp for mobile Safari cookie handling
+        // Store login timestamp for mobile device authentication
+        // On mobile devices (especially iOS), cookies don't work, so we use localStorage + token
         try {
           localStorage.setItem('loginTimestamp', Date.now().toString());
+          
+          // Verify token was saved (critical for mobile)
+          const savedToken = localStorage.getItem('authToken');
+          const savedUser = localStorage.getItem('staffUser');
+          console.log('✅ Staff login - Token saved:', savedToken ? 'YES' : 'NO');
+          console.log('✅ Staff login - User saved:', savedUser ? 'YES' : 'NO');
+          
+          if (!savedToken) {
+            console.error('❌ CRITICAL: Staff token not saved to localStorage! This will fail on mobile devices!');
+          }
         } catch (e) {
           console.warn('Could not store login timestamp:', e);
         }
         
-        // Give mobile Safari a moment to process the cookie before redirecting
-        // This helps with cookie persistence on mobile Safari
+        // Detect mobile device
+        const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+        
+        // For mobile devices, redirect immediately (cookies don't work anyway)
+        // For desktop, small delay to let cookies process
+        const delay = isMobile ? 100 : 500;
         setTimeout(() => {
+          console.log(`Staff login redirect - Device: ${isMobile ? 'mobile' : 'desktop'}, Using: ${isMobile ? 'localStorage/token' : 'cookies'}`);
           navigate("/staff/dashboard");
-        }, 500); // 500ms delay for mobile Safari cookie processing
+        }, delay);
       }
     } catch (err) {
       console.error('Staff login error:', err);

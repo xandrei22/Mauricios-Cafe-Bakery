@@ -33,14 +33,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     try {
       const API_URL = getApiUrl();
       
-      // FIRST: Check localStorage BEFORE any network call (critical for iOS)
+      // FIRST: Check localStorage BEFORE any network call (critical for mobile)
+      // On mobile devices (especially iOS), cookies DON'T work for cross-origin requests
+      // So we MUST use localStorage + JWT token as PRIMARY authentication method
       const loginTimestamp = localStorage.getItem('loginTimestamp');
       const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-      const recentLoginWindow = isIOS ? 30000 : 5000;
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const recentLoginWindow = isMobile ? 30000 : 5000; // Longer window for mobile
       const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
       
-      // If we have localStorage and it's a recent login, use it IMMEDIATELY (for all roles)
-      if (isRecentLogin) {
+      // For mobile devices, ALWAYS check localStorage first (cookies don't work)
+      // For desktop, check localStorage if it's a recent login
+      if (isMobile || isRecentLogin) {
         let storedUser = null;
         let sessionEndpoint = '';
         
@@ -63,7 +67,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               setIsAuthenticated(true);
               setUserRole(user.role || requiredRole);
               setIsLoading(false);
-              console.log(`✅ ProtectedRoute: Using localStorage FIRST for ${requiredRole} (iOS cookie workaround - before session check)`);
+              console.log(`✅ ProtectedRoute: Using localStorage FIRST for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
               
               // Do session check in background
               if (sessionEndpoint) {
@@ -110,9 +114,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = `${API_URL}/api/customer/check-session`;
       }
 
-      // If recent login, add a delay to let iOS process cookies
-      if (isRecentLogin) {
-        const delay = isIOS ? 1500 : 300;
+      // For mobile devices, don't wait for cookies (they don't work anyway)
+      // For desktop with recent login, add a small delay
+      if (!isMobile && isRecentLogin) {
+        const delay = 300;
         await new Promise(resolve => setTimeout(resolve, delay));
       }
 
@@ -141,8 +146,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             localStorage.removeItem('loginTimestamp');
           }
         } else {
-          // If session check fails, fall back to localStorage (especially important for iOS Safari)
-          // On iOS, cookies may never work, so we should always check localStorage if we have a token
+          // If session check fails, fall back to localStorage (especially important for mobile)
+          // On mobile devices (especially iOS), cookies may never work, so always check localStorage
           const storedToken = localStorage.getItem('authToken');
           let storedUser = null;
           let userRoleFromStorage = null;
@@ -163,12 +168,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               const user = JSON.parse(storedUser);
               // Verify the role matches
               if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
-                // For iOS, always use localStorage fallback if cookies don't work
-                // For other devices, only use it if it's a recent login
-                if (isIOS || isRecentLogin) {
+                // For mobile devices, ALWAYS use localStorage fallback (cookies don't work)
+                // For desktop, only use it if it's a recent login
+                if (isMobile || isRecentLogin) {
                   setIsAuthenticated(true);
                   setUserRole(user.role || userRoleFromStorage);
-                  console.log(`✅ ProtectedRoute: Using localStorage fallback for ${requiredRole} (iOS cookie workaround)`);
+                  console.log(`✅ ProtectedRoute: Using localStorage fallback for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
                 } else {
                   setIsAuthenticated(false);
                 }
@@ -183,8 +188,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           }
         }
       } else {
-        // On 401/403, try localStorage fallback for all roles (especially for iOS)
-        if (isIOS || isRecentLogin) {
+        // On 401/403, try localStorage fallback for all roles (especially for mobile)
+        // Mobile devices (especially iOS) can't use cookies, so always try localStorage
+        if (isMobile || isRecentLogin) {
           const storedToken = localStorage.getItem('authToken');
           let storedUser = null;
           let expectedRole = requiredRole;
@@ -204,7 +210,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
                 setIsAuthenticated(true);
                 setUserRole(user.role || expectedRole);
-                console.log(`✅ ProtectedRoute: Using localStorage fallback after 401/403 for ${requiredRole} (iOS cookie workaround)`);
+                console.log(`✅ ProtectedRoute: Using localStorage fallback after 401/403 for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
               } else {
                 setIsAuthenticated(false);
               }
@@ -238,14 +244,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           const user = JSON.parse(storedUser);
           // Verify the role matches
           if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
-            // For iOS, always use localStorage fallback if cookies don't work
-            // For other devices, only use it if it's a recent login
+            // For mobile devices, always use localStorage fallback (cookies don't work)
+            // For desktop, only use it if it's a recent login
             const loginTimestamp = localStorage.getItem('loginTimestamp');
+            const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
             const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000;
-            if (isIOS || isRecentLogin) {
+            if (isMobile || isRecentLogin) {
               setIsAuthenticated(true);
               setUserRole(user.role || expectedRole);
-              console.log(`✅ ProtectedRoute: Using localStorage fallback after error for ${requiredRole} (iOS cookie workaround)`);
+              console.log(`✅ ProtectedRoute: Using localStorage fallback after error for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
             } else {
               setIsAuthenticated(false);
             }
