@@ -106,30 +106,53 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 function isAllowedOrigin(origin) {
+    // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return true;
+
     try {
         const hostname = new URL(origin).hostname;
-        return (
+        const isAllowed = (
             allowedOrigins.includes(origin) ||
             hostname.endsWith('.vercel.app') ||
-            hostname.endsWith('vercel.app')
+            hostname === 'vercel.app' ||
+            hostname.endsWith('.onrender.com') ||
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1'
         );
-    } catch (_) {
+
+        console.log('🔍 CORS Origin Check:', {
+            origin: origin,
+            hostname: hostname,
+            isAllowed: isAllowed,
+            allowedOrigins: allowedOrigins
+        });
+
+        return isAllowed;
+    } catch (error) {
+        console.error('❌ CORS Origin Check Error:', error);
         return false;
     }
 }
 
 const corsOptions = {
     origin: function(origin, callback) {
+        // Log CORS check for debugging
+        console.log('🔍 CORS Preflight Check - Origin:', origin || 'NO ORIGIN');
+
         if (isAllowedOrigin(origin)) {
+            console.log('✅ CORS: Origin allowed');
             return callback(null, true);
         }
+
+        console.error('❌ CORS: Origin NOT allowed:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
     credentials: false, // ✅ JWT-only mode: No cookies needed
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // ✅ Must include Authorization
-    optionsSuccessStatus: 204
+    exposedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 204,
+    preflightContinue: false // Let CORS handle preflight
 };
 
 // ✅ HTTPS redirection (keep this after cors)
@@ -156,16 +179,36 @@ app.use(cors(corsOptions));
 // Ensure preflight handled for all routes
 app.options('*', cors(corsOptions));
 // Fallback explicit headers for some hosts/proxies
+// This ensures CORS headers are set even if the CORS middleware doesn't catch it
 app.use((req, res, next) => {
     const origin = req.headers.origin;
+
+    // Log for debugging
+    if (req.method === 'OPTIONS') {
+        console.log('🔍 CORS Preflight Request:', {
+            origin: origin,
+            method: req.method,
+            path: req.path
+        });
+    }
+
     if (isAllowedOrigin(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Origin', origin || '*');
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        if (req.method === 'OPTIONS') return res.sendStatus(204);
+        res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
+
+        // Handle preflight requests
+        if (req.method === 'OPTIONS') {
+            console.log('✅ CORS Preflight: Sending 204');
+            return res.sendStatus(204);
+        }
+    } else if (origin) {
+        console.error('❌ CORS: Origin not allowed in fallback:', origin);
     }
+
     next();
 });
 
