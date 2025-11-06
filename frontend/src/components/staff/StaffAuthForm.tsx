@@ -10,7 +10,7 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
-import { getApiUrl } from "../../utils/apiConfig";
+import { staffLogin } from "../../utils/authUtils";
 
 export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
@@ -21,111 +21,47 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
-  // Get the API URL from environment variable
-  const API_URL = getApiUrl();
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    
     try {
       console.log('Attempting staff login with:', { username: usernameOrEmail });
       
-      const res = await fetch(`${API_URL}/api/staff/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameOrEmail, password }),
-        credentials: "include",
+      const data = await staffLogin(usernameOrEmail, password);
+      
+      console.log('Staff login successful, checking for alerts');
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('authToken');
+      const savedUser = localStorage.getItem('staffUser');
+      console.log('✅ Staff login - Token saved:', savedToken ? 'YES' : 'NO');
+      console.log('✅ Staff login - User saved:', savedUser ? 'YES' : 'NO');
+      
+      if (!savedToken) {
+        console.error('❌ CRITICAL: Staff token not saved to localStorage!');
+        setError("Failed to save authentication token. Please try again.");
+        return;
+      }
+
+      // Check for alerts immediately after successful login
+      checkLowStockAlert().catch(err => {
+        console.error('Failed to check low stock alert:', err);
       });
       
-      console.log('Staff login response status:', res.status);
+      // Small delay to ensure localStorage is synced (especially on mobile)
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 200 : 100;
       
-      const data = await res.json();
-      console.log('Staff login response data:', data);
+      setTimeout(() => {
+        console.log(`Staff login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
+        navigate("/staff/dashboard");
+      }, delay);
       
-      if (!res.ok || !data.success) {
-        // Show regular error message for all validation failures (same layout as admin)
-        setError(data.message || "Login failed");
-      } else {
-        console.log('Staff login successful, checking for alerts');
-        try {
-          if (data?.user) {
-            localStorage.setItem('staffUser', JSON.stringify(data.user));
-          } else if (data?.email) {
-            localStorage.setItem('staffUser', JSON.stringify({ email: data.email }));
-          }
-          if (data?.token) {
-            localStorage.setItem('authToken', data.token);
-          }
-        } catch {}
-        // Check for alerts immediately after successful login
-        // Don't await - let it fail silently if there's an error
-        checkLowStockAlert().catch(err => {
-          console.error('Failed to check low stock alert:', err);
-          // Continue with navigation even if alert check fails
-        });
-        // Store login timestamp for mobile device authentication
-        // On mobile devices (especially iOS), cookies don't work, so we use localStorage + token
-        try {
-          localStorage.setItem('loginTimestamp', Date.now().toString());
-          
-          // Verify token was saved (critical for mobile)
-          const savedToken = localStorage.getItem('authToken');
-          const savedUser = localStorage.getItem('staffUser');
-          console.log('✅ Staff login - Token saved:', savedToken ? 'YES' : 'NO');
-          console.log('✅ Staff login - User saved:', savedUser ? 'YES' : 'NO');
-          
-          if (!savedToken) {
-            console.error('❌ CRITICAL: Staff token not saved to localStorage! This will fail on mobile devices!');
-          }
-        } catch (e) {
-          console.warn('Could not store login timestamp:', e);
-        }
-        
-        // Detect mobile device
-        const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-        
-        // CRITICAL: Ensure token is saved before redirecting
-        // Verify token was actually saved
-        const verifyToken = () => {
-          const token = localStorage.getItem('authToken');
-          const user = localStorage.getItem('staffUser');
-          if (!token || !user) {
-            console.error('❌ CRITICAL: Token or user not saved after login! Retrying...');
-            // Retry saving
-            if (data?.token) {
-              localStorage.setItem('authToken', data.token);
-            }
-            if (data?.user) {
-              localStorage.setItem('staffUser', JSON.stringify(data.user));
-            }
-            return false;
-          }
-          return true;
-        };
-        
-        // Verify immediately
-        if (!verifyToken()) {
-          // Wait a bit and verify again
-          setTimeout(() => {
-            if (!verifyToken()) {
-              console.error('❌ CRITICAL: Failed to save token after retry!');
-            }
-          }, 100);
-        }
-        
-        // For mobile devices, wait a bit longer to ensure localStorage is synced
-        // For desktop, small delay to let cookies process
-        const delay = isMobile ? 300 : 500;
-        setTimeout(() => {
-          console.log(`Staff login redirect - Device: ${isMobile ? 'mobile' : 'desktop'}, Using: ${isMobile ? 'localStorage/token' : 'cookies'}`);
-          console.log(`Staff login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
-          navigate("/staff/dashboard");
-        }, delay);
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Staff login error:', err);
-      setError("Network error. Please try again.");
+      setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }

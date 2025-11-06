@@ -9,6 +9,7 @@ import { Label } from "./label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card"
 import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import { customerLogin } from "../../utils/authUtils";
 import { getApiUrl } from "../../utils/apiConfig";
 
 export function LoginForm({
@@ -24,9 +25,6 @@ export function LoginForm({
   // Get table number from URL if present
   const urlParams = new URLSearchParams(window.location.search);
   const tableFromUrl = urlParams.get('table');
-  
-  // Get the API URL from environment variable
-  const API_URL = getApiUrl();
   
   // Check for Google OAuth verification error
   useEffect(() => {
@@ -48,145 +46,44 @@ export function LoginForm({
     e.preventDefault();
     setError("");
     setLoading(true);
+    
     try {
-      const res = await fetch(`${API_URL}/api/customer/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, table: tableFromUrl || undefined }),
-        credentials: "include",
-      });
+      const hasTable = !!tableFromUrl;
+      const data = await customerLogin(email, password, hasTable, false);
       
-      const data = await res.json();
+      // Verify token was saved
+      const savedToken = localStorage.getItem('authToken');
+      const savedUser = localStorage.getItem('customerUser');
+      console.log('✅ Customer login - Token saved:', savedToken ? 'YES' : 'NO');
+      console.log('✅ Customer login - User saved:', savedUser ? 'YES' : 'NO');
       
-      if (!res.ok) {
-        // Handle HTTP error responses (like 401 for wrong credentials)
-        if (data.requiresVerification) {
-          setError(data.message + " Please check your email for the verification link.");
-        } else {
-          setError(data.message || `Login failed (${res.status})`);
-        }
-      } else if (!data.success) {
-        // Handle successful HTTP response but failed login
-        setError(data.message || "Login failed");
-      } else {
-        // Successful login - store user info and JWT in localStorage (for iOS without cookies)
-        // CRITICAL: This MUST work on iOS, so we verify it multiple times
-        if (data.user) {
-          try {
-            const userJson = JSON.stringify(data.user);
-            const timestamp = Date.now().toString();
-            localStorage.setItem('customerUser', userJson);
-            localStorage.setItem('loginTimestamp', timestamp);
-            if (data.token) {
-              localStorage.setItem('authToken', data.token);
-            }
-            
-            // IMMEDIATE verification (critical for iOS)
-            const verifyUser = localStorage.getItem('customerUser');
-            const verifyTimestamp = localStorage.getItem('loginTimestamp');
-            const verifyToken = localStorage.getItem('authToken');
-            
-            console.log('✅ localStorage set - customerUser:', data.user.email, 'timestamp:', timestamp);
-            console.log('✅ localStorage verification - stored:', verifyUser ? 'YES' : 'NO');
-            console.log('✅ localStorage verification - timestamp:', verifyTimestamp ? 'YES' : 'NO');
-            console.log('✅ localStorage verification - token:', verifyToken ? 'YES' : 'NO');
-            
-            if (!verifyUser || !verifyTimestamp) {
-              console.error('❌ CRITICAL: localStorage write failed! This will cause iOS login issues!');
-              // Try one more time
-              try {
-                localStorage.setItem('customerUser', userJson);
-                localStorage.setItem('loginTimestamp', timestamp);
-                if (data.token) {
-                  localStorage.setItem('authToken', data.token);
-                }
-                console.log('✅ Retry: localStorage set again');
-              } catch (retryErr) {
-                console.error('❌ CRITICAL: localStorage retry also failed!', retryErr);
-              }
-            }
-          } catch (e) {
-            console.error('❌ Could not store user in localStorage:', e);
-            console.error('❌ Error details:', {
-              name: e?.name,
-              message: e?.message,
-              code: (e as any)?.code,
-              stack: e?.stack
-            });
-            alert('Warning: Could not save login session. You may need to log in again if you refresh the page.');
-          }
-        } else {
-          console.warn('⚠️ No user data in login response to store in localStorage');
-        }
-        
-        // Verify localStorage was written successfully before redirecting
-        // This is critical for mobile devices where localStorage might need a moment
-        const verifyStorage = () => {
-          const storedUser = localStorage.getItem('customerUser');
-          const storedToken = localStorage.getItem('authToken');
-          const storedTimestamp = localStorage.getItem('loginTimestamp');
-          
-          console.log('🔍 Verifying localStorage before redirect:', {
-            hasUser: !!storedUser,
-            hasToken: !!storedToken,
-            hasTimestamp: !!storedTimestamp
-          });
-          
-          return !!(storedUser && storedToken && storedTimestamp);
-        };
-        
-        // Detect iOS - ALL iOS versions (including ALL browsers on iOS) can have cookie blocking issues
-        const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-        
-        console.log('Login successful - iOS device detected:', isIOS, 'User stored in localStorage:', !!data.user);
-        console.log('User Agent:', navigator.userAgent);
-        
-        // Ensure localStorage is written before redirecting
-        // On mobile, localStorage might need a moment to sync
-        const ensureStorageWritten = async () => {
-          let attempts = 0;
-          const maxAttempts = 10;
-          
-          while (!verifyStorage() && attempts < maxAttempts) {
-            attempts++;
-            console.log(`⏳ Waiting for localStorage to sync (attempt ${attempts}/${maxAttempts})...`);
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-          
-          if (!verifyStorage()) {
-            console.error('❌ WARNING: localStorage verification failed after', maxAttempts, 'attempts');
-            // Still redirect - the AuthContext will handle missing token
-          } else {
-            console.log('✅ localStorage verified successfully');
-          }
-        };
-        
-        // Wait for localStorage to be written, then redirect
-        ensureStorageWritten().then(() => {
-          const redirectUrl = data && data.redirect 
-            ? data.redirect 
-            : tableFromUrl 
-              ? `/customer/dashboard?table=${tableFromUrl}` 
-              : "/customer/dashboard";
-          
-          console.log('Redirecting to:', redirectUrl);
-          
-          // Use full page reload for mobile devices
-          if (isMobile) {
-            window.location.replace(redirectUrl);
-          } else {
-            window.location.href = redirectUrl;
-          }
-        });
+      if (!savedToken || !savedUser) {
+        console.error('❌ CRITICAL: Customer token or user not saved to localStorage!');
+        setError("Failed to save authentication token. Please try again.");
+        return;
       }
-    } catch (err) {
-      console.error('Login error:', err);
-      // Only show network error for actual connection issues
-      if (err instanceof Error && err.message.includes('fetch')) {
-        setError("Cannot connect to server. Please check your connection and try again.");
+      
+      // Small delay to ensure localStorage is synced (especially on mobile)
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 200 : 100;
+      
+      setTimeout(() => {
+        console.log(`Customer login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
+        // Redirect based on table presence
+        if (tableFromUrl) {
+          window.location.href = `/menu?table=${tableFromUrl}`;
+        } else {
+          window.location.href = '/dashboard';
+        }
+      }, delay);
+      
+    } catch (err: any) {
+      console.error('Customer login error:', err);
+      
+      if (err.response?.data?.requiresVerification) {
+        setError(err.response.data.message + " Please check your email for the verification link.");
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -253,7 +150,7 @@ export function LoginForm({
                 <Button type="submit" className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white h-10 sm:h-11 text-sm sm:text-base" disabled={loading}>
                   {loading ? "Logging in..." : "Login"}
                 </Button>
-                <Button variant="outline" className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base" type="button" disabled={loading} onClick={() => window.location.href = `${API_URL}/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}` }>
+                <Button variant="outline" className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base" type="button" disabled={loading} onClick={() => window.location.href = `${getApiUrl()}/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}` }>
                   {/* Google "G" logo */}
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-4 w-4 sm:h-5 sm:w-5">
                     <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.676 32.658 29.223 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.157 7.961 3.039l5.657-5.657C33.64 6.053 29.083 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20c10.494 0 19.126-7.645 19.126-20 0-1.341-.146-2.651-.415-3.917z"/>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getApiUrl } from '../utils/apiConfig';
+import axiosInstance from '../utils/axiosInstance';
+import { checkAdminSession, checkStaffSession, checkCustomerSession } from '../utils/authUtils';
 
 type Role = 'admin' | 'staff' | 'customer';
 
@@ -22,60 +23,26 @@ export const useSessionValidation = (role: Role = 'admin'): SessionValidationRes
       setIsLoading(true);
       setError(null);
 
-      const API_URL = getApiUrl();
-
-      const endpointMap: Record<Role, string> = {
-        admin: `${API_URL}/api/admin/check-session`,
-        staff: `${API_URL}/api/staff/check-session`,
-        customer: `${API_URL}/api/customer/check-session`,
-      };
-
       const loginRouteMap: Record<Role, string> = {
         admin: '/admin/login',
         staff: '/staff/login',
         customer: '/login',
       };
 
-      // Get token from localStorage and include in Authorization header
-      const token = localStorage.getItem('authToken');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
+      let data;
       
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log(`🔑 useSessionValidation (${role}): Sending Authorization header with token`);
+      // Use appropriate session check function based on role
+      if (role === 'admin') {
+        data = await checkAdminSession();
+      } else if (role === 'staff') {
+        data = await checkStaffSession();
       } else {
-        console.warn(`⚠️ useSessionValidation (${role}): No token in localStorage`);
+        data = await checkCustomerSession();
       }
-
-      console.log(`🔑 useSessionValidation (${role}): Fetch options:`, {
-        endpoint: endpointMap[role],
-        hasAuthorization: !!headers['Authorization'],
-        allHeaders: Object.keys(headers)
-      });
-
-      const response = await fetch(endpointMap[role], {
-        credentials: 'include',
-        headers: headers
-      });
-
-      if (response.status === 401) {
-        setIsValid(false);
-        setUser(null);
-        setError('Session expired. Please log in again.');
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error('Session check failed');
-      }
-
-      const data = await response.json();
 
       if (data && (data.authenticated || data.success)) {
         setIsValid(true);
-        setUser(data.user || data.data || null);
+        setUser(data.user || null);
         setError(null);
       } else {
         setIsValid(false);
@@ -86,10 +53,15 @@ export const useSessionValidation = (role: Role = 'admin'): SessionValidationRes
           window.location.href = loginRouteMap[role];
         }, 1500);
       }
-    } catch (err) {
+    } catch (err: any) {
       setIsValid(false);
       setUser(null);
-      setError('Network error. Please check your connection.');
+      
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setError('Session expired. Please log in again.');
+      } else {
+        setError('Network error. Please check your connection.');
+      }
     } finally {
       setIsLoading(false);
     }

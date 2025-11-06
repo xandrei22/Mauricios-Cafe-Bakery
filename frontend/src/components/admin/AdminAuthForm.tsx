@@ -11,7 +11,7 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
-import { getApiUrl } from "../../utils/apiConfig";
+import { adminLogin } from "../../utils/authUtils";
 import { mobileFriendlySwal } from "../../utils/sweetAlertConfig";
 
 export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div">) {
@@ -24,139 +24,65 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
-// Get the API URL from environment variable
-const API_URL = getApiUrl();
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-async function handleLogin(e: React.FormEvent) {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
-
-  try {
-    console.log('Attempting admin login with:', { username: usernameOrEmail });
-    
-    const res = await fetch(`${API_URL}/api/admin/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include", // must be above body for consistent handling
-      body: JSON.stringify({
-        username: usernameOrEmail,
-        password,
-      }),
-    });
-
-    console.log('Admin login response status:', res.status);
-    
-    const data = await res.json();
-    console.log('Admin login response data:', data);
-
-    if (!res.ok || !data.success) {
-      // Handle different error types with appropriate responses
-      if (data.errorType === 'unauthorized_access') {
-        // Show sweet alert for unauthorized access
-        await mobileFriendlySwal.error(
-          'Not Authorized',
-          'You are not authorized to access the admin portal. Please contact your administrator.'
-        );
-      } else if (data.errorType === 'inactive_account') {
-        // Show sweet alert for inactive account
-        await mobileFriendlySwal.warning(
-          'Account Inactive',
-          'Your account is not active. Please contact your administrator.'
-        );
-      } else {
-        // Show regular error message for invalid credentials
-        setError(data.message || "Login failed");
-      }
-      return;
-    }
-
-    console.log('Admin login successful, checking for alerts');
-    
     try {
-      if (data.user) {
-        localStorage.setItem("adminUser", JSON.stringify(data.user));
-      } else if (data.email) {
-      localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
-      }
-      if (data.token) {
-        localStorage.setItem('authToken', data.token);
-      }
-    } catch {}
-
-    // Store login timestamp for mobile device authentication
-    // On mobile devices (especially iOS), cookies don't work, so we use localStorage + token
-    try {
-      localStorage.setItem('loginTimestamp', Date.now().toString());
+      console.log('Attempting admin login with:', { username: usernameOrEmail });
       
-      // Verify token was saved (critical for mobile)
+      const data = await adminLogin(usernameOrEmail, password);
+      
+      console.log('Admin login successful, checking for alerts');
+      
+      // Verify token was saved
       const savedToken = localStorage.getItem('authToken');
       const savedUser = localStorage.getItem('adminUser');
       console.log('✅ Admin login - Token saved:', savedToken ? 'YES' : 'NO');
       console.log('✅ Admin login - User saved:', savedUser ? 'YES' : 'NO');
       
       if (!savedToken) {
-        console.error('❌ CRITICAL: Admin token not saved to localStorage! This will fail on mobile devices!');
+        console.error('❌ CRITICAL: Admin token not saved to localStorage!');
+        setError("Failed to save authentication token. Please try again.");
+        return;
       }
-    } catch (e) {
-      console.warn('Could not store login timestamp:', e);
-    }
 
-    // Check for alerts immediately after successful login
-    // Don't await - let it fail silently if there's an error
-    checkLowStockAlert().catch(err => {
-      console.error('Failed to check low stock alert:', err);
-      // Continue with navigation even if alert check fails
-    });
-    
-    // Detect mobile device
-    const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-    
-    // CRITICAL: Ensure token is saved before redirecting
-    // Verify token was actually saved
-    const verifyToken = () => {
-      const token = localStorage.getItem('authToken');
-      const user = localStorage.getItem('adminUser');
-      if (!token || !user) {
-        console.error('❌ CRITICAL: Token or user not saved after login! Retrying...');
-        // Retry saving
-        if (data.token) {
-          localStorage.setItem('authToken', data.token);
-        }
-        if (data.user) {
-          localStorage.setItem('adminUser', JSON.stringify(data.user));
-        }
-        return false;
-      }
-      return true;
-    };
-    
-    // Verify immediately
-    if (!verifyToken()) {
-      // Wait a bit and verify again
+      // Check for alerts immediately after successful login
+      checkLowStockAlert().catch(err => {
+        console.error('Failed to check low stock alert:', err);
+      });
+      
+      // Small delay to ensure localStorage is synced (especially on mobile)
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 200 : 100;
+      
       setTimeout(() => {
-        if (!verifyToken()) {
-          console.error('❌ CRITICAL: Failed to save token after retry!');
-        }
-      }, 100);
-    }
-    
-    // For mobile devices, wait a bit longer to ensure localStorage is synced
-    // For desktop, small delay to let cookies process
-    const delay = isMobile ? 300 : 500;
-    setTimeout(() => {
-      console.log(`Admin login redirect - Device: ${isMobile ? 'mobile' : 'desktop'}, Using: ${isMobile ? 'localStorage/token' : 'cookies'}`);
-      console.log(`Admin login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
-      navigate("/admin/dashboard");
-    }, delay);
+        console.log(`Admin login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
+        navigate("/admin/dashboard");
+      }, delay);
 
-  } catch (err) {
-    console.error("Admin login error:", err);
-    setError("Network error. Please try again.");
-  } finally {
-    setLoading(false);
+    } catch (err: any) {
+      console.error("Admin login error:", err);
+      
+      // Handle different error types
+      if (err.response?.data?.errorType === 'unauthorized_access') {
+        await mobileFriendlySwal.error(
+          'Not Authorized',
+          'You are not authorized to access the admin portal. Please contact your administrator.'
+        );
+      } else if (err.response?.data?.errorType === 'inactive_account') {
+        await mobileFriendlySwal.warning(
+          'Account Inactive',
+          'Your account is not active. Please contact your administrator.'
+        );
+      } else {
+        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   return (
     <div className={cn("min-h-screen flex", className)} {...props}>

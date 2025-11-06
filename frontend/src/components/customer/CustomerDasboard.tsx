@@ -109,13 +109,19 @@ export default function CustomerDasboard() {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       console.log('Fetching dashboard data for user ID:', user.id);
       
-      // Use the dedicated dashboard API endpoint
+      // Use the dedicated dashboard API endpoint with JWT token
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch(`${API_URL}/api/customer/dashboard?customerId=${user.id}`, {
         method: 'GET',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        headers: headers
       });
       
       console.log('Dashboard API response status:', response.status);

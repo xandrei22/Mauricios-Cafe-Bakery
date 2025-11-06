@@ -196,7 +196,19 @@ const CustomerOrders: React.FC = () => {
       const url = `${API_URL}/api/customer/orders/${user.email}`;
       console.log('  - API URL:', url);
       
-      const response = await fetch(url, { credentials: 'include' });
+      // Include JWT token in Authorization header
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, { 
+        credentials: 'include',
+        headers: headers
+      });
       console.log('  - Response status:', response.status);
       
       if (response.ok) {

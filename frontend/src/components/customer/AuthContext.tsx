@@ -22,8 +22,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [lastSessionCheck, setLastSessionCheck] = useState<number>(0);
-  const API_URL = getApiUrl();
-
   const checkSession = useCallback(async () => {
     // Detect device type
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
