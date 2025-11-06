@@ -85,11 +85,41 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
         // Detect mobile device
         const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
         
-        // For mobile devices, redirect immediately (cookies don't work anyway)
+        // CRITICAL: Ensure token is saved before redirecting
+        // Verify token was actually saved
+        const verifyToken = () => {
+          const token = localStorage.getItem('authToken');
+          const user = localStorage.getItem('staffUser');
+          if (!token || !user) {
+            console.error('❌ CRITICAL: Token or user not saved after login! Retrying...');
+            // Retry saving
+            if (data?.token) {
+              localStorage.setItem('authToken', data.token);
+            }
+            if (data?.user) {
+              localStorage.setItem('staffUser', JSON.stringify(data.user));
+            }
+            return false;
+          }
+          return true;
+        };
+        
+        // Verify immediately
+        if (!verifyToken()) {
+          // Wait a bit and verify again
+          setTimeout(() => {
+            if (!verifyToken()) {
+              console.error('❌ CRITICAL: Failed to save token after retry!');
+            }
+          }, 100);
+        }
+        
+        // For mobile devices, wait a bit longer to ensure localStorage is synced
         // For desktop, small delay to let cookies process
-        const delay = isMobile ? 100 : 500;
+        const delay = isMobile ? 300 : 500;
         setTimeout(() => {
           console.log(`Staff login redirect - Device: ${isMobile ? 'mobile' : 'desktop'}, Using: ${isMobile ? 'localStorage/token' : 'cookies'}`);
+          console.log(`Staff login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
           navigate("/staff/dashboard");
         }, delay);
       }

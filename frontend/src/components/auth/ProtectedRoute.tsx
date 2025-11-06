@@ -74,13 +74,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                 setTimeout(async () => {
                   try {
                     const token = localStorage.getItem('authToken');
-                    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                    const headers = new Headers();
+                    headers.set('Content-Type', 'application/json');
                     if (token) {
-                      headers['Authorization'] = `Bearer ${token}`;
+                      headers.set('Authorization', `Bearer ${token}`);
                     }
                     const res = await fetch(sessionEndpoint, {
                       credentials: 'include',
-                      headers
+                      headers: headers
                     });
                     if (res.ok) {
                       const data = await res.json();
@@ -114,7 +115,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = `${API_URL}/api/customer/check-session`;
       }
 
-      // For mobile devices, don't wait for cookies (they don't work anyway)
+      // CRITICAL: For mobile devices with recent login, wait a bit for token to be saved
+      // This ensures localStorage has the token before we check session
+      if (isMobile && isRecentLogin) {
+        console.log('⏳ Waiting for token to be saved to localStorage...');
+        await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms for localStorage sync
+      }
+      
       // For desktop with recent login, add a small delay
       if (!isMobile && isRecentLogin) {
         const delay = 300;
@@ -124,17 +131,51 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // Check if user is logged in by calling the appropriate session check endpoint
       // ALWAYS include token if available (critical for iOS Safari cookie blocking)
       const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log('🔑 ProtectedRoute: Sending Authorization header with token');
-      } else {
-        console.log('⚠️ ProtectedRoute: No token in localStorage');
+      
+      // CRITICAL: On mobile, token is REQUIRED (cookies don't work)
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      if (isMobile && !token) {
+        console.error(`❌ CRITICAL: Mobile device but NO TOKEN in localStorage for ${requiredRole}! Authentication will fail!`);
+        console.error('❌ localStorage contents:', {
+          keys: Object.keys(localStorage),
+          hasAdminUser: !!localStorage.getItem('adminUser'),
+          hasStaffUser: !!localStorage.getItem('staffUser'),
+          hasCustomerUser: !!localStorage.getItem('customerUser'),
+          hasAuthToken: !!localStorage.getItem('authToken')
+        });
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
       }
-      const response = await fetch(sessionEndpoint, {
-        credentials: 'include',
-        headers
+      
+      // CRITICAL: Use Headers object to ensure headers are sent correctly
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
+      
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+        console.log(`🔑 ProtectedRoute (${requiredRole}): Sending Authorization header with token`);
+        console.log(`🔑 ProtectedRoute (${requiredRole}): Token length:`, token.length);
+        console.log(`🔑 ProtectedRoute (${requiredRole}): Authorization header value:`, `Bearer ${token.substring(0, 20)}...`);
+      } else {
+        console.warn(`⚠️ ProtectedRoute (${requiredRole}): No token in localStorage (desktop may use cookies)`);
+      }
+      
+      // Log what we're about to send
+      console.log(`🔑 ProtectedRoute (${requiredRole}) - Fetch options:`, {
+        endpoint: sessionEndpoint,
+        hasAuthorization: headers.has('Authorization'),
+        authorizationValue: headers.get('Authorization')?.substring(0, 30) + '...',
+        allHeaders: Array.from(headers.entries())
       });
+      
+      const response = await fetch(sessionEndpoint, {
+        method: 'GET',
+        credentials: 'include',
+        headers: headers
+      });
+      
+      console.log(`🔑 ProtectedRoute (${requiredRole}) - Response status:`, response.status);
 
       if (response.ok) {
         const data = await response.json();

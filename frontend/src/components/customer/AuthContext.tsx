@@ -64,9 +64,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   return;
                 }
                 
-                const headers: HeadersInit = { 'Content-Type': 'application/json' };
-                headers['Authorization'] = `Bearer ${token}`;
-                console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
+              const headers = new Headers();
+              headers.set('Content-Type', 'application/json');
+              headers.set('Authorization', `Bearer ${token}`);
+              console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
                 
                 const res = await fetch(`${API_URL}/api/customer/check-session`, {
                   credentials: 'include',
@@ -150,13 +151,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      // ALWAYS create headers object first
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      // CRITICAL: Use Headers object to ensure headers are sent correctly
+      // Plain objects might not work correctly with fetch API
+      const headers = new Headers();
+      headers.set('Content-Type', 'application/json');
       
       // ALWAYS send token if available (primary auth method for mobile)
       if (token) {
-        // Use lowercase 'authorization' (Express normalizes to lowercase)
-        headers['Authorization'] = `Bearer ${token}`;
+        headers.set('Authorization', `Bearer ${token}`);
         console.log('🔑 AuthContext checkSession - Sending Authorization header with token');
         console.log('🔑 AuthContext checkSession - Token length:', token.length);
         console.log('🔑 AuthContext checkSession - Authorization header value:', `Bearer ${token.substring(0, 20)}...`);
@@ -168,7 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fetchOptions: RequestInit = {
         method: 'GET',
         credentials: 'include', // Keep for desktop browsers that support cookies
-        headers,
+        headers: headers,
         signal: controller.signal as any
       };
       
@@ -176,8 +178,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('🔑 AuthContext checkSession - Fetch options:', {
         method: fetchOptions.method,
         hasHeaders: !!fetchOptions.headers,
-        hasAuthorization: !!(fetchOptions.headers as any)?.['Authorization'],
-        headersKeys: Object.keys(fetchOptions.headers || {})
+        hasAuthorization: headers.has('Authorization'),
+        authorizationValue: headers.get('Authorization')?.substring(0, 30) + '...',
+        allHeaders: Array.from(headers.entries())
       });
       
       const res = await fetch(`${API_URL}/api/customer/check-session`, fetchOptions);
