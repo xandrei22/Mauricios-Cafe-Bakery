@@ -50,20 +50,9 @@ dotenv.config();
 
 // Create Express app and set port
 const app = express();
-app.use(cors({
-    origin: [
-        "https://mauricios-cafe-bakery.vercel.app",
-        "http://localhost:5173"
-    ],
-    credentials: true
-}));
-app.options("*", cors({
-    origin: [
-        "https://mauricios-cafe-bakery.vercel.app",
-        "http://localhost:5173"
-    ],
-    credentials: true
-}));
+
+// Note: CORS will be configured properly below with corsOptions
+// This initial setup is removed to prevent conflicts
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
