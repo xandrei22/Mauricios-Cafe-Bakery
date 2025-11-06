@@ -12,85 +12,32 @@ const ActivityLogger = require('../utils/activityLogger');
 
 // Lightweight session check for staff (placed after middleware to ensure session is present)
 router.get('/check-session', (req, res) => {
-    // Add mobile debugging
-    const userAgent = req.headers['user-agent'] || '';
-    const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-
-    if (isMobile) {
-        console.log('📱 Mobile staff session check:', {
-            sessionId: req.sessionID,
-            userAgent: userAgent.substring(0, 100),
-            hasSession: !!req.session,
-            hasStaffUser: !!(req.session && req.session.staffUser),
-            staffUser: req.session && req.session.staffUser ? req.session.staffUser : null
-        });
-    }
-
-    console.log('🔐 Staff session check - req.session.staffUser:', req.session && req.session.staffUser);
-
-    // First check session
-    if (req.session && req.session.staffUser && (req.session.staffUser.role === 'admin' || req.session.staffUser.role === 'staff')) {
-        console.log('🔐 Staff session check - returning authenticated user from session');
-        return res.json({
-            authenticated: true,
-            user: {
-                id: req.session.staffUser.id,
-                username: req.session.staffUser.username,
-                email: req.session.staffUser.email,
-                fullName: req.session.staffUser.fullName,
-                role: req.session.staffUser.role || 'staff'
-            }
-        });
-    }
-
-    // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
+    // JWT-only staff session check
     const jwt = require('jsonwebtoken');
     try {
-        // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
-        const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
-        console.log('🔑 Staff session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
-        console.log('🔑 Staff session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
-
+        const authHeader = (req.headers && req.headers.authorization) || '';
         if (authHeader) {
             const parts = authHeader.split(' ');
             const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
             const token = hasBearer ? parts[1] : null;
-            console.log('🔑 Staff session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
-
             if (token) {
                 const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                try {
-                    const payload = jwt.verify(token, secret);
-                    // Only allow staff or admin roles via token
-                    if (payload.role === 'staff' || payload.role === 'admin') {
-                        console.log('🔑 Staff session check - JWT verified successfully, user:', payload.email || payload.username || payload.id);
-                        // Return payload with same structure as session user
-                        return res.json({
-                            authenticated: true,
-                            user: {
-                                id: payload.id,
-                                username: payload.username,
-                                email: payload.email,
-                                fullName: payload.fullName,
-                                role: payload.role || 'staff'
-                            }
-                        });
-                    } else {
-                        console.log('🔑 Staff session check - JWT token has invalid role:', payload.role);
-                    }
-                } catch (verifyErr) {
-                    console.log('🔑 Staff session check - JWT verification failed:', verifyErr.message);
-                    console.log('🔑 Staff session check - Token might be expired or invalid');
-                    // Continue to fall through to unauthenticated
+                const payload = jwt.verify(token, secret);
+                if (payload.role === 'staff' || payload.role === 'admin') {
+                    return res.json({
+                        authenticated: true,
+                        user: {
+                            id: payload.id,
+                            username: payload.username,
+                            email: payload.email,
+                            fullName: payload.fullName,
+                            role: payload.role || 'staff'
+                        }
+                    });
                 }
             }
         }
-    } catch (e) {
-        console.log('🔑 Staff session check - Error processing Authorization header:', e.message);
-        // ignore and fall through to unauthenticated
-    }
-
-    console.log('🔐 Staff session check - not authenticated');
+    } catch (_) {}
     return res.status(401).json({ authenticated: false });
 });
 

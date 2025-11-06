@@ -51,102 +51,40 @@ async function login(req, res) {
         // }
         console.log('⚠️ Email verification check disabled - allowing login');
 
-        // Set customer session with unique key
-        req.session.customerUser = {
-            id: customer.id,
-            username: customer.username,
-            email: customer.email,
-            name: customer.full_name,
-            role: 'customer'
-        };
-
-        // Optionally set a post-login redirect when coming from a QR/table link
+        // Optionally compute a post-login redirect when coming from a QR/table link (no sessions used)
         const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
         let postLoginRedirect = undefined;
         if (redirect) {
             postLoginRedirect = `${frontendBase}${String(redirect).startsWith('/') ? '' : '/'}${redirect}`;
         } else if (table) {
-            req.session.tableNumber = String(table);
             postLoginRedirect = `${frontendBase}/customer/dashboard?table=${encodeURIComponent(String(table))}`;
         }
-
-        if (postLoginRedirect) {
-            req.session.postLoginRedirect = postLoginRedirect;
+        // Issue JWT (client stores it in localStorage). No cookies/sessions are used for customers.
+        let token = null;
+        try {
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            token = jwt.sign({
+                id: customer.id,
+                username: customer.username,
+                email: customer.email,
+                name: customer.full_name,
+                role: 'customer'
+            }, secret, { expiresIn: '1d' });
+        } catch (signErr) {
+            console.error('Error signing JWT:', signErr);
         }
 
-        // Persist the session cookie before responding (improves reliability on mobile browsers)
-        req.session.save((err) => {
-            if (err) {
-                console.error('Session save error:', err);
-                return res.status(500).json({ message: 'Error saving session' });
-            }
-
-            // Explicitly set cookie for mobile Safari - express-session might not be setting it
-            const cookieValue = req.sessionID;
-            const cookieOptions = {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'none',
-                maxAge: 1000 * 60 * 60 * 24, // 24 hours
-                path: '/'
-            };
-
-            // NEVER set domain for cross-origin cookies - mobile Safari rejects them
-            // Even if COOKIE_DOMAIN is set, don't use it for mobile Safari compatibility
-
-            res.cookie('connect.sid', cookieValue, cookieOptions);
-
-            // Log session and cookie info for debugging
-            try {
-                // Get ALL set-cookie headers (res.cookie adds to array)
-                const setCookieHeaders = res.getHeader('set-cookie') || [];
-                const setCookieArray = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
-
-                console.log('🔒 Login Set-Cookie headers:', setCookieArray);
-                console.log('🔒 Number of Set-Cookie headers:', setCookieArray.length);
-                console.log('🔒 Session ID:', req.sessionID);
-                console.log('🔒 Session customerUser set:', !!req.session.customerUser);
-                console.log('🔒 Cookie secure:', process.env.NODE_ENV === 'production');
-                console.log('🔒 Cookie sameSite: none');
-                console.log('🔒 Response headers before sending:', {
-                    'Access-Control-Allow-Origin': res.getHeader('access-control-allow-origin'),
-                    'Access-Control-Allow-Credentials': res.getHeader('access-control-allow-credentials'),
-                    'Set-Cookie': setCookieArray.length
-                });
-            } catch (logErr) {
-                console.error('Error logging cookie info:', logErr);
-            }
-
-            // Ensure response headers allow cookie setting
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-            // Issue JWT for clients that prefer localStorage (iOS Safari compatibility)
-            let token = null;
-            try {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                token = jwt.sign({
-                    id: customer.id,
-                    username: customer.username,
-                    email: customer.email,
-                    name: customer.full_name,
-                    role: 'customer'
-                }, secret, { expiresIn: '1d' });
-            } catch (signErr) {
-                console.error('Error signing JWT:', signErr);
-            }
-
-            res.json({
-                success: true,
-                user: {
-                    id: customer.id,
-                    username: customer.username,
-                    email: customer.email,
-                    name: customer.full_name,
-                    role: 'customer'
-                },
-                redirect: postLoginRedirect || null,
-                token: token
-            });
+        return res.json({
+            success: true,
+            user: {
+                id: customer.id,
+                username: customer.username,
+                email: customer.email,
+                name: customer.full_name,
+                role: 'customer'
+            },
+            redirect: postLoginRedirect || null,
+            token: token
         });
 
     } catch (error) {
@@ -157,78 +95,56 @@ async function login(req, res) {
 
 // Customer session check controller
 function checkSession(req, res) {
-    console.log('Session check - req.session:', req.session);
-    console.log('Session check - req.session.customerUser:', req.session.customerUser);
-    if (req.session.customerUser && req.session.customerUser.role === 'customer') {
-        console.log('Session check - returning authenticated user:', req.session.customerUser);
-        res.json({ authenticated: true, user: req.session.customerUser });
-    } else {
-        // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
-        try {
-            // DEBUG: Log ALL headers to see what's actually being received
-            console.log('🔍 DEBUG: All request headers:', JSON.stringify(Object.keys(req.headers || {})));
-            console.log(
-                '🔍 DEBUG: req.headers.authorization:',
-                req.headers && 'authorization' in req.headers ? 'PRESENT' : 'MISSING'
-            );
-            console.log(
-                '🔍 DEBUG: req.headers.Authorization:',
-                req.headers && 'Authorization' in req.headers ? 'PRESENT' : 'MISSING'
-            );
+    // Stateless customer auth: validate Bearer token only (no cookies/sessions)
+    try {
+        const allHeaderKeys = Object.keys(req.headers || {});
+        console.log('🔍 DEBUG: All request headers keys:', allHeaderKeys);
+        console.log('🔍 DEBUG: req.headers.authorization:', req.headers && req.headers.authorization ? 'PRESENT' : 'MISSING');
+        if (req.headers && req.headers.authorization) {
+            console.log('🔍 DEBUG: Authorization header value (first 50 chars):', req.headers.authorization.substring(0, 50));
+        }
 
-            // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
-            const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
-            console.log(
-                '🔑 Session check - Authorization header:',
-                authHeader ? 'PRESENT' : 'MISSING',
-                authHeader ? authHeader.substring(0, 30) + '...' : ''
-            );
-            console.log('🔑 Session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
+        const authHeader = (req.headers && req.headers.authorization) || '';
+        console.log(
+            '🔑 Session check - Authorization header:',
+            authHeader ? 'PRESENT' : 'MISSING',
+            authHeader ? authHeader.substring(0, 30) + '...' : ''
+        );
 
-            // Also check raw headers object
-            if (req.headers && typeof req.headers === 'object') {
-                const allHeaders = Object.keys(req.headers);
-                console.log('🔍 DEBUG: All header keys (first 20):', allHeaders.slice(0, 20));
-                const authHeaders = allHeaders.filter(k => k.toLowerCase().includes('auth'));
-                console.log('🔍 DEBUG: Auth-related header keys:', authHeaders);
-            }
+        const authHeaders = allHeaderKeys.filter(k => k.toLowerCase().includes('auth'));
+        console.log('🔍 DEBUG: Auth-related header keys:', authHeaders);
 
-            if (authHeader) {
-                const parts = authHeader.split(' ');
-                const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-                const token = hasBearer ? parts[1] : null;
-                console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
+        if (authHeader) {
+            const parts = authHeader.split(' ');
+            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+            const token = hasBearer ? parts[1] : null;
+            console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
 
-                if (token) {
-                    const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                    try {
-                        const payload = jwt.verify(token, secret);
-                        console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
-                        // Return payload with same structure as session user
-                        return res.json({
-                            authenticated: true,
-                            user: {
-                                id: payload.id,
-                                username: payload.username,
-                                email: payload.email,
-                                name: payload.name,
-                                role: payload.role || 'customer'
-                            }
-                        });
-                    } catch (verifyErr) {
-                        console.log('🔑 Session check - JWT verification failed:', verifyErr.message);
-                        console.log('🔑 Session check - Token might be expired or invalid');
-                        // Continue to fall through to unauthenticated
-                    }
+            if (token) {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                try {
+                    const payload = jwt.verify(token, secret);
+                    console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
+                    return res.json({
+                        authenticated: true,
+                        user: {
+                            id: payload.id,
+                            username: payload.username,
+                            email: payload.email,
+                            name: payload.name,
+                            role: payload.role || 'customer'
+                        }
+                    });
+                } catch (verifyErr) {
+                    console.log('🔑 Session check - JWT verification failed:', verifyErr.message);
                 }
             }
-        } catch (e) {
-            console.log('🔑 Session check - Error processing Authorization header:', e.message);
-            // ignore and fall through to unauthenticated
         }
-        console.log('Session check - not authenticated');
-        res.json({ authenticated: false });
+    } catch (e) {
+        console.log('🔑 Session check - Error processing Authorization header:', e.message);
     }
+    console.log('Session check - not authenticated');
+    res.json({ authenticated: false });
 }
 
 // Customer logout controller

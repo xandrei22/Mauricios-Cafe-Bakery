@@ -244,9 +244,10 @@ sessionStore.on('connect', () => {
 // Build cookie config - mobile Safari requires no domain for cross-origin
 // IMPORTANT: NEVER set domain for cross-origin cookies (frontend Vercel → backend Render)
 // Mobile Safari's ITP (Intelligent Tracking Prevention) rejects cookies with explicit domains
+// Note: secure flag will be dynamically set based on request (see session middleware below)
 const cookieConfig = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Must be true for sameSite: 'none'
+    secure: true, // Must be true for sameSite: 'none' to work (will be set dynamically)
     sameSite: 'none', // Required for cross-origin cookies (mobile Safari needs this)
     maxAge: 1000 * 60 * 60 * 24, // 24 hours
     path: '/'
@@ -302,10 +303,7 @@ app.use((req, res, next) => {
                 hasCustomerUser: !!req.session.customerUser
             });
 
-            // If no session cookie is being sent, log warning
-            if (!hasSessionCookie && req.path !== '/api/debug/session') {
-                console.warn('⚠️ WARNING: No connect.sid cookie received from mobile device!');
-            }
+            // Cookies are optional now (JWT preferred); don't warn if missing
         }
 
         // Refresh session for admin users

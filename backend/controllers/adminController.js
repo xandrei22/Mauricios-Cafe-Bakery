@@ -171,77 +171,31 @@ async function login(req, res) {
             });
         }
 
-        // Set admin session with unique key
-        req.session.adminUser = {
-            id: admin.id,
-            username: admin.username,
-            email: admin.email,
-            fullName: admin.full_name,
-            role: 'admin'
-        };
-        console.log('Admin login successful. Session adminUser set:', req.session.adminUser);
+        // JWT-only auth for admin: no sessions or cookies
+        let token = null;
+        try {
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            token = jwt.sign({
+                id: admin.id,
+                username: admin.username,
+                email: admin.email,
+                fullName: admin.full_name,
+                role: 'admin'
+            }, secret, { expiresIn: '1d' });
+        } catch (signErr) {
+            console.error('Error signing admin JWT:', signErr);
+        }
 
-        req.session.save((err) => {
-            if (err) {
-                console.error('Admin session save error:', err);
-                return res.status(500).json({ message: 'Error saving session' });
-            }
-
-            // Explicitly set cookie for mobile Safari - express-session might not be setting it
-            const cookieValue = req.sessionID;
-            const cookieOptions = {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'none',
-                maxAge: 1000 * 60 * 60 * 24, // 24 hours
-                path: '/'
-            };
-
-            // NEVER set domain for cross-origin cookies - mobile Safari rejects them
-            // Even if COOKIE_DOMAIN is set, don't use it for mobile Safari compatibility
-            // console.log('ℹ️ Cookie domain intentionally not set for mobile Safari compatibility');
-
-            res.cookie('connect.sid', cookieValue, cookieOptions);
-
-            // Log session and cookie info for debugging
-            try {
-                const setCookieHeader = res.getHeader('set-cookie');
-                console.log('🔒 Admin Login Set-Cookie header:', setCookieHeader);
-                console.log('🔒 Admin Session ID:', req.sessionID);
-                console.log('🔒 Admin Session adminUser set:', !!req.session.adminUser);
-            } catch (logErr) {
-                console.error('Error logging cookie info:', logErr);
-            }
-
-            // Ensure response headers allow cookie setting
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-            // Issue JWT for admin
-            let token = null;
-            try {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                token = jwt.sign({
-                    id: admin.id,
-                    username: admin.username,
-                    email: admin.email,
-                    fullName: admin.full_name,
-                    role: 'admin'
-                }, secret, { expiresIn: '1d' });
-            } catch (signErr) {
-                console.error('Error signing admin JWT:', signErr);
-            }
-
-            res.json({
-                success: true,
-                user: {
-                    id: admin.id,
-                    username: admin.username,
-                    email: admin.email,
-                    fullName: admin.full_name,
-                    role: 'admin'
-                },
-                token
-            });
+        return res.json({
+            success: true,
+            user: {
+                id: admin.id,
+                username: admin.username,
+                email: admin.email,
+                fullName: admin.full_name,
+                role: 'admin'
+            },
+            token
         });
 
     } catch (error) {
@@ -252,31 +206,19 @@ async function login(req, res) {
 
 // Admin session check controller
 function checkSession(req, res) {
-    console.log('🔐 Admin session check - req.session.adminUser:', req.session.adminUser);
-    if (req.session.adminUser && req.session.adminUser.role === 'admin') {
-        console.log('🔐 Admin session check - returning authenticated user from session');
-        return res.json({ authenticated: true, user: req.session.adminUser });
-    }
-
-    // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
+    // JWT-only admin session check
     try {
-        // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
-        const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+        const authHeader = (req.headers && req.headers.authorization) || '';
         console.log('🔑 Admin session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
-        console.log('🔑 Admin session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
-
         if (authHeader) {
             const parts = authHeader.split(' ');
             const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
             const token = hasBearer ? parts[1] : null;
-            console.log('🔑 Admin session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
-
             if (token) {
                 const secret = process.env.JWT_SECRET || 'change-me-in-prod';
                 try {
                     const payload = jwt.verify(token, secret);
                     console.log('🔑 Admin session check - JWT verified successfully, user:', payload.email || payload.username || payload.id);
-                    // Return payload with same structure as session user
                     return res.json({
                         authenticated: true,
                         user: {
@@ -289,18 +231,14 @@ function checkSession(req, res) {
                     });
                 } catch (verifyErr) {
                     console.log('🔑 Admin session check - JWT verification failed:', verifyErr.message);
-                    console.log('🔑 Admin session check - Token might be expired or invalid');
-                    // Continue to fall through to unauthenticated
                 }
             }
         }
     } catch (e) {
         console.log('🔑 Admin session check - Error processing Authorization header:', e.message);
-        // ignore and fall through to unauthenticated
     }
-
     console.log('🔐 Admin session check - not authenticated');
-    return res.json({ authenticated: false });
+    return res.status(401).json({ authenticated: false });
 }
 
 // Admin logout controller
