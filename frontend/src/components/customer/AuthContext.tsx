@@ -64,10 +64,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   return;
                 }
                 
-              const headers = new Headers();
-              headers.set('Content-Type', 'application/json');
-              headers.set('Authorization', `Bearer ${token}`);
-              console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
+                // Use plain object for headers (Headers object may not serialize correctly)
+                const headers: Record<string, string> = {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                };
+                console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
                 
                 const res = await fetch(`${API_URL}/api/customer/check-session`, {
                   credentials: 'include',
@@ -124,27 +126,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let token = localStorage.getItem('authToken');
       
       // If no token, wait a bit and try again (for timing issues after login)
+      // On mobile, wait longer as localStorage might need more time after redirect
       if (!token && isRecentLogin) {
-        console.log('⏳ No token found, waiting 100ms for localStorage sync...');
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const waitTime = isMobile ? 500 : 100;
+        console.log(`⏳ No token found, waiting ${waitTime}ms for localStorage sync...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
         token = localStorage.getItem('authToken');
+        
+        // Try one more time if still missing
+        if (!token && isMobile) {
+          console.log('⏳ Still no token, waiting another 500ms...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          token = localStorage.getItem('authToken');
+        }
       }
       
       console.log('🔑 AuthContext checkSession - Token from localStorage:', token ? 'PRESENT' : 'MISSING');
       if (token) {
         console.log('🔑 AuthContext checkSession - Token length:', token.length);
         console.log('🔑 AuthContext checkSession - Token preview:', token.substring(0, 20) + '...');
+      } else {
+        console.error('❌ CRITICAL: NO TOKEN in localStorage!');
+        console.error('❌ localStorage contents:', {
+          keys: Object.keys(localStorage),
+          hasCustomerUser: !!localStorage.getItem('customerUser'),
+          hasAuthToken: !!localStorage.getItem('authToken'),
+          hasLoginTimestamp: !!localStorage.getItem('loginTimestamp'),
+          authTokenValue: localStorage.getItem('authToken') ? 'EXISTS' : 'NULL'
+        });
       }
       
       // CRITICAL: On mobile, token is REQUIRED (cookies don't work)
       if (isMobile && !token) {
         console.error('❌ CRITICAL: Mobile device but NO TOKEN in localStorage! Authentication will fail!');
-        console.error('❌ localStorage contents:', {
-          keys: Object.keys(localStorage),
-          hasCustomerUser: !!localStorage.getItem('customerUser'),
-          hasAuthToken: !!localStorage.getItem('authToken'),
-          hasLoginTimestamp: !!localStorage.getItem('loginTimestamp')
-        });
         setLoading(false);
         setAuthenticated(false);
         setUser(null);

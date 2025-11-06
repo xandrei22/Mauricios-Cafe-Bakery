@@ -119,34 +119,66 @@ export function LoginForm({
           console.warn('⚠️ No user data in login response to store in localStorage');
         }
         
+        // Verify localStorage was written successfully before redirecting
+        // This is critical for mobile devices where localStorage might need a moment
+        const verifyStorage = () => {
+          const storedUser = localStorage.getItem('customerUser');
+          const storedToken = localStorage.getItem('authToken');
+          const storedTimestamp = localStorage.getItem('loginTimestamp');
+          
+          console.log('🔍 Verifying localStorage before redirect:', {
+            hasUser: !!storedUser,
+            hasToken: !!storedToken,
+            hasTimestamp: !!storedTimestamp
+          });
+          
+          return !!(storedUser && storedToken && storedTimestamp);
+        };
+        
         // Detect iOS - ALL iOS versions (including ALL browsers on iOS) can have cookie blocking issues
-        // iOS 12, 13, 14, 15, 16, 17, 18+ all have ITP that blocks cross-origin cookies
         const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
-        // Use localStorage fallback for ALL iOS devices regardless of browser (Safari, Chrome, Firefox, etc.)
-        const delay = isIOS ? 2000 : 500; // 2 seconds for ALL iOS devices, 500ms for others
+        const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
         
         console.log('Login successful - iOS device detected:', isIOS, 'User stored in localStorage:', !!data.user);
         console.log('User Agent:', navigator.userAgent);
         
-        // Give mobile Safari a moment to process the cookie before redirecting
-        // iOS 15.8 requires longer delay due to aggressive ITP cookie blocking
-        setTimeout(() => {
+        // Ensure localStorage is written before redirecting
+        // On mobile, localStorage might need a moment to sync
+        const ensureStorageWritten = async () => {
+          let attempts = 0;
+          const maxAttempts = 10;
+          
+          while (!verifyStorage() && attempts < maxAttempts) {
+            attempts++;
+            console.log(`⏳ Waiting for localStorage to sync (attempt ${attempts}/${maxAttempts})...`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          
+          if (!verifyStorage()) {
+            console.error('❌ WARNING: localStorage verification failed after', maxAttempts, 'attempts');
+            // Still redirect - the AuthContext will handle missing token
+          } else {
+            console.log('✅ localStorage verified successfully');
+          }
+        };
+        
+        // Wait for localStorage to be written, then redirect
+        ensureStorageWritten().then(() => {
           const redirectUrl = data && data.redirect 
             ? data.redirect 
             : tableFromUrl 
               ? `/customer/dashboard?table=${tableFromUrl}` 
               : "/customer/dashboard";
           
-          console.log('Redirecting to:', redirectUrl, 'using localStorage fallback for iOS:', isIOS);
+          console.log('Redirecting to:', redirectUrl);
           
-          // Use full page reload for ALL iOS devices to potentially help with cookie acceptance
-          // But localStorage fallback will handle it if cookies don't work on ANY iOS version
-          if (isIOS) {
+          // Use full page reload for mobile devices
+          if (isMobile) {
             window.location.replace(redirectUrl);
           } else {
             window.location.href = redirectUrl;
           }
-        }, delay);
+        });
       }
     } catch (err) {
       console.error('Login error:', err);
