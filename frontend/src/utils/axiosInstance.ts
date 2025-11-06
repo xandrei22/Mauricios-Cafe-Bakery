@@ -21,32 +21,23 @@ const axiosInstance: AxiosInstance = axios.create({
 // Request interceptor: Automatically add Authorization header
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    console.log('🔍 Axios Interceptor running');
     const token = localStorage.getItem('authToken');
-    
-    // Log all localStorage keys for debugging
-    const allKeys = Object.keys(localStorage);
-    console.log('🔍 Axios Interceptor - localStorage keys:', allKeys);
-    console.log('🔍 Axios Interceptor - authToken exists:', !!token);
-    console.log('🔍 Axios Interceptor - Request URL:', config.url);
+    console.log('✅ Token found in localStorage:', !!token);
+    console.log('✅ Token length:', token ? token.length : 0);
+    console.log('🔍 Request URL:', config.url);
+    console.log('🔍 Request method:', config.method);
     
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Axios: Added Authorization header to request:', config.url);
-      console.log('✅ Axios: Token length:', token.length);
-      console.log('✅ Axios: Token preview:', token.substring(0, 20) + '...');
-      console.log('✅ Axios: Full Authorization header:', `Bearer ${token.substring(0, 30)}...`);
+      console.log('✅ Added Authorization header:', `Bearer ${token.substring(0, 30)}...`);
+      console.log('✅ Full Authorization header value:', config.headers.Authorization);
     } else {
-      console.warn('⚠️ Axios: No token found in localStorage for request:', config.url);
-      console.warn('⚠️ Axios: localStorage contents:', {
-        hasAuthToken: !!localStorage.getItem('authToken'),
-        hasAdminUser: !!localStorage.getItem('adminUser'),
-        hasStaffUser: !!localStorage.getItem('staffUser'),
-        hasCustomerUser: !!localStorage.getItem('customerUser'),
-        allKeys: allKeys
-      });
+      console.warn('⚠️ No token found in localStorage');
+      console.warn('⚠️ localStorage keys:', Object.keys(localStorage));
     }
     
-    // Ensure withCredentials is false
+    // Ensure withCredentials is false (JWT doesn't use cookies)
     config.withCredentials = false;
     
     return config;
