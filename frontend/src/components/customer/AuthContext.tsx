@@ -48,46 +48,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
             console.log(`✅ AuthContext: Using localStorage FIRST (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
           
-          // ALWAYS verify token with backend, even if we use localStorage immediately
-          // This ensures the token is valid and the backend knows about the session
-          setTimeout(async () => {
-            try {
-              const token = localStorage.getItem('authToken');
-              if (!token) {
-                console.warn('⚠️ AuthContext: No token found in localStorage for background verification');
-                return;
-              }
-              
-              const headers: HeadersInit = { 'Content-Type': 'application/json' };
-              headers['Authorization'] = `Bearer ${token}`;
-              console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
-              
-              const res = await fetch(`${API_URL}/api/customer/check-session`, {
-                credentials: 'include',
-                headers
-              });
-              
-              if (res.ok) {
-                const data = await res.json();
-                if (data && data.authenticated && data.user) {
-                  console.log('✅ AuthContext: Token verified successfully, updating user from server');
-                  setUser(data.user);
-                  const currentTimestamp = localStorage.getItem('loginTimestamp');
-                  if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
-                    localStorage.removeItem('loginTimestamp');
+          // CRITICAL: On mobile, we MUST verify token with backend immediately
+          // Don't exit early - we need to send the token to backend for verification
+          // The backend needs to know about the session even if we use localStorage for UI
+          if (isMobile) {
+            console.log('📱 Mobile device detected - will verify token with backend immediately');
+            // Don't return early - continue to token verification below
+          } else {
+            // For desktop, we can use localStorage immediately and verify in background
+            setTimeout(async () => {
+              try {
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                  console.warn('⚠️ AuthContext: No token found in localStorage for background verification');
+                  return;
+                }
+                
+                const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                headers['Authorization'] = `Bearer ${token}`;
+                console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
+                
+                const res = await fetch(`${API_URL}/api/customer/check-session`, {
+                  credentials: 'include',
+                  headers
+                });
+                
+                if (res.ok) {
+                  const data = await res.json();
+                  if (data && data.authenticated && data.user) {
+                    console.log('✅ AuthContext: Token verified successfully, updating user from server');
+                    setUser(data.user);
+                    const currentTimestamp = localStorage.getItem('loginTimestamp');
+                    if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                      localStorage.removeItem('loginTimestamp');
+                    }
+                  } else {
+                    console.warn('⚠️ AuthContext: Token verification failed - user not authenticated');
                   }
                 } else {
-                  console.warn('⚠️ AuthContext: Token verification failed - user not authenticated');
+                  console.warn('⚠️ AuthContext: Token verification failed - HTTP error:', res.status);
                 }
-              } else {
-                console.warn('⚠️ AuthContext: Token verification failed - HTTP error:', res.status);
+              } catch (retryErr) {
+                console.error('AuthContext: Background session check error:', retryErr);
               }
-            } catch (retryErr) {
-              console.error('AuthContext: Background session check error:', retryErr);
-            }
-          }, 500); // Reduced delay to verify token sooner
-          
-          return; // EXIT EARLY - don't do session check at all if localStorage exists
+            }, 500);
+            
+            return; // EXIT EARLY only for desktop
+          }
         } catch (e) {
           console.error('Failed to parse stored user:', e);
           // Continue to session check below
@@ -128,32 +135,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('🔑 AuthContext checkSession - Token preview:', token.substring(0, 20) + '...');
       }
       
+      // CRITICAL: On mobile, token is REQUIRED (cookies don't work)
+      if (isMobile && !token) {
+        console.error('❌ CRITICAL: Mobile device but NO TOKEN in localStorage! Authentication will fail!');
+        console.error('❌ localStorage contents:', {
+          keys: Object.keys(localStorage),
+          hasCustomerUser: !!localStorage.getItem('customerUser'),
+          hasAuthToken: !!localStorage.getItem('authToken'),
+          hasLoginTimestamp: !!localStorage.getItem('loginTimestamp')
+        });
+        setLoading(false);
+        setAuthenticated(false);
+        setUser(null);
+        return;
+      }
+      
       // ALWAYS create headers object first
       const headers: HeadersInit = { 'Content-Type': 'application/json' };
       
       // ALWAYS send token if available (primary auth method for mobile)
       if (token) {
+        // Use lowercase 'authorization' (Express normalizes to lowercase)
         headers['Authorization'] = `Bearer ${token}`;
         console.log('🔑 AuthContext checkSession - Sending Authorization header with token');
+        console.log('🔑 AuthContext checkSession - Token length:', token.length);
         console.log('🔑 AuthContext checkSession - Authorization header value:', `Bearer ${token.substring(0, 20)}...`);
       } else {
-        console.error('❌ AuthContext checkSession - CRITICAL: No token in localStorage! This will fail on iPhone and other mobile devices!');
-        console.error('❌ AuthContext checkSession - localStorage keys:', Object.keys(localStorage));
+        console.warn('⚠️ AuthContext checkSession - No token in localStorage (desktop may use cookies)');
       }
       
-      // Use authenticatedFetch helper to ensure token is always included
-      const res = await fetch(`${API_URL}/api/customer/check-session`, {
+      // Create fetch request with proper headers
+      const fetchOptions: RequestInit = {
         method: 'GET',
         credentials: 'include', // Keep for desktop browsers that support cookies
         headers,
         signal: controller.signal as any
+      };
+      
+      // Log what we're about to send
+      console.log('🔑 AuthContext checkSession - Fetch options:', {
+        method: fetchOptions.method,
+        hasHeaders: !!fetchOptions.headers,
+        hasAuthorization: !!(fetchOptions.headers as any)?.['Authorization'],
+        headersKeys: Object.keys(fetchOptions.headers || {})
       });
       
-      // Log what headers were actually sent (for debugging)
-      console.log('🔑 AuthContext checkSession - Request headers sent:', {
-        hasAuthorization: !!headers['Authorization'],
-        authorizationLength: headers['Authorization']?.toString().length || 0
-      });
+      const res = await fetch(`${API_URL}/api/customer/check-session`, fetchOptions);
       
       console.log('🔑 AuthContext checkSession - Response status:', res.status);
       if (!res.ok) throw new Error('Session check failed');
