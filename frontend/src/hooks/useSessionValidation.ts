@@ -36,8 +36,28 @@ export const useSessionValidation = (role: Role = 'admin'): SessionValidationRes
         customer: '/login',
       };
 
+      // Get token from localStorage and include in Authorization header
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        console.log(`🔑 useSessionValidation (${role}): Sending Authorization header with token`);
+      } else {
+        console.warn(`⚠️ useSessionValidation (${role}): No token in localStorage`);
+      }
+
+      console.log(`🔑 useSessionValidation (${role}): Fetch options:`, {
+        endpoint: endpointMap[role],
+        hasAuthorization: !!headers['Authorization'],
+        allHeaders: Object.keys(headers)
+      });
+
       const response = await fetch(endpointMap[role], {
         credentials: 'include',
+        headers: headers
       });
 
       if (response.status === 401) {
