@@ -34,17 +34,46 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const savedCart = localStorage.getItem('cart');
       if (savedCart) {
+        // Check if cart is empty array
+        if (savedCart === '[]' || savedCart.trim() === '[]') {
+          console.log('Cart is empty in localStorage, starting with empty cart');
+          return [];
+        }
+        
         const parsedCart = JSON.parse(savedCart);
-        // Validate that the cart is an array and has valid items
-        if (Array.isArray(parsedCart) && parsedCart.every(item => 
-          item && typeof item.id === 'string' && typeof item.quantity === 'number'
-        )) {
-          return parsedCart;
-        } else {
-          console.warn('Invalid cart data found in localStorage, clearing...');
+        
+        // Validate that the cart is an array
+        if (!Array.isArray(parsedCart)) {
+          console.warn('Invalid cart data: not an array, clearing...');
           localStorage.removeItem('cart');
           return [];
         }
+        
+        // If array is empty, return empty
+        if (parsedCart.length === 0) {
+          console.log('Cart array is empty, starting with empty cart');
+          return [];
+        }
+        
+        // Validate that all items have required properties
+        const validItems = parsedCart.filter(item => 
+          item && typeof item.id === 'string' && typeof item.quantity === 'number'
+        );
+        
+        if (validItems.length !== parsedCart.length) {
+          console.warn('Some cart items are invalid, removing invalid items...');
+          // Save only valid items back to localStorage
+          if (validItems.length > 0) {
+            localStorage.setItem('cart', JSON.stringify(validItems));
+            return validItems;
+          } else {
+            localStorage.removeItem('cart');
+            return [];
+          }
+        }
+        
+        console.log('Loaded cart from localStorage:', validItems.length, 'items');
+        return validItems;
       }
       return [];
     } catch (error) {
@@ -59,10 +88,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Save cart to localStorage whenever items change
   useEffect(() => {
     try {
-      localStorage.setItem('cart', JSON.stringify(items));
+      // Always save current state to localStorage (even if empty array)
+      // This ensures localStorage stays in sync with state
+      const cartData = JSON.stringify(items);
+      localStorage.setItem('cart', cartData);
       
       // Dispatch custom event to notify other components (like navbar) that cart has changed
       window.dispatchEvent(new CustomEvent('cartUpdated'));
+      
+      // Debug: log cart state changes in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🛒 Cart state saved to localStorage:', items.length, 'items');
+      }
     } catch (error) {
       console.error('Error saving cart to localStorage:', error);
     }
@@ -70,13 +107,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = (item: CartItem) => {
     setItems(prev => {
-      const existing = prev.find(i => i.id === item.id);
+      // Ensure we're working with clean state (not accidentally merging with old localStorage data)
+      const currentItems = Array.isArray(prev) ? prev : [];
+      
+      const existing = currentItems.find(i => i.id === item.id);
       if (existing) {
-        return prev.map(i => 
+        const updated = currentItems.map(i => 
           i.id === item.id ? { ...i, quantity: i.quantity + (item.quantity || 1) } : i
         );
+        return updated;
       }
-      return [...prev, { ...item, quantity: item.quantity || 1 }];
+      return [...currentItems, { ...item, quantity: item.quantity || 1 }];
     });
 
     Swal.fire({
@@ -111,15 +152,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => {
     console.log('Clearing cart completely...');
-    setItems([]);
-    // Clear all possible cart-related localStorage keys
+    
+    // CRITICAL: Clear localStorage FIRST before updating state
+    // This prevents the useEffect from re-saving old data
     localStorage.removeItem('cart');
     localStorage.removeItem('guest-cart');
     localStorage.removeItem('pos-cart');
     localStorage.removeItem('customer-cart');
     localStorage.removeItem('menu-cart');
+    
+    // Clear ALL cart-related keys (case-insensitive search)
+    Object.keys(localStorage).forEach(key => {
+      if (key.toLowerCase().includes('cart')) {
+        localStorage.removeItem(key);
+        console.log('Removed cart key:', key);
+      }
+    });
+    
+    // Now set state to empty array (this will trigger useEffect which will save [] to localStorage)
+    setItems([]);
+    
     // Force a re-render by dispatching the cart update event
     window.dispatchEvent(new CustomEvent('cartUpdated'));
+    
+    // Double-check: ensure localStorage is truly empty after state update
+    setTimeout(() => {
+      const remainingCart = localStorage.getItem('cart');
+      if (remainingCart && remainingCart !== '[]') {
+        console.warn('⚠️ Cart data still exists in localStorage after clear, removing again...');
+        localStorage.removeItem('cart');
+        window.dispatchEvent(new CustomEvent('cartUpdated'));
+      }
+    }, 100);
   };
 
   const total = items.reduce((sum, item) => {
