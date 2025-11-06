@@ -165,10 +165,23 @@ function checkSession(req, res) {
     } else {
         // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
         try {
+            // DEBUG: Log ALL headers to see what's actually being received
+            console.log('🔍 DEBUG: All request headers:', JSON.stringify(Object.keys(req.headers || {})));
+            console.log('🔍 DEBUG: req.headers.authorization:', req.headers ? .authorization ? 'PRESENT' : 'MISSING');
+            console.log('🔍 DEBUG: req.headers.Authorization:', req.headers ? .Authorization ? 'PRESENT' : 'MISSING');
+
             // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
             const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
             console.log('🔑 Session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
             console.log('🔑 Session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
+
+            // Also check raw headers object
+            if (req.headers && typeof req.headers === 'object') {
+                const allHeaders = Object.keys(req.headers);
+                console.log('🔍 DEBUG: All header keys (first 20):', allHeaders.slice(0, 20));
+                const authHeaders = allHeaders.filter(k => k.toLowerCase().includes('auth'));
+                console.log('🔍 DEBUG: Auth-related header keys:', authHeaders);
+            }
 
             if (authHeader) {
                 const parts = authHeader.split(' ');
