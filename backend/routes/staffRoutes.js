@@ -10,36 +10,10 @@ const ActivityLogger = require('../utils/activityLogger');
 // Temporarily bypass authentication for testing
 // router.use(ensureStaffAuthenticated);
 
-// Lightweight session check for staff (placed after middleware to ensure session is present)
-router.get('/check-session', (req, res) => {
-    // JWT-only staff session check
-    const jwt = require('jsonwebtoken');
-    try {
-        const authHeader = (req.headers && req.headers.authorization) || '';
-        if (authHeader) {
-            const parts = authHeader.split(' ');
-            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-            const token = hasBearer ? parts[1] : null;
-            if (token) {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                const payload = jwt.verify(token, secret);
-                if (payload.role === 'staff' || payload.role === 'admin') {
-                    return res.json({
-                        authenticated: true,
-                        user: {
-                            id: payload.id,
-                            username: payload.username,
-                            email: payload.email,
-                            fullName: payload.fullName,
-                            role: payload.role || 'staff'
-                        }
-                    });
-                }
-            }
-        }
-    } catch (_) {}
-    return res.status(401).json({ authenticated: false });
-});
+// Staff session check - uses JWT middleware
+const { authenticateJWT } = require('../middleware/jwtAuth');
+const { checkStaffSession } = require('../controllers/adminController');
+router.get('/check-session', authenticateJWT, checkStaffSession);
 
 // Staff dashboard data endpoint
 router.get('/dashboard', async(req, res) => {

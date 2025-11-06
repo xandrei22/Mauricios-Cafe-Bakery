@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
+const { authenticateJWT } = require('../middleware/jwtAuth');
 const { login, checkSession, logout, createStaff, editStaff, getAllStaff, countStaff, countAdmins, deleteStaff, getRevenueMetrics, getOrderMetrics, getInventoryMetrics, forgotPassword, resetPassword } = require('../controllers/adminController');
 const ActivityLogger = require('../utils/activityLogger');
 const AdminInventoryService = require('../services/adminInventoryService');
@@ -9,8 +10,8 @@ const AdminInventoryService = require('../services/adminInventoryService');
 // Admin login route (does not require authentication)
 router.post('/login', login);
 
-// Admin session check (does not require full authentication as it checks session status)
-router.get('/check-session', checkSession);
+// Admin session check - uses JWT middleware
+router.get('/check-session', authenticateJWT, checkSession);
 
 // Admin logout (does not require full authentication as it destroys session)
 router.post('/logout', logout);
@@ -498,8 +499,8 @@ router.get('/dashboard/staff-sales', async(req, res) => {
         `);
 
         // Fallback: if no data in last 90 days, look back 12 months
-        if (!staffData || staffData.length === 0) {
-            ;[staffData] = await db.query(`
+        if (!staffData || staffData.length === 0) {;
+            [staffData] = await db.query(`
                 SELECT 
                     CASE 
                         WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
@@ -580,7 +581,8 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             console.log('🔍 Sample admin staff data:', staffData[0]);
         } else {
             // Fallback: expand time window to 12 months, then all time
-            ;[staffData] = await db.query(`
+            ;
+            [staffData] = await db.query(`
                 SELECT 
                     CASE 
                         WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
@@ -601,8 +603,8 @@ router.get('/dashboard/staff-performance', async(req, res) => {
                 ORDER BY period DESC, total_sales DESC
             `);
 
-            if (staffData.length === 0) {
-                ;[staffData] = await db.query(`
+            if (staffData.length === 0) {;
+                [staffData] = await db.query(`
                     SELECT 
                         CASE 
                             WHEN o.staff_id IS NULL THEN 'Unassigned Orders'

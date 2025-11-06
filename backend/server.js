@@ -306,21 +306,17 @@ app.use((req, res, next) => {
             // Cookies are optional now (JWT preferred); don't warn if missing
         }
 
-        // Refresh session for admin users
+        // Refresh session for admin users (still using sessions)
         if (req.session.adminUser) {
             req.session.touch();
             console.log(`Admin session refreshed for: ${req.session.adminUser.email || req.session.adminUser.id}`);
         }
-        // Refresh session for staff users
+        // Refresh session for staff users (still using sessions)
         if (req.session.staffUser) {
             req.session.touch();
             console.log(`Staff session refreshed for: ${req.session.staffUser.email || req.session.staffUser.id}`);
         }
-        // Refresh session for customer users
-        if (req.session.customerUser) {
-            req.session.touch();
-            console.log(`Customer session refreshed for: ${req.session.customerUser.email || req.session.customerUser.id}`);
-        }
+        // Customers use JWT-only (no sessions) - removed customer session refresh
     }
     next();
 });

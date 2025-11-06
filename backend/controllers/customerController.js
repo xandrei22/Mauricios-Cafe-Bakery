@@ -94,74 +94,34 @@ async function login(req, res) {
 }
 
 // Customer session check controller
+// Customer session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkSession(req, res) {
-    // Stateless customer auth: validate Bearer token only (no cookies/sessions)
-    try {
-        const allHeaderKeys = Object.keys(req.headers || {});
-        console.log('🔍 DEBUG: All request headers keys:', allHeaderKeys);
-        console.log('🔍 DEBUG: req.headers.authorization:', req.headers && req.headers.authorization ? 'PRESENT' : 'MISSING');
-        if (req.headers && req.headers.authorization) {
-            console.log('🔍 DEBUG: Authorization header value (first 50 chars):', req.headers.authorization.substring(0, 50));
-        }
-
-        const authHeader = (req.headers && req.headers.authorization) || '';
-        console.log(
-            '🔑 Session check - Authorization header:',
-            authHeader ? 'PRESENT' : 'MISSING',
-            authHeader ? authHeader.substring(0, 30) + '...' : ''
-        );
-
-        const authHeaders = allHeaderKeys.filter(k => k.toLowerCase().includes('auth'));
-        console.log('🔍 DEBUG: Auth-related header keys:', authHeaders);
-
-        if (authHeader) {
-            const parts = authHeader.split(' ');
-            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-            const token = hasBearer ? parts[1] : null;
-            console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
-
-            if (token) {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                try {
-                    const payload = jwt.verify(token, secret);
-                    console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
-                    return res.json({
-                        authenticated: true,
-                        user: {
-                            id: payload.id,
-                            username: payload.username,
-                            email: payload.email,
-                            name: payload.name,
-                            role: payload.role || 'customer'
-                        }
-                    });
-                } catch (verifyErr) {
-                    console.log('🔑 Session check - JWT verification failed:', verifyErr.message);
-                }
+    // req.user is set by authenticateJWT middleware
+    if (req.user && req.user.role === 'customer') {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                name: req.user.name,
+                role: req.user.role
             }
-        }
-    } catch (e) {
-        console.log('🔑 Session check - Error processing Authorization header:', e.message);
+        });
     }
-    console.log('Session check - not authenticated');
-    res.json({ authenticated: false });
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Customer logout controller
+// Customer logout controller (JWT-only: just return success, client clears localStorage)
 function logout(req, res) {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error logging out' });
-        }
-        try {
-            res.clearCookie('connect.sid', {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'none'
-            });
-        } catch (_) {}
-        res.json({ message: 'Logged out successfully' });
-    });
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
+    res.json({ message: 'Logged out successfully' });
 }
 
 // Customer signup controller

@@ -74,61 +74,26 @@ async function login(req, res) {
                     });
                 }
 
-                // Set admin session
-                req.session.adminUser = {
+                // JWT-only: Generate token and return (no sessions/cookies)
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                const token = jwt.sign({
                     id: user.id,
                     username: user.username,
                     email: user.email,
                     fullName: user.full_name,
                     role: 'admin'
-                };
+                }, secret, { expiresIn: '1d' });
 
-                return req.session.save((err) => {
-                    if (err) {
-                        console.error('Admin session save error:', err);
-                        return res.status(500).json({ message: 'Error saving session' });
-                    }
-
-                    // Explicitly set cookie for mobile Safari
-                    const cookieValue = req.sessionID;
-                    const cookieOptions = {
-                        httpOnly: true,
-                        secure: process.env.NODE_ENV === 'production',
-                        sameSite: 'none',
-                        maxAge: 1000 * 60 * 60 * 24,
-                        path: '/'
-                    };
-                    // Don't set domain - mobile Safari rejects cross-origin cookies with explicit domains
-                    res.cookie('connect.sid', cookieValue, cookieOptions);
-
-                    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-                    // Issue JWT for admin
-                    let token = null;
-                    try {
-                        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                        token = jwt.sign({
-                            id: user.id,
-                            username: user.username,
-                            email: user.email,
-                            fullName: user.full_name,
-                            role: 'admin'
-                        }, secret, { expiresIn: '1d' });
-                    } catch (signErr) {
-                        console.error('Error signing admin JWT:', signErr);
-                    }
-
-                    res.json({
-                        success: true,
-                        user: {
-                            id: user.id,
-                            username: user.username,
-                            email: user.email,
-                            fullName: user.full_name,
-                            role: 'admin'
-                        },
-                        token
-                    });
+                return res.json({
+                    success: true,
+                    user: {
+                        id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        fullName: user.full_name,
+                        role: 'admin'
+                    },
+                    token
                 });
             } else {
                 // Block regular staff from admin portal
@@ -204,58 +169,34 @@ async function login(req, res) {
     }
 }
 
-// Admin session check controller
+// Admin session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkSession(req, res) {
-    // JWT-only admin session check
-    try {
-        const authHeader = (req.headers && req.headers.authorization) || '';
-        console.log('🔑 Admin session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
-        if (authHeader) {
-            const parts = authHeader.split(' ');
-            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-            const token = hasBearer ? parts[1] : null;
-            if (token) {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                try {
-                    const payload = jwt.verify(token, secret);
-                    console.log('🔑 Admin session check - JWT verified successfully, user:', payload.email || payload.username || payload.id);
-                    return res.json({
-                        authenticated: true,
-                        user: {
-                            id: payload.id,
-                            username: payload.username,
-                            email: payload.email,
-                            fullName: payload.fullName,
-                            role: payload.role || 'admin'
-                        }
-                    });
-                } catch (verifyErr) {
-                    console.log('🔑 Admin session check - JWT verification failed:', verifyErr.message);
-                }
+    // req.user is set by authenticateJWT middleware
+    if (req.user && req.user.role === 'admin') {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                fullName: req.user.fullName || req.user.name,
+                role: req.user.role
             }
-        }
-    } catch (e) {
-        console.log('🔑 Admin session check - Error processing Authorization header:', e.message);
+        });
     }
-    console.log('🔐 Admin session check - not authenticated');
-    return res.status(401).json({ authenticated: false });
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Admin logout controller
+// Admin logout controller (JWT-only: client clears token from localStorage)
 function logout(req, res) {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error logging out' });
-        }
-        try {
-            res.clearCookie('connect.sid', {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'none'
-            });
-        } catch (_) {}
-        res.json({ message: 'Logged out successfully' });
-    });
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
+    res.json({ message: 'Logged out successfully' });
 }
 
 // Staff login controller (can be used by both admin and staff)
@@ -345,90 +286,26 @@ async function staffLogin(req, res) {
 
         console.log('✅ Password valid for user:', username);
 
-        // Set staff session with unique key
-        req.session.staffUser = {
+        // JWT-only auth for staff: no sessions or cookies
+        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+        const token = jwt.sign({
             id: user.id,
             username: user.username,
             email: user.email,
             fullName: user.full_name,
             role: user.role
-        };
-        console.log('✅ Staff login successful. Session staffUser set:', req.session.staffUser);
+        }, secret, { expiresIn: '1d' });
 
-        // Add mobile debugging
-        const userAgent = req.headers['user-agent'] || '';
-        const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-        if (isMobile) {
-            console.log('📱 Mobile staff login:', {
-                sessionId: req.sessionID,
-                userAgent: userAgent.substring(0, 100),
-                staffUser: req.session.staffUser
-            });
-        }
-
-        req.session.save((err) => {
-            if (err) {
-                console.error('Session save error:', err);
-                return res.status(500).json({ message: 'Error saving session' });
-            }
-
-            // Explicitly set cookie for mobile Safari - express-session might not be setting it
-            const cookieValue = req.sessionID;
-            const cookieOptions = {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'none',
-                maxAge: 1000 * 60 * 60 * 24, // 24 hours
-                path: '/'
-            };
-
-            // NEVER set domain for cross-origin cookies - mobile Safari rejects them
-            // Even if COOKIE_DOMAIN is set, don't use it for mobile Safari compatibility
-            // console.log('ℹ️ Cookie domain intentionally not set for mobile Safari compatibility');
-
-            res.cookie('connect.sid', cookieValue, cookieOptions);
-
-            // Log session and cookie info for debugging
-            try {
-                const setCookieHeader = res.getHeader('set-cookie');
-                console.log('🔒 Staff Login Set-Cookie header:', setCookieHeader);
-                console.log('🔒 Staff Session ID:', req.sessionID);
-                console.log('🔒 Staff Session staffUser set:', !!req.session.staffUser);
-                console.log('🔒 Cookie secure:', process.env.NODE_ENV === 'production');
-                console.log('🔒 Cookie sameSite: none');
-            } catch (logErr) {
-                console.error('Error logging cookie info:', logErr);
-            }
-
-            // Ensure response headers allow cookie setting
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-            // Issue JWT for staff
-            let token = null;
-            try {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                token = jwt.sign({
-                    id: user.id,
-                    username: user.username,
-                    email: user.email,
-                    fullName: user.full_name,
-                    role: user.role
-                }, secret, { expiresIn: '1d' });
-            } catch (signErr) {
-                console.error('Error signing staff JWT:', signErr);
-            }
-
-            res.json({
-                success: true,
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    email: user.email,
-                    fullName: user.full_name,
-                    role: user.role
-                },
-                token
-            });
+        return res.json({
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                fullName: user.full_name,
+                role: user.role
+            },
+            token
         });
 
     } catch (error) {
@@ -437,35 +314,34 @@ async function staffLogin(req, res) {
     }
 }
 
-// Staff session check controller
+// Staff session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkStaffSession(req, res) {
-    if (req.session.staffUser && (req.session.staffUser.role === 'admin' || req.session.staffUser.role === 'staff')) {
-        return res.json({ authenticated: true, user: req.session.staffUser });
+    // req.user is set by authenticateJWT middleware
+    if (req.user && (req.user.role === 'staff' || req.user.role === 'admin')) {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                fullName: req.user.fullName || req.user.name,
+                role: req.user.role
+            }
+        });
     }
-    // Fallback: Bearer token
-    try {
-        const authHeader = (req.headers && req.headers.authorization) || '';
-        const parts = authHeader.split(' ');
-        const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-        const token = hasBearer ? parts[1] : null;
-        if (token) {
-            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-            const payload = jwt.verify(token, secret);
-            return res.json({ authenticated: true, user: payload });
-        }
-    } catch (_) {}
-    return res.json({ authenticated: false });
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Staff logout controller
+// Staff logout controller (JWT-only: client clears token from localStorage)
 function staffLogout(req, res) {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error logging out' });
-        }
-        res.clearCookie('sessionId');
-        res.json({ message: 'Logged out successfully' });
-    });
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
+    res.json({ message: 'Logged out successfully' });
 }
 
 // Create new staff account

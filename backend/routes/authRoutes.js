@@ -3,16 +3,17 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const customerController = require('../controllers/customerController');
 const { ensureAuthenticated } = require('../middleware/authMiddleware');
+const { authenticateJWT } = require('../middleware/jwtAuth');
 const passport = require('passport');
 
 // Admin routes
 router.post('/admin/login', adminController.login);
-router.get('/admin/check-session', adminController.checkSession);
+router.get('/admin/check-session', authenticateJWT, adminController.checkSession);
 router.post('/admin/logout', adminController.logout);
 
 // Staff routes (can be used by both admin and staff)
 router.post('/staff/login', adminController.staffLogin);
-router.get('/staff/check-session', adminController.checkStaffSession);
+router.get('/staff/check-session', authenticateJWT, adminController.checkStaffSession);
 router.post('/staff/logout', adminController.staffLogout);
 router.post('/staff/forgot-password', adminController.staffForgotPassword);
 router.post('/staff/reset-password', adminController.staffResetPassword);
@@ -20,7 +21,7 @@ router.post('/staff/reset-password', adminController.staffResetPassword);
 // Customer routes
 router.post('/customer/signup', customerController.signup);
 router.post('/customer/login', customerController.login);
-router.get('/customer/check-session', customerController.checkSession);
+router.get('/customer/check-session', authenticateJWT, customerController.checkSession);
 router.post('/customer/logout', customerController.logout);
 
 // Forgot password and reset password routes
