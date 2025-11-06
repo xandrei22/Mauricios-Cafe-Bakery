@@ -175,24 +175,21 @@ if (process.env.NODE_ENV === 'production') {
         next();
     });
 }
-app.use(cors(corsOptions));
-// Ensure preflight handled for all routes
-app.options('*', cors(corsOptions));
-// Fallback explicit headers for some hosts/proxies
-// This ensures CORS headers are set even if the CORS middleware doesn't catch it
+// CRITICAL: Apply CORS headers FIRST, before any other middleware
+// This ensures CORS headers are on ALL responses, including errors
 app.use((req, res, next) => {
     const origin = req.headers.origin;
 
     // Log for debugging
-    if (req.method === 'OPTIONS') {
-        console.log('🔍 CORS Preflight Request:', {
-            origin: origin,
-            method: req.method,
-            path: req.path
-        });
-    }
+    console.log('🔍 CORS Request:', {
+        origin: origin || 'NO ORIGIN',
+        method: req.method,
+        path: req.path,
+        url: req.url
+    });
 
     if (isAllowedOrigin(origin)) {
+        // Apply CORS headers to ALL requests (not just preflight)
         res.header('Access-Control-Allow-Origin', origin || '*');
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies
@@ -200,17 +197,29 @@ app.use((req, res, next) => {
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
 
-        // Handle preflight requests
+        // Handle preflight requests IMMEDIATELY
         if (req.method === 'OPTIONS') {
             console.log('✅ CORS Preflight: Sending 204');
             return res.sendStatus(204);
         }
+
+        console.log('✅ CORS: Headers applied to', req.method, req.path);
     } else if (origin) {
-        console.error('❌ CORS: Origin not allowed in fallback:', origin);
+        console.error('❌ CORS: Origin not allowed:', origin);
+        console.error('❌ CORS: Allowed origins:', allowedOrigins);
+    } else {
+        // No origin header (same-origin request or mobile app)
+        console.log('⚠️ CORS: No origin header (same-origin or mobile app)');
     }
 
     next();
 });
+
+// Apply CORS middleware (this handles additional CORS logic)
+app.use(cors(corsOptions));
+
+// Ensure preflight handled for all routes
+app.options('*', cors(corsOptions));
 
 // Extra CORS guard specifically for Socket.IO polling/websocket endpoints
 // Note: Socket.IO may need credentials for its own auth, but API routes use JWT
