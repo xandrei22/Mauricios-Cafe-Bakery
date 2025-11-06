@@ -258,12 +258,35 @@ router.get('/dashboard', async(req, res) => {
                 })),
                 total: (totalOrdersResult[0] && totalOrdersResult[0].total) || 0
             },
-            favorites: favoritesResult.map(item => ({
-                id: Math.random(),
-                name: JSON.parse(item.names || '[]')[0] || 'Unknown Item',
-                category: 'Popular',
-                imageUrl: null
-            }))
+            favorites: favoritesResult.map(item => {
+                let itemName = 'Unknown Item';
+                try {
+                    // item.names might be a JSON string array or already a string
+                    if (item.names) {
+                        if (typeof item.names === 'string') {
+                            // Try to parse as JSON first
+                            try {
+                                const parsed = JSON.parse(item.names);
+                                itemName = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : (parsed || item.names);
+                            } catch {
+                                // If parsing fails, it's probably already a string
+                                itemName = item.names;
+                            }
+                        } else {
+                            itemName = item.names;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing favorite item name:', e);
+                    itemName = item.names || 'Unknown Item';
+                }
+                return {
+                    id: Math.random(),
+                    name: itemName,
+                    category: 'Popular',
+                    imageUrl: null
+                };
+            })
         };
 
         res.json({
