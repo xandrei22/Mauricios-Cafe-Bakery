@@ -306,17 +306,9 @@ app.use((req, res, next) => {
             // Cookies are optional now (JWT preferred); don't warn if missing
         }
 
-        // Refresh session for admin users (still using sessions)
-        if (req.session.adminUser) {
-            req.session.touch();
-            console.log(`Admin session refreshed for: ${req.session.adminUser.email || req.session.adminUser.id}`);
-        }
-        // Refresh session for staff users (still using sessions)
-        if (req.session.staffUser) {
-            req.session.touch();
-            console.log(`Staff session refreshed for: ${req.session.staffUser.email || req.session.staffUser.id}`);
-        }
-        // Customers use JWT-only (no sessions) - removed customer session refresh
+        // JWT-only authentication: Admin, Staff, and Customer all use JWT tokens
+        // No session refresh needed - sessions are only used for Google OAuth flow
+        // If you see session data here, it's from Google OAuth or legacy sessions
     }
     next();
 });
