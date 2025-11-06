@@ -148,12 +148,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         return;
       }
       
-      // CRITICAL: Use Headers object to ensure headers are sent correctly
-      const headers = new Headers();
-      headers.set('Content-Type', 'application/json');
+      // CRITICAL: Use plain object for headers (Headers object may not serialize correctly in mobile Safari)
+      // Mobile Safari has issues with Headers object, so we use a plain object instead
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
       
       if (token) {
-        headers.set('Authorization', `Bearer ${token}`);
+        headers['Authorization'] = `Bearer ${token}`;
         console.log(`🔑 ProtectedRoute (${requiredRole}): Sending Authorization header with token`);
         console.log(`🔑 ProtectedRoute (${requiredRole}): Token length:`, token.length);
         console.log(`🔑 ProtectedRoute (${requiredRole}): Authorization header value:`, `Bearer ${token.substring(0, 20)}...`);
@@ -164,9 +166,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // Log what we're about to send
       console.log(`🔑 ProtectedRoute (${requiredRole}) - Fetch options:`, {
         endpoint: sessionEndpoint,
-        hasAuthorization: headers.has('Authorization'),
-        authorizationValue: headers.get('Authorization')?.substring(0, 30) + '...',
-        allHeaders: Array.from(headers.entries())
+        hasAuthorization: !!headers['Authorization'],
+        authorizationValue: headers['Authorization']?.substring(0, 30) + '...',
+        allHeaders: Object.keys(headers)
       });
       
       const response = await fetch(sessionEndpoint, {
