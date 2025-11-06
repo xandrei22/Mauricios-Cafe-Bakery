@@ -252,21 +252,54 @@ async function login(req, res) {
 
 // Admin session check controller
 function checkSession(req, res) {
+    console.log('🔐 Admin session check - req.session.adminUser:', req.session.adminUser);
     if (req.session.adminUser && req.session.adminUser.role === 'admin') {
+        console.log('🔐 Admin session check - returning authenticated user from session');
         return res.json({ authenticated: true, user: req.session.adminUser });
     }
-    // Fallback: Bearer token
+
+    // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
     try {
-        const authHeader = (req.headers && req.headers.authorization) || '';
-        const parts = authHeader.split(' ');
-        const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-        const token = hasBearer ? parts[1] : null;
-        if (token) {
-            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-            const payload = jwt.verify(token, secret);
-            return res.json({ authenticated: true, user: payload });
+        // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
+        const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+        console.log('🔑 Admin session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
+        console.log('🔑 Admin session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
+
+        if (authHeader) {
+            const parts = authHeader.split(' ');
+            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+            const token = hasBearer ? parts[1] : null;
+            console.log('🔑 Admin session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
+
+            if (token) {
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                try {
+                    const payload = jwt.verify(token, secret);
+                    console.log('🔑 Admin session check - JWT verified successfully, user:', payload.email || payload.username || payload.id);
+                    // Return payload with same structure as session user
+                    return res.json({
+                        authenticated: true,
+                        user: {
+                            id: payload.id,
+                            username: payload.username,
+                            email: payload.email,
+                            fullName: payload.fullName,
+                            role: payload.role || 'admin'
+                        }
+                    });
+                } catch (verifyErr) {
+                    console.log('🔑 Admin session check - JWT verification failed:', verifyErr.message);
+                    console.log('🔑 Admin session check - Token might be expired or invalid');
+                    // Continue to fall through to unauthenticated
+                }
+            }
         }
-    } catch (_) {}
+    } catch (e) {
+        console.log('🔑 Admin session check - Error processing Authorization header:', e.message);
+        // ignore and fall through to unauthenticated
+    }
+
+    console.log('🔐 Admin session check - not authenticated');
     return res.json({ authenticated: false });
 }
 

@@ -163,22 +163,44 @@ function checkSession(req, res) {
         console.log('Session check - returning authenticated user:', req.session.customerUser);
         res.json({ authenticated: true, user: req.session.customerUser });
     } else {
-        // Fallback: validate Bearer token for clients using localStorage
+        // Fallback: validate Bearer token for clients using localStorage (iOS Safari cookie workaround)
         try {
-            const authHeader = (req.headers && req.headers.authorization) || '';
-            console.log('🔑 Session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 20) + '...' : '');
-            const parts = authHeader.split(' ');
-            const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
-            const token = hasBearer ? parts[1] : null;
-            console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO');
-            if (token) {
-                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-                const payload = jwt.verify(token, secret);
-                console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
-                return res.json({ authenticated: true, user: payload });
+            // Check both lowercase and uppercase header (Express normalizes to lowercase, but be safe)
+            const authHeader = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+            console.log('🔑 Session check - Authorization header:', authHeader ? 'PRESENT' : 'MISSING', authHeader ? authHeader.substring(0, 30) + '...' : '');
+            console.log('🔑 Session check - All headers keys:', Object.keys(req.headers || {}).filter(k => k.toLowerCase().includes('auth')));
+
+            if (authHeader) {
+                const parts = authHeader.split(' ');
+                const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+                const token = hasBearer ? parts[1] : null;
+                console.log('🔑 Session check - Token extracted:', token ? 'YES' : 'NO', token ? `(${token.substring(0, 20)}...)` : '');
+
+                if (token) {
+                    const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                    try {
+                        const payload = jwt.verify(token, secret);
+                        console.log('🔑 Session check - JWT verified successfully, user:', payload.email || payload.id);
+                        // Return payload with same structure as session user
+                        return res.json({
+                            authenticated: true,
+                            user: {
+                                id: payload.id,
+                                username: payload.username,
+                                email: payload.email,
+                                name: payload.name,
+                                role: payload.role || 'customer'
+                            }
+                        });
+                    } catch (verifyErr) {
+                        console.log('🔑 Session check - JWT verification failed:', verifyErr.message);
+                        console.log('🔑 Session check - Token might be expired or invalid');
+                        // Continue to fall through to unauthenticated
+                    }
+                }
             }
         } catch (e) {
-            console.log('🔑 Session check - JWT verification failed:', e.message);
+            console.log('🔑 Session check - Error processing Authorization header:', e.message);
             // ignore and fall through to unauthenticated
         }
         console.log('Session check - not authenticated');
