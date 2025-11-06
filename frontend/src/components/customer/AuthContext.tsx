@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getApiUrl } from '../../utils/apiConfig';
+import { checkCustomerSession } from '../../utils/authUtils';
 
 interface User {
   name: string;
@@ -116,46 +116,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
     try {
-      // Check token multiple ways to ensure we get it
-      let token = localStorage.getItem('authToken');
+      // Check token exists before making request
+      const token = localStorage.getItem('authToken');
       
       // If no token, wait a bit and try again (for timing issues after login)
-      // On mobile, wait longer as localStorage might need more time after redirect
       if (!token && isRecentLogin) {
         const waitTime = isMobile ? 500 : 100;
         console.log(`⏳ No token found, waiting ${waitTime}ms for localStorage sync...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
-        token = localStorage.getItem('authToken');
-        
-        // Try one more time if still missing
-        if (!token && isMobile) {
-          console.log('⏳ Still no token, waiting another 500ms...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          token = localStorage.getItem('authToken');
-        }
-      }
-      
-      console.log('🔑 AuthContext checkSession - Token from localStorage:', token ? 'PRESENT' : 'MISSING');
-      if (token) {
-        console.log('🔑 AuthContext checkSession - Token length:', token.length);
-        console.log('🔑 AuthContext checkSession - Token preview:', token.substring(0, 20) + '...');
-      } else {
-        console.error('❌ CRITICAL: NO TOKEN in localStorage!');
-        console.error('❌ localStorage contents:', {
-          keys: Object.keys(localStorage),
-          hasCustomerUser: !!localStorage.getItem('customerUser'),
-          hasAuthToken: !!localStorage.getItem('authToken'),
-          hasLoginTimestamp: !!localStorage.getItem('loginTimestamp'),
-          authTokenValue: localStorage.getItem('authToken') ? 'EXISTS' : 'NULL'
-        });
       }
       
       // CRITICAL: On mobile, token is REQUIRED (cookies don't work)
-      if (isMobile && !token) {
+      if (isMobile && !localStorage.getItem('authToken')) {
         console.error('❌ CRITICAL: Mobile device but NO TOKEN in localStorage! Authentication will fail!');
         setLoading(false);
         setAuthenticated(false);
@@ -163,44 +137,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      // CRITICAL: Use plain object for headers (Headers object may not serialize correctly in mobile Safari)
-      // Mobile Safari has issues with Headers object, so we use a plain object instead
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
+      // Use JWT auth utility (uses axiosInstance which automatically adds Authorization header)
+      console.log('🔑 AuthContext: Using checkCustomerSession (JWT)');
+      const data = await checkCustomerSession();
       
-      // ALWAYS send token if available (primary auth method for mobile)
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log('🔑 AuthContext checkSession - Sending Authorization header with token');
-        console.log('🔑 AuthContext checkSession - Token length:', token.length);
-        console.log('🔑 AuthContext checkSession - Authorization header value:', `Bearer ${token.substring(0, 20)}...`);
-      } else {
-        console.warn('⚠️ AuthContext checkSession - No token in localStorage (desktop may use cookies)');
-      }
-      
-      // Create fetch request with proper headers
-      const fetchOptions: RequestInit = {
-        method: 'GET',
-        credentials: 'include', // Keep for desktop browsers that support cookies
-        headers: headers,
-        signal: controller.signal as any
-      };
-      
-      // Log what we're about to send
-      console.log('🔑 AuthContext checkSession - Fetch options:', {
-        method: fetchOptions.method,
-        hasHeaders: !!fetchOptions.headers,
-        hasAuthorization: !!headers['Authorization'],
-        authorizationValue: headers['Authorization']?.substring(0, 30) + '...',
-        allHeaders: Object.keys(headers)
-      });
-      
-      const res = await fetch(`${API_URL}/api/customer/check-session`, fetchOptions);
-      
-      console.log('🔑 AuthContext checkSession - Response status:', res.status);
-      if (!res.ok) throw new Error('Session check failed');
-      const data = await res.json();
       if (data && data.authenticated && data.user) {
         setAuthenticated(true);
         setUser(data.user);
@@ -210,42 +150,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         // If session check fails, fall back to localStorage (especially important for iOS Safari)
-        // On iOS, cookies may never work, so we should always check localStorage if we have a token
         const storedUser = localStorage.getItem('customerUser');
         const storedToken = localStorage.getItem('authToken');
         if (storedUser && storedToken) {
           try {
             const user = JSON.parse(storedUser);
-            // For iOS, always use localStorage fallback if cookies don't work
-            // For other devices, only use it if it's a recent login
+            // For iOS, always use localStorage fallback if JWT check fails
             if (isIOS || isRecentLogin) {
               setAuthenticated(true);
               setUser(user);
-              console.log('✅ AuthContext: Session failed, using localStorage fallback (iOS cookie workaround)');
-              return; // Don't clear - let it persist
+              console.log('✅ AuthContext: JWT check failed, using localStorage fallback');
+              return;
             }
           } catch (e) {
             console.error('Failed to parse stored user:', e);
           }
         }
-        // Only set authenticated to false if we don't have a valid localStorage fallback
         setAuthenticated(false);
         setUser(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Session check error:', e);
-      // On error, always try localStorage fallback if we have token and user (especially for iOS)
+      // On error, try localStorage fallback if we have token and user
       const storedUser = localStorage.getItem('customerUser');
       const storedToken = localStorage.getItem('authToken');
       if (storedUser && storedToken) {
         try {
           const user = JSON.parse(storedUser);
-          // For iOS, always use localStorage fallback if cookies don't work
-          // For other devices, only use it if it's a recent login
+          // For iOS, always use localStorage fallback if JWT check fails
           if (isIOS || isRecentLogin) {
             setAuthenticated(true);
             setUser(user);
-            console.log('✅ AuthContext: Session check error, using localStorage fallback (iOS cookie workaround)');
+            console.log('✅ AuthContext: JWT check error, using localStorage fallback');
           } else {
             setAuthenticated(false);
             setUser(null);
@@ -260,10 +196,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
       }
     } finally {
-      clearTimeout(timeout);
       setLoading(false);
     }
-  }, [API_URL, lastSessionCheck]);
+  }, [isIOS, isMobile, isRecentLogin, lastSessionCheck]);
 
   const logout = async () => {
     try {
