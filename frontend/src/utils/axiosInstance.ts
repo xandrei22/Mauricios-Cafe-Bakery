@@ -25,27 +25,46 @@ axiosInstance.interceptors.request.use(
     // ⭐ CRITICAL: Get token from localStorage FIRST
     const token = localStorage.getItem('authToken');
     
-    // ⭐ CRITICAL: Log for check-session requests
+    // ⭐ CRITICAL: Log for ALL requests to verify interceptor is running
     if (config.url?.includes('check-session')) {
       console.log('🔍🔍🔍 AXIOS INTERCEPTOR RUNNING FOR CHECK-SESSION 🔍🔍🔍');
       console.log('Token exists:', !!token);
       console.log('Token length:', token?.length || 0);
+      console.log('Config URL:', config.url);
+      console.log('Config method:', config.method);
+      console.log('Config headers BEFORE:', config.headers ? Object.keys(config.headers) : 'NO HEADERS');
     }
     
     // ⭐ CRITICAL: Always add Authorization header if token exists
-    if (token) {
-      // CRITICAL: Set header - axios normalizes to lowercase internally but we set both
-      const authHeader = `Bearer ${token}`;
+    if (token && token.trim()) {
+      // CRITICAL: Set header - use axios's proper header setting
+      const authHeader = `Bearer ${token.trim()}`;
       
       // Ensure headers object exists
       if (!config.headers) {
         config.headers = {} as any;
       }
       
-      // Set header - axios will normalize 'Authorization' to 'authorization' internally
-      // But we set both to be safe
-      config.headers.Authorization = authHeader;
-      config.headers.authorization = authHeader;
+      // CRITICAL: Set header using multiple methods to ensure it works
+      // Method 1: Direct assignment
+      config.headers['Authorization'] = authHeader;
+      config.headers['authorization'] = authHeader;
+      
+      // Method 2: Use setHeader if available (for AxiosHeaders)
+      if (typeof (config.headers as any).set === 'function') {
+        try {
+          (config.headers as any).set('Authorization', authHeader);
+        } catch (e) {
+          console.warn('Could not use headers.set():', e);
+        }
+      }
+      
+      // Method 3: Force set on the config object directly
+      (config as any).headers = {
+        ...config.headers,
+        'Authorization': authHeader,
+        'authorization': authHeader
+      };
       
       // ALWAYS log for check-session to debug
       if (config.url?.includes('check-session')) {
@@ -54,10 +73,21 @@ axiosInstance.interceptors.request.use(
           hasToken: !!token,
           tokenLength: token.length,
           tokenPreview: token.substring(0, 30) + '...',
-          headerSet: !!(config.headers.Authorization || config.headers.authorization),
-          headerValue: (config.headers.Authorization || config.headers.authorization)?.substring(0, 40) + '...',
-          allHeaderKeys: Object.keys(config.headers || {})
+          headerSet: !!(config.headers['Authorization'] || config.headers['authorization']),
+          headerValue: (config.headers['Authorization'] || config.headers['authorization'])?.substring(0, 40) + '...',
+          allHeaderKeys: Object.keys(config.headers || {}),
+          configHeadersType: typeof config.headers,
+          configHeadersConstructor: config.headers?.constructor?.name
         });
+        
+        // CRITICAL: Final verification - check if header is actually set
+        const finalHeader = config.headers['Authorization'] || config.headers['authorization'];
+        if (!finalHeader) {
+          console.error('❌❌❌ CRITICAL: Header was set but is now missing! ❌❌❌');
+          console.error('Config headers after setting:', config.headers);
+        } else {
+          console.log('✅ Header verified in config:', finalHeader.substring(0, 40) + '...');
+        }
       }
     } else {
       // ALWAYS error for check-session if no token
@@ -69,7 +99,8 @@ axiosInstance.interceptors.request.use(
             authToken: localStorage.getItem('authToken') ? 'EXISTS' : 'MISSING',
             customerUser: localStorage.getItem('customerUser') ? 'EXISTS' : 'MISSING',
             loginTimestamp: localStorage.getItem('loginTimestamp')
-          }
+          },
+          tokenValue: localStorage.getItem('authToken')
         });
       }
     }
@@ -144,4 +175,8 @@ axiosInstance.interceptors.response.use(
   }
 );
 
+// ⭐ CRITICAL: Verify interceptor is registered
+console.log('✅ Axios instance created and interceptor registered');
+
+// Export the instance
 export default axiosInstance;

@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { useSessionValidation } from '../../hooks/useSessionValidation';
+import axiosInstance from '../../utils/axiosInstance';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -115,12 +116,11 @@ const StaffDashboard: React.FC = () => {
   // Fetch staff performance data (only current staff member)
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
-      const response = await fetch(`${API_URL}/api/staff/dashboard/staff-performance?period=${period}`, {
-        credentials: 'omit'
-      });
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/staff/dashboard/staff-performance?period=${period}`);
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
         console.log('Staff performance data received:', data);
         setStaffPerformanceData(data);
         
@@ -181,7 +181,7 @@ const StaffDashboard: React.FC = () => {
           }));
         }
       } else {
-        console.error('Staff performance API error:', response.status, await response.text());
+        console.error('Staff performance API error:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching staff performance data:', error);
@@ -192,12 +192,12 @@ const StaffDashboard: React.FC = () => {
   const fetchChartData = async () => {
     try {
       // Fetch sales data - use admin endpoints for consistency
-      const salesResponse = await fetch(`${API_URL}/api/admin/dashboard/sales`, {
-        credentials: 'omit'
-      });
+      // Use axiosInstance which automatically adds Authorization header
       let salesData = null;
-      if (salesResponse.ok) {
-        const salesRaw = await salesResponse.json();
+      try {
+        const salesResponse = await axiosInstance.get('/api/admin/dashboard/sales');
+        if (salesResponse.status === 200) {
+          const salesRaw = salesResponse.data;
         console.log('Raw staff sales API response:', salesRaw);
         if (salesRaw && Array.isArray(salesRaw.labels) && Array.isArray(salesRaw.data) && salesRaw.labels.length > 0) {
           salesData = salesRaw;
@@ -205,8 +205,9 @@ const StaffDashboard: React.FC = () => {
         } else {
           console.log('Staff sales API returned empty or invalid data');
         }
-      } else {
-        console.log('Staff sales API request failed:', salesResponse.status, salesResponse.statusText);
+        }
+      } catch (salesErr: any) {
+        console.log('Staff sales API request failed:', salesErr.response?.status || salesErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -227,12 +228,12 @@ const StaffDashboard: React.FC = () => {
       }
 
       // Fetch ingredients usage data - use admin endpoints for consistency
-      const ingredientsResponse = await fetch('/api/admin/dashboard/ingredients', {
-        credentials: 'omit'
-      });
+      // Use axiosInstance which automatically adds Authorization header
       let ingredientsData = null;
-      if (ingredientsResponse.ok) {
-        const ingredientsRaw = await ingredientsResponse.json();
+      try {
+        const ingredientsResponse = await axiosInstance.get('/api/admin/dashboard/ingredients');
+        if (ingredientsResponse.status === 200) {
+          const ingredientsRaw = ingredientsResponse.data;
         console.log('Raw staff ingredients API response:', ingredientsRaw);
         if (ingredientsRaw && Array.isArray(ingredientsRaw.labels) && Array.isArray(ingredientsRaw.data) && ingredientsRaw.labels.length > 0) {
           ingredientsData = ingredientsRaw;
@@ -240,8 +241,9 @@ const StaffDashboard: React.FC = () => {
         } else {
           console.log('Staff ingredients API returned empty or invalid data');
         }
-      } else {
-        console.log('Staff ingredients API request failed:', ingredientsResponse.status, ingredientsResponse.statusText);
+        }
+      } catch (ingredientsErr: any) {
+        console.log('Staff ingredients API request failed:', ingredientsErr.response?.status || ingredientsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -256,12 +258,12 @@ const StaffDashboard: React.FC = () => {
       }
 
       // Fetch menu items data - use admin endpoints for consistency
-      const menuItemsResponse = await fetch('/api/admin/dashboard/menu-items', {
-        credentials: 'omit'
-      });
+      // Use axiosInstance which automatically adds Authorization header
       let menuItemsData = null;
-      if (menuItemsResponse.ok) {
-        const menuItemsRaw = await menuItemsResponse.json();
+      try {
+        const menuItemsResponse = await axiosInstance.get('/api/admin/dashboard/menu-items');
+        if (menuItemsResponse.status === 200) {
+          const menuItemsRaw = menuItemsResponse.data;
         console.log('Raw staff menu items API response:', menuItemsRaw);
         if (menuItemsRaw && Array.isArray(menuItemsRaw.labels) && Array.isArray(menuItemsRaw.data) && menuItemsRaw.labels.length > 0) {
           menuItemsData = menuItemsRaw;
@@ -269,8 +271,9 @@ const StaffDashboard: React.FC = () => {
         } else {
           console.log('Staff menu items API returned empty or invalid data');
         }
-      } else {
-        console.log('Staff menu items API request failed:', menuItemsResponse.status, menuItemsResponse.statusText);
+        }
+      } catch (menuItemsErr: any) {
+        console.log('Staff menu items API request failed:', menuItemsErr.response?.status || menuItemsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -360,19 +363,12 @@ const StaffDashboard: React.FC = () => {
       setError(null);
       
       // Fetch dashboard data - use admin endpoints for consistency
-      const staffResponse = await fetch(`${API_URL}/api/admin/dashboard`, {
-        credentials: 'omit'
-      });
-      
-      if (staffResponse.status === 401) {
-        // Session expired - redirect to login
-        navigate('/staff/login');
-        return;
-      }
-      
+      // Use axiosInstance which automatically adds Authorization header
       let metricsData: any = null;
-      if (staffResponse.ok) {
-        const staffData = await staffResponse.json();
+      try {
+        const staffResponse = await axiosInstance.get('/api/admin/dashboard');
+        if (staffResponse.status === 200) {
+          const staffData = staffResponse.data;
         console.log('Staff dashboard data received:', staffData);
         metricsData = {
           revenue: staffData?.data?.revenue?.year ?? 0, // Use year revenue for total (all-time)
@@ -383,8 +379,14 @@ const StaffDashboard: React.FC = () => {
           customers: staffData?.data?.customers ?? { total: 0, new: 0, active: 0 }
         };
         console.log('Processed metrics data:', metricsData);
-      } else {
-        console.log('Staff dashboard API failed:', staffResponse.status, staffResponse.statusText);
+        }
+      } catch (staffErr: any) {
+        if (staffErr.response?.status === 401) {
+          // Session expired - redirect to login
+          navigate('/staff/login');
+          return;
+        }
+        console.log('Staff dashboard API failed:', staffErr.response?.status || staffErr.message);
         // Fallback to basic data if staff endpoint fails
         metricsData = {
           revenue: 0,

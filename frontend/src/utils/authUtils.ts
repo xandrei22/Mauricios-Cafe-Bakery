@@ -382,6 +382,18 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
   try {
     console.log('🚀 Making check-session request with axiosInstance');
     console.log('Token being used:', token.substring(0, 30) + '...');
+    console.log('axiosInstance type:', typeof axiosInstance);
+    console.log('axiosInstance has interceptors:', !!(axiosInstance.interceptors));
+    
+    // CRITICAL: Verify token is still in localStorage right before request
+    const tokenBeforeRequest = localStorage.getItem('authToken');
+    if (!tokenBeforeRequest || tokenBeforeRequest !== token) {
+      console.error('❌❌❌ CRITICAL: Token changed or disappeared before request! ❌❌❌', {
+        originalToken: token ? token.substring(0, 30) + '...' : 'NONE',
+        tokenBeforeRequest: tokenBeforeRequest ? tokenBeforeRequest.substring(0, 30) + '...' : 'NONE',
+        tokensMatch: token === tokenBeforeRequest
+      });
+    }
     
     const response = await axiosInstance.get('/api/customer/check-session');
     

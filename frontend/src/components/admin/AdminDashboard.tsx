@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSessionValidation } from '../../hooks/useSessionValidation';
+import axiosInstance from '../../utils/axiosInstance';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -124,12 +125,11 @@ const AdminDashboard: React.FC = () => {
   // Fetch staff performance data
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
-      const response = await fetch(`/api/admin/dashboard/staff-performance?period=${period}`, {
-        credentials: 'omit'
-      });
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/admin/dashboard/staff-performance?period=${period}`);
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
         console.log('Admin staff performance data received:', data);
         setStaffPerformanceData(data);
         
@@ -181,7 +181,7 @@ const AdminDashboard: React.FC = () => {
           }));
         }
       } else {
-        console.error('Admin staff performance API error:', response.status, await response.text());
+        console.error('Admin staff performance API error:', response.status, response.statusText);
         // Set empty chart data on error
         setChartData(prev => ({
           ...prev,
@@ -207,13 +207,12 @@ const AdminDashboard: React.FC = () => {
   // Fetch chart data
   const fetchChartData = async () => {
     try {
-      // Fetch sales data
-      const salesResponse = await fetch('/api/admin/dashboard/sales', {
-        credentials: 'omit'
-      });
+      // Fetch sales data - use axiosInstance which automatically adds Authorization header
       let salesData = null;
-      if (salesResponse.ok) {
-        const salesRaw = await salesResponse.json();
+      try {
+        const salesResponse = await axiosInstance.get('/api/admin/dashboard/sales');
+        if (salesResponse.status === 200) {
+          const salesRaw = salesResponse.data;
         console.log('Raw sales API response:', salesRaw);
         if (salesRaw && Array.isArray(salesRaw.labels) && Array.isArray(salesRaw.data) && salesRaw.labels.length > 0) {
           salesData = salesRaw;
@@ -221,8 +220,9 @@ const AdminDashboard: React.FC = () => {
         } else {
           console.log('Sales API returned empty or invalid data');
         }
-      } else {
-        console.log('Sales API request failed:', salesResponse.status, salesResponse.statusText);
+        }
+      } catch (salesErr: any) {
+        console.log('Sales API request failed:', salesErr.response?.status || salesErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -242,13 +242,12 @@ const AdminDashboard: React.FC = () => {
         console.log('Sales data loaded from API:', salesData);
       }
 
-      // Fetch ingredients usage data
-      const ingredientsResponse = await fetch('/api/admin/dashboard/ingredients', {
-        credentials: 'omit'
-      });
+      // Fetch ingredients usage data - use axiosInstance which automatically adds Authorization header
       let ingredientsData = null;
-      if (ingredientsResponse.ok) {
-        const ingredientsRaw = await ingredientsResponse.json();
+      try {
+        const ingredientsResponse = await axiosInstance.get('/api/admin/dashboard/ingredients');
+        if (ingredientsResponse.status === 200) {
+          const ingredientsRaw = ingredientsResponse.data;
         console.log('Raw ingredients API response:', ingredientsRaw);
         if (ingredientsRaw && Array.isArray(ingredientsRaw.labels) && Array.isArray(ingredientsRaw.data) && ingredientsRaw.labels.length > 0) {
           ingredientsData = ingredientsRaw;
@@ -256,8 +255,9 @@ const AdminDashboard: React.FC = () => {
         } else {
           console.log('Ingredients API returned empty or invalid data');
         }
-      } else {
-        console.log('Ingredients API request failed:', ingredientsResponse.status, ingredientsResponse.statusText);
+        }
+      } catch (ingredientsErr: any) {
+        console.log('Ingredients API request failed:', ingredientsErr.response?.status || ingredientsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -271,16 +271,18 @@ const AdminDashboard: React.FC = () => {
         console.log('Ingredients data loaded from API:', ingredientsData);
       }
 
-      // Fetch menu items data
-      const menuItemsResponse = await fetch('/api/admin/dashboard/menu-items', {
-        credentials: 'omit'
-      });
+      // Fetch menu items data - use axiosInstance which automatically adds Authorization header
       let menuItemsData = null;
-      if (menuItemsResponse.ok) {
-        const menuItemsRaw = await menuItemsResponse.json();
+      try {
+        const menuItemsResponse = await axiosInstance.get('/api/admin/dashboard/menu-items');
+        if (menuItemsResponse.status === 200) {
+          const menuItemsRaw = menuItemsResponse.data;
         if (menuItemsRaw && Array.isArray(menuItemsRaw.labels) && Array.isArray(menuItemsRaw.data) && menuItemsRaw.labels.length > 0) {
           menuItemsData = menuItemsRaw;
         }
+        }
+      } catch (menuItemsErr: any) {
+        console.log('Menu items API request failed:', menuItemsErr.response?.status || menuItemsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -350,26 +352,24 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       
       // Fetch unified metrics for 365 days (year view) for total revenue
-      const metricsResponse = await fetch('/api/admin/metrics/summary?range=365d', {
-        credentials: 'omit'
-      });
-      
-      if (metricsResponse.status === 401) {
-        // Session expired - redirect to login
-        navigate('/admin/login');
-        return;
-      }
-      
+      // Use axiosInstance which automatically adds Authorization header
       let yearMetrics: any = null;
-      if (metricsResponse.ok) {
-        yearMetrics = await metricsResponse.json();
-      } else {
-        // Fallback to legacy dashboard endpoint to avoid blank screen
-        const legacyResponse = await fetch('/api/admin/dashboard', { credentials: 'omit' });
-        if (!legacyResponse.ok) {
-          throw new Error('Failed to fetch metrics data');
+      try {
+        const metricsResponse = await axiosInstance.get('/api/admin/metrics/summary?range=365d');
+        if (metricsResponse.status === 200) {
+          yearMetrics = metricsResponse.data;
         }
-        const legacy = await legacyResponse.json();
+      } catch (metricsErr: any) {
+        if (metricsErr.response?.status === 401) {
+          // Session expired - redirect to login
+          navigate('/admin/login');
+          return;
+        }
+        // Fallback to legacy dashboard endpoint to avoid blank screen
+        try {
+          const legacyResponse = await axiosInstance.get('/api/admin/dashboard');
+          if (legacyResponse.status === 200) {
+            const legacy = legacyResponse.data;
         // Map legacy data to the new structure expected below
         yearMetrics = {
           revenue: legacy?.data?.revenue?.year ?? 0, // Use year revenue for total
@@ -377,17 +377,24 @@ const AdminDashboard: React.FC = () => {
           orders: legacy?.data?.orders ?? { total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 },
           inventory: legacy?.data?.inventory ?? { in_stock: 0, low_stock: 0, out_of_stock: 0 }
         };
+          }
+        } catch (legacyErr) {
+          throw new Error('Failed to fetch metrics data');
+        }
       }
 
       // Fetch today's metrics for daily revenue card
-      const todayResponse = await fetch('/api/admin/metrics/summary?range=today', { credentials: 'omit' });
       let todayMetrics: any = null;
-      if (todayResponse.ok) {
-        todayMetrics = await todayResponse.json();
-      } else {
+      try {
+        const todayResponse = await axiosInstance.get('/api/admin/metrics/summary?range=today');
+        if (todayResponse.status === 200) {
+          todayMetrics = todayResponse.data;
+        }
+      } catch (todayErr: any) {
         // Fallback using legacy: use today's number from legacy if available, otherwise 0
         todayMetrics = { revenue: 0 };
       }
+
       
       // Transform metrics data to match expected dashboard format
       const n = (v: any) => {
