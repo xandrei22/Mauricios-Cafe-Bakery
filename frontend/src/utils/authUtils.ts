@@ -174,6 +174,8 @@ export async function customerLogin(
   hasTable?: boolean,
   hasRedirect?: boolean
 ): Promise<LoginResponse> {
+  console.log('🔍 customerLogin called', { email, hasTable, hasRedirect });
+  
   const response = await axiosInstance.post('/api/customer/login', {
     email,
     password,
@@ -182,17 +184,48 @@ export async function customerLogin(
   });
 
   const data = response.data;
+  console.log('🔍 Login response received', {
+    success: data.success,
+    hasToken: !!data.token,
+    hasUser: !!data.user,
+    tokenLength: data.token ? data.token.length : 0
+  });
 
   if (data.success && data.token && data.user) {
-    // Store token and user info
+    // CRITICAL: Store token and user info IMMEDIATELY
     localStorage.setItem('authToken', data.token);
     localStorage.setItem('customerUser', JSON.stringify(data.user));
     localStorage.setItem('loginTimestamp', Date.now().toString());
     
-    console.log('✅ Customer login successful - Token saved');
+    // Verify storage immediately
+    const savedToken = localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('customerUser');
+    
+    console.log('✅ Customer login - Token storage verification:', {
+      tokenSaved: !!savedToken,
+      tokenMatches: savedToken === data.token,
+      userSaved: !!savedUser,
+      tokenLength: savedToken ? savedToken.length : 0
+    });
+    
+    if (!savedToken || savedToken !== data.token) {
+      console.error('❌ CRITICAL: Token not saved correctly!', {
+        expectedLength: data.token.length,
+        actualLength: savedToken ? savedToken.length : 0
+      });
+      throw new Error('Failed to save authentication token');
+    }
+    
+    console.log('✅ Customer login successful - Token saved and verified');
     return data;
   }
 
+  console.error('❌ Login failed - invalid response:', {
+    success: data.success,
+    hasToken: !!data.token,
+    hasUser: !!data.user,
+    message: data.message
+  });
   throw new Error(data.message || 'Login failed');
 }
 
@@ -217,12 +250,42 @@ export async function customerLogout(): Promise<void> {
  * Check customer session
  */
 export async function checkCustomerSession(): Promise<SessionResponse> {
+  // Verify token exists before making request
+  const token = localStorage.getItem('authToken');
+  console.log('🔍 checkCustomerSession called', {
+    tokenExists: !!token,
+    tokenLength: token ? token.length : 0,
+    timestamp: new Date().toISOString()
+  });
+  
+  if (!token) {
+    console.warn('⚠️ checkCustomerSession: No token in localStorage, returning unauthenticated');
+    return { success: false, authenticated: false };
+  }
+  
   try {
+    console.log('🔍 Making check-session request with axiosInstance');
     const response = await axiosInstance.get('/api/customer/check-session');
+    console.log('✅ check-session response received:', {
+      authenticated: response.data?.authenticated,
+      hasUser: !!response.data?.user
+    });
     return response.data;
   } catch (error: any) {
+    console.error('❌ checkCustomerSession error:', {
+      status: error.response?.status,
+      message: error.message,
+      responseData: error.response?.data,
+      config: error.config ? {
+        url: error.config.url,
+        method: error.config.method,
+        headers: Object.keys(error.config.headers || {})
+      } : null
+    });
+    
     if (error.response?.status === 401 || error.response?.status === 403) {
       // Token expired or invalid
+      console.warn('⚠️ Token expired or invalid, clearing auth data');
       localStorage.removeItem('authToken');
       localStorage.removeItem('customerUser');
       localStorage.removeItem('loginTimestamp');

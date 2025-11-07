@@ -21,29 +21,59 @@ const axiosInstance: AxiosInstance = axios.create({
 // ====================== REQUEST INTERCEPTOR ======================
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    console.log('🔍 Axios Interceptor running');
+    // CRITICAL: Always log to verify interceptor is running
+    console.log('🔍 Axios Interceptor running', {
+      url: config.url,
+      method: config.method?.toUpperCase(),
+      hasBaseURL: !!config.baseURL,
+      fullURL: config.url ? `${config.baseURL || ''}${config.url}` : 'unknown'
+    });
+    
     const token = localStorage.getItem('authToken');
-    console.log('✅ Token found in localStorage:', !!token);
-    console.log('✅ Token length:', token ? token.length : 0);
-    console.log('🔍 Request URL:', config.url);
-    console.log('🔍 Request method:', config.method);
+    console.log('🔍 Token check:', {
+      tokenExists: !!token,
+      tokenLength: token ? token.length : 0,
+      tokenPreview: token ? `${token.substring(0, 20)}...` : 'NONE',
+      localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
+    });
 
-    // ✅ Attach Authorization header if token exists
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Added Authorization header:', `Bearer ${token.substring(0, 30)}...`);
+    // ✅ CRITICAL: Attach Authorization header if token exists
+    if (token) {
+      // Ensure headers object exists
+      if (!config.headers) {
+        config.headers = {} as any;
+      }
+      
+      // Set Authorization header (axios handles case-insensitivity internally)
+      config.headers['Authorization'] = `Bearer ${token}`;
+      
+      console.log('✅ Authorization header added:', {
+        headerValue: `Bearer ${token.substring(0, 30)}...`,
+        headerLength: `Bearer ${token}`.length,
+        configHeaders: Object.keys(config.headers || {})
+      });
     } else {
-      console.warn('⚠️ No token found in localStorage');
-      console.warn('⚠️ localStorage keys:', Object.keys(localStorage));
+      console.warn('⚠️ No token found - request will fail if endpoint requires auth', {
+        url: config.url,
+        localStorageKeys: Object.keys(localStorage)
+      });
     }
 
     // Allow sending credentials for cookies if backend supports it
     config.withCredentials = true;
 
+    // Log final config for debugging
+    console.log('🔍 Final request config:', {
+      url: config.url,
+      method: config.method,
+      hasAuthHeader: !!(config.headers && (config.headers['Authorization'] || config.headers['authorization'])),
+      withCredentials: config.withCredentials
+    });
+
     return config;
   },
   (error: AxiosError) => {
-    console.error('❌ Axios request error:', error);
+    console.error('❌ Axios request interceptor error:', error);
     return Promise.reject(error);
   }
 );

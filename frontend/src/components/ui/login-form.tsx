@@ -71,9 +71,10 @@ export function LoginForm({
         console.log(`Customer login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
         // Redirect based on table presence
         if (tableFromUrl) {
-          window.location.href = `/menu?table=${tableFromUrl}`;
+          window.location.href = `/customer/menu?table=${tableFromUrl}`;
         } else {
-          window.location.href = '/dashboard';
+          // ✅ FIX: Use correct route path
+          window.location.href = '/customer/dashboard';
         }
       }, delay);
       
