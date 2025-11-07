@@ -482,7 +482,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setLoading(true);
     try {
-      console.log('🔑 AuthContext: Checking session with JWT token');
+      // ⭐ CRITICAL: Verify token exists before calling checkCustomerSession
+      const tokenBeforeCall = localStorage.getItem('authToken');
+      console.log('🔑 AuthContext: Checking session with JWT token', {
+        tokenExists: !!tokenBeforeCall,
+        tokenLength: tokenBeforeCall?.length || 0
+      });
+      
+      if (!tokenBeforeCall) {
+        console.error('❌ CRITICAL: No token before checkCustomerSession call!');
+        setLoading(false);
+        setAuthenticated(false);
+        setUser(null);
+        return;
+      }
+      
       const data = await checkCustomerSession();
       
       if (data && data.authenticated && data.user) {

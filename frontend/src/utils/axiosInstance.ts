@@ -19,37 +19,57 @@ const axiosInstance: AxiosInstance = axios.create({
 });
 
 // ====================== REQUEST INTERCEPTOR ======================
+// ⭐ CRITICAL: This interceptor MUST run for ALL requests
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // ⭐ CRITICAL: Get token from localStorage
+    // ⭐ CRITICAL: Get token from localStorage FIRST
     const token = localStorage.getItem('authToken');
+    
+    // ⭐ CRITICAL: Log for check-session requests
+    if (config.url?.includes('check-session')) {
+      console.log('🔍🔍🔍 AXIOS INTERCEPTOR RUNNING FOR CHECK-SESSION 🔍🔍🔍');
+      console.log('Token exists:', !!token);
+      console.log('Token length:', token?.length || 0);
+    }
     
     // ⭐ CRITICAL: Always add Authorization header if token exists
     if (token) {
+      // CRITICAL: Set header - axios normalizes to lowercase internally but we set both
+      const authHeader = `Bearer ${token}`;
+      
       // Ensure headers object exists
       if (!config.headers) {
         config.headers = {} as any;
       }
       
-      // Set Authorization header - CRITICAL for authentication
-      const authHeader = `Bearer ${token}`;
-      config.headers['Authorization'] = authHeader;
-      config.headers = config.headers; // Ensure headers are properly set
+      // Set header - axios will normalize 'Authorization' to 'authorization' internally
+      // But we set both to be safe
+      config.headers.Authorization = authHeader;
+      config.headers.authorization = authHeader;
       
-      // Log for debugging (only for check-session to reduce noise)
+      // ALWAYS log for check-session to debug
       if (config.url?.includes('check-session')) {
-        console.log('🔑 Axios: Adding Authorization header to check-session', {
+        console.log('🔑🔑🔑 AUTHORIZATION HEADER SET 🔑🔑🔑', {
+          url: config.url,
           hasToken: !!token,
           tokenLength: token.length,
-          url: config.url
+          tokenPreview: token.substring(0, 30) + '...',
+          headerSet: !!(config.headers.Authorization || config.headers.authorization),
+          headerValue: (config.headers.Authorization || config.headers.authorization)?.substring(0, 40) + '...',
+          allHeaderKeys: Object.keys(config.headers || {})
         });
       }
     } else {
-      // Only warn for protected routes
-      if (config.url?.includes('check-session') || config.url?.includes('/customer/')) {
-        console.warn('⚠️ Axios: No token found for protected route', {
+      // ALWAYS error for check-session if no token
+      if (config.url?.includes('check-session')) {
+        console.error('❌❌❌ NO TOKEN IN LOCALSTORAGE FOR CHECK-SESSION ❌❌❌', {
           url: config.url,
-          localStorageKeys: Object.keys(localStorage)
+          localStorageKeys: Object.keys(localStorage),
+          localStorageContent: {
+            authToken: localStorage.getItem('authToken') ? 'EXISTS' : 'MISSING',
+            customerUser: localStorage.getItem('customerUser') ? 'EXISTS' : 'MISSING',
+            loginTimestamp: localStorage.getItem('loginTimestamp')
+          }
         });
       }
     }

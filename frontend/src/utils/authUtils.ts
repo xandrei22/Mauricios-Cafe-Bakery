@@ -357,25 +357,38 @@ export async function customerLogout(): Promise<void> {
  * Check customer session
  */
 export async function checkCustomerSession(): Promise<SessionResponse> {
-  // Verify token exists before making request
+  // ⭐ CRITICAL: Verify token exists before making request
   const token = localStorage.getItem('authToken');
-  console.log('🔍 checkCustomerSession called', {
+  
+  console.log('🔍🔍🔍 checkCustomerSession CALLED 🔍🔍🔍', {
     tokenExists: !!token,
     tokenLength: token ? token.length : 0,
-    timestamp: new Date().toISOString()
+    tokenPreview: token ? token.substring(0, 30) + '...' : 'NONE',
+    timestamp: new Date().toISOString(),
+    localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
   });
   
   if (!token) {
-    console.warn('⚠️ checkCustomerSession: No token in localStorage, returning unauthenticated');
+    console.error('❌❌❌ checkCustomerSession: NO TOKEN IN LOCALSTORAGE ❌❌❌');
+    console.error('localStorage contents:', {
+      allKeys: Object.keys(localStorage),
+      authToken: localStorage.getItem('authToken'),
+      customerUser: localStorage.getItem('customerUser'),
+      loginTimestamp: localStorage.getItem('loginTimestamp')
+    });
     return { success: false, authenticated: false };
   }
   
   try {
-    console.log('🔍 Making check-session request with axiosInstance');
+    console.log('🚀 Making check-session request with axiosInstance');
+    console.log('Token being used:', token.substring(0, 30) + '...');
+    
     const response = await axiosInstance.get('/api/customer/check-session');
-    console.log('✅ check-session response received:', {
+    
+    console.log('✅✅✅ check-session SUCCESS ✅✅✅', {
       authenticated: response.data?.authenticated,
-      hasUser: !!response.data?.user
+      hasUser: !!response.data?.user,
+      userEmail: response.data?.user?.email
     });
     return response.data;
   } catch (error: any) {
