@@ -56,7 +56,7 @@ export default function CustomerDasboard() {
       const newSocket = io(API_URL, {
         transports: ['polling', 'websocket'],
         path: '/socket.io',
-        withCredentials: true,
+        withCredentials: false, // JWT-only: No cookies needed
         timeout: 30000,
         forceNew: true,
         autoConnect: true
@@ -120,7 +120,7 @@ export default function CustomerDasboard() {
       
       const response = await fetch(`${API_URL}/api/customer/dashboard?customerId=${user.id}`, {
         method: 'GET',
-        credentials: 'include',
+        credentials: 'omit', // JWT-only: No cookies needed
         headers: headers
       });
       

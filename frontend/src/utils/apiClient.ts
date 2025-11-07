@@ -44,7 +44,7 @@ export async function authenticatedFetch(
   return fetch(url, {
     ...options,
     headers,
-    credentials: 'include', // Keep for desktop browsers
+    credentials: 'omit', // JWT-only: No cookies needed
   });
 }
 

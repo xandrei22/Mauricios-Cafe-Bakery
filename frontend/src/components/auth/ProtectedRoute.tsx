@@ -173,7 +173,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       
       const response = await fetch(sessionEndpoint, {
         method: 'GET',
-        credentials: 'include',
+        credentials: 'omit', // JWT-only: No cookies needed
         headers: headers
       });
       
