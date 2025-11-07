@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 // Parse MYSQL_URL if provided, otherwise use individual parameters
-// Parse MYSQL_URL if provided, otherwise use individual parameters
+// Works with both Render and Railway (both provide MYSQL_URL)
 let connectionConfig;
 
 if (process.env.MYSQL_URL) {
@@ -40,7 +40,7 @@ if (process.env.MYSQL_URL) {
         connectTimeout: 20000,
     };
 
-    console.log('✅ Using local .env configuration');
+    console.log('✅ Using individual DB_* environment variables');
 }
 
 // Create a connection pool for better performance
@@ -67,6 +67,11 @@ pool.getConnection()
             user: connectionConfig.user,
             hasPassword: !!connectionConfig.password
         });
+        console.error('🔍 MYSQL_URL present:', !!process.env.MYSQL_URL);
+        if (!process.env.MYSQL_URL) {
+            console.error('💡 If using Railway or Render, ensure MYSQL_URL environment variable is set');
+        }
+        console.error('💡 Full error:', err);
     });
 
 // Create a wrapper object that provides both pool methods and backward compatibility
