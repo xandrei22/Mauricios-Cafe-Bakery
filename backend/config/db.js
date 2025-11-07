@@ -43,19 +43,25 @@ if (mysqlUrl) {
         });
     } catch (error) {
         console.error('❌ Failed to parse MySQL URL:', error.message);
-        console.error('💡 MySQL URL value (first 50 chars):', mysqlUrl ? .substring(0, 50));
+        console.error(
+            '💡 MySQL URL value (first 50 chars):',
+            mysqlUrl ? mysqlUrl.substring(0, 50) : '(undefined)'
+        );
         // Fall through to use individual variables
     }
 }
 
 // If MYSQL_URL parsing failed or not provided, try Railway variables first, then Render variables
 if (!connectionConfig) {
-    // ✅ Railway uses: MYSQLHOST, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE, MYSQLPORT
-    const railwayHost = process.env.MYSQLHOST;
-    const railwayUser = process.env.MYSQLUSER;
-    const railwayPassword = process.env.MYSQLPASSWORD;
-    const railwayDatabase = process.env.MYSQLDATABASE;
-    const railwayPort = process.env.MYSQLPORT;
+    // ✅ Railway provides BOTH formats:
+    //   - With underscores: MYSQL_DATABASE, MYSQL_PORT, MYSQL_USER, MYSQL_ROOT_PASSWORD
+    //   - Without underscores: MYSQLDATABASE, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD, MYSQLHOST
+    // Check both formats for maximum compatibility
+    const railwayHost = process.env.MYSQLHOST || process.env.MYSQL_HOST;
+    const railwayUser = process.env.MYSQLUSER || process.env.MYSQL_USER || process.env.MYSQL_ROOT_USER;
+    const railwayPassword = process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.MYSQL_ROOT_PASSWORD;
+    const railwayDatabase = process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE;
+    const railwayPort = process.env.MYSQLPORT || process.env.MYSQL_PORT;
 
     // ✅ Render uses: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT
     const renderHost = process.env.DB_HOST;
@@ -79,8 +85,15 @@ if (!connectionConfig) {
         connectTimeout: 20000,
     };
 
-    if (railwayHost) {
+    if (railwayHost || railwayDatabase) {
         console.log('✅ Using Railway MYSQL* environment variables');
+        console.log('📊 Railway variables found:', {
+            hasHost: !!railwayHost,
+            hasUser: !!railwayUser,
+            hasPassword: !!railwayPassword,
+            hasDatabase: !!railwayDatabase,
+            hasPort: !!railwayPort
+        });
     } else if (renderHost) {
         console.log('✅ Using Render DB_* environment variables');
     } else {
@@ -115,10 +128,11 @@ pool.getConnection()
         console.error('🔍 Environment variables check:');
         console.error('  - MYSQL_URL:', process.env.MYSQL_URL ? 'SET' : 'NOT SET');
         console.error('  - MYSQL_PUBLIC_URL (Railway external):', process.env.MYSQL_PUBLIC_URL ? 'SET' : 'NOT SET');
-        console.error('  - MYSQLHOST (Railway):', process.env.MYSQLHOST ? 'SET' : 'NOT SET');
-        console.error('  - MYSQLUSER (Railway):', process.env.MYSQLUSER ? 'SET' : 'NOT SET');
-        console.error('  - MYSQLDATABASE (Railway):', process.env.MYSQLDATABASE ? 'SET' : 'NOT SET');
-        console.error('  - MYSQLPORT (Railway):', process.env.MYSQLPORT ? 'SET' : 'NOT SET');
+        console.error('  - MYSQLHOST / MYSQL_HOST (Railway):', (process.env.MYSQLHOST || process.env.MYSQL_HOST) ? 'SET' : 'NOT SET');
+        console.error('  - MYSQLUSER / MYSQL_USER (Railway):', (process.env.MYSQLUSER || process.env.MYSQL_USER || process.env.MYSQL_ROOT_USER) ? 'SET' : 'NOT SET');
+        console.error('  - MYSQLPASSWORD / MYSQL_PASSWORD (Railway):', (process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD || process.env.MYSQL_ROOT_PASSWORD) ? 'SET' : 'NOT SET');
+        console.error('  - MYSQLDATABASE / MYSQL_DATABASE (Railway):', (process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE) ? 'SET' : 'NOT SET');
+        console.error('  - MYSQLPORT / MYSQL_PORT (Railway):', (process.env.MYSQLPORT || process.env.MYSQL_PORT) ? 'SET' : 'NOT SET');
         console.error('  - DB_HOST (Render):', process.env.DB_HOST ? 'SET' : 'NOT SET');
         console.error('  - DB_USER (Render):', process.env.DB_USER ? 'SET' : 'NOT SET');
         console.error('  - DB_NAME (Render):', process.env.DB_NAME ? 'SET' : 'NOT SET');
