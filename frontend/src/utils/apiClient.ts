@@ -5,7 +5,11 @@
  */
 
 export function getApiUrl(): string {
-  return import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL || 'https://mauricios-cafe-bakery.onrender.com';
+  } else {
+    return 'http://localhost:5001';
+  }
 }
 
 /**
@@ -44,7 +48,7 @@ export async function authenticatedFetch(
   return fetch(url, {
     ...options,
     headers,
-    credentials: 'omit', // JWT-only: No cookies needed
+    credentials: 'include', // Keep for desktop browsers
   });
 }
 
