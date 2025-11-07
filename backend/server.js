@@ -164,7 +164,9 @@ const corsOptions = {
         console.error('❌ CORS: Origin NOT allowed:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
-    credentials: false, // ✅ JWT-only mode: No cookies needed
+    // CRITICAL: Do NOT set credentials option - omit it completely
+    // This ensures Access-Control-Allow-Credentials header is NOT set at all
+    // Setting credentials: false causes cors() to set header to 'false' which is invalid
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // ✅ Must include Authorization
     exposedHeaders: ['Content-Type', 'Authorization'],
@@ -207,9 +209,9 @@ app.use((req, res, next) => {
 
     if (isAllowedOrigin(origin)) {
         // Apply CORS headers to ALL requests (not just preflight)
+        // NOTE: Access-Control-Allow-Credentials is NOT set (omitted = no cookies, JWT-only)
         res.header('Access-Control-Allow-Origin', origin || '*');
         res.header('Vary', 'Origin');
-        res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
@@ -247,8 +249,8 @@ app.use((req, res, next) => {
     // Helper function to set CORS headers
     const setCorsHeaders = () => {
         if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
+            // NOTE: Access-Control-Allow-Credentials is NOT set (omitted = no cookies, JWT-only)
             res.setHeader('Access-Control-Allow-Origin', res.locals.corsOrigin);
-            res.setHeader('Access-Control-Allow-Credentials', 'false');
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
             res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         }
@@ -288,8 +290,8 @@ app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (isAllowedOrigin(origin) && origin) {
         // Ensure CORS headers are set (cors() package might not set them for all responses)
+        // NOTE: Access-Control-Allow-Credentials is NOT set (omitted = no cookies, JWT-only)
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', 'false');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     }
@@ -301,9 +303,9 @@ app.use((req, res, next) => {
 app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
     const origin = req.headers.origin;
     if (isAllowedOrigin(origin)) {
+        // NOTE: Access-Control-Allow-Credentials is NOT set (omitted = no cookies, JWT-only)
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Vary', 'Origin');
-        res.header('Access-Control-Allow-Credentials', 'false'); // ✅ JWT-only: No cookies for API
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         if (req.method === 'OPTIONS') return res.sendStatus(204);
