@@ -21,57 +21,41 @@ const axiosInstance: AxiosInstance = axios.create({
 // ====================== REQUEST INTERCEPTOR ======================
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // CRITICAL: Always log to verify interceptor is running
-    console.log('🔍 Axios Interceptor running', {
-      url: config.url,
-      method: config.method?.toUpperCase(),
-      hasBaseURL: !!config.baseURL,
-      fullURL: config.url ? `${config.baseURL || ''}${config.url}` : 'unknown'
-    });
-    
+    // ⭐ CRITICAL: Get token from localStorage
     const token = localStorage.getItem('authToken');
-    console.log('🔍 Token check:', {
-      tokenExists: !!token,
-      tokenLength: token ? token.length : 0,
-      tokenPreview: token ? `${token.substring(0, 20)}...` : 'NONE',
-      localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
-    });
-
-    // ✅ CRITICAL: Attach Authorization header if token exists
+    
+    // ⭐ CRITICAL: Always add Authorization header if token exists
     if (token) {
       // Ensure headers object exists
       if (!config.headers) {
         config.headers = {} as any;
       }
       
-      // Set Authorization header - use both lowercase and capitalized versions to ensure it works
+      // Set Authorization header - CRITICAL for authentication
       const authHeader = `Bearer ${token}`;
       config.headers['Authorization'] = authHeader;
-      config.headers['authorization'] = authHeader; // Also set lowercase for compatibility
+      config.headers = config.headers; // Ensure headers are properly set
       
-      console.log('✅ Authorization header added:', {
-        headerValue: `Bearer ${token.substring(0, 30)}...`,
-        headerLength: authHeader.length,
-        configHeaders: Object.keys(config.headers || {}),
-        hasAuthHeader: !!(config.headers['Authorization'] || config.headers['authorization'])
-      });
+      // Log for debugging (only for check-session to reduce noise)
+      if (config.url?.includes('check-session')) {
+        console.log('🔑 Axios: Adding Authorization header to check-session', {
+          hasToken: !!token,
+          tokenLength: token.length,
+          url: config.url
+        });
+      }
     } else {
-      console.warn('⚠️ No token found - request will fail if endpoint requires auth', {
-        url: config.url,
-        localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
-      });
+      // Only warn for protected routes
+      if (config.url?.includes('check-session') || config.url?.includes('/customer/')) {
+        console.warn('⚠️ Axios: No token found for protected route', {
+          url: config.url,
+          localStorageKeys: Object.keys(localStorage)
+        });
+      }
     }
 
-    // Allow sending credentials for cookies if backend supports it
+    // Allow sending credentials
     config.withCredentials = true;
-
-    // Log final config for debugging
-    console.log('🔍 Final request config:', {
-      url: config.url,
-      method: config.method,
-      hasAuthHeader: !!(config.headers && (config.headers['Authorization'] || config.headers['authorization'])),
-      withCredentials: config.withCredentials
-    });
 
     return config;
   },

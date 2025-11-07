@@ -392,29 +392,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastSessionCheck, setLastSessionCheck] = useState<number>(0);
   
   const checkSession = useCallback(async () => {
-    // ⭐ CRITICAL FIX: Check if token exists BEFORE making any API calls
-    // Also wait a bit if we just logged in (to ensure token is saved)
-    const loginTimestampCheck = localStorage.getItem('loginTimestamp');
-    const isVeryRecentLogin = loginTimestampCheck && (Date.now() - parseInt(loginTimestampCheck)) < 5000; // 5 seconds
-    
+    // ⭐ CRITICAL: Get token - wait if recent login
     let token = localStorage.getItem('authToken');
+    const loginTimestampCheck = localStorage.getItem('loginTimestamp');
+    const isVeryRecentLogin = loginTimestampCheck && (Date.now() - parseInt(loginTimestampCheck)) < 10000; // 10 seconds
     
-    // If no token but recent login, wait a bit for token to be saved
+    // If no token but recent login, wait for it (up to 2 seconds)
     if (!token && isVeryRecentLogin) {
-      console.log('⏳ No token found but recent login - waiting for token to be saved...');
-      for (let i = 0; i < 10; i++) {
+      console.log('⏳ Recent login detected - waiting for token...');
+      for (let i = 0; i < 20; i++) {
         await new Promise(resolve => setTimeout(resolve, 100));
         token = localStorage.getItem('authToken');
         if (token) {
-          console.log(`✅ Token found after ${(i + 1) * 100}ms wait`);
+          console.log(`✅ Token found after ${(i + 1) * 100}ms`);
           break;
         }
       }
     }
     
+    // No token = not logged in
     if (!token) {
-      // No token = not logged in = no need to check session
-      console.log('ℹ️ AuthContext: No token found, skipping session check');
+      console.log('ℹ️ No token - user not logged in');
       setLoading(false);
       setAuthenticated(false);
       setUser(null);
