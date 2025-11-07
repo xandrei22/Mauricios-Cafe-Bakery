@@ -70,7 +70,7 @@ export function SignupForm({
           gender: gender || undefined,
           table: tableFromUrl || undefined 
         }),
-        credentials: "include",
+        credentials: "omit",
       });
       
       const data = await res.json();

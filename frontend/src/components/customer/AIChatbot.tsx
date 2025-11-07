@@ -165,7 +165,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/start`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
         });
@@ -202,7 +202,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/start`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
         });
@@ -220,7 +220,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/${activeSession}/message`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: outgoing })
         });
@@ -254,7 +254,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
         try {
           const startRes = await fetch(`${API_URL}/api/ai-chat/session/start`, {
             method: 'POST',
-            credentials: 'include',
+            credentials: 'omit',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
           });
@@ -265,7 +265,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
             try {
               const retryRes = await fetch(`${API_URL}/api/ai-chat/session/${activeSession}/message`, {
                 method: 'POST',
-                credentials: 'include',
+                credentials: 'omit',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: outgoing })
               });

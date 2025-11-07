@@ -96,7 +96,7 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
       });
 
       const url = `${basePath}/activity-logs?${params}`;
-      const response = await fetch(url, { credentials: 'include' });
+      const response = await fetch(url, { credentials: 'omit' });
 
       if (!response.ok) {
         throw new Error('Failed to fetch activity logs');
@@ -129,7 +129,7 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
       if (filters.end_date) params.append('end_date', filters.end_date);
 
       const response = await fetch(`${basePath}/activity-logs/stats?${params}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
 
       if (response.ok) {

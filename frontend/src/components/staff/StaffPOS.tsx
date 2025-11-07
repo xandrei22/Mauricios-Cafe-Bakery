@@ -83,7 +83,7 @@ const StaffPOS: React.FC = () => {
     try {
       // Fetch orders using staff endpoints
       const response = await fetch('/api/staff/orders', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       let allOrders: Order[] = [];
@@ -116,7 +116,7 @@ const StaffPOS: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ status, updatedBy: 'staff' }),
       });
 
@@ -135,7 +135,7 @@ const StaffPOS: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ 
           verifiedBy: 'staff', 
           paymentMethod 

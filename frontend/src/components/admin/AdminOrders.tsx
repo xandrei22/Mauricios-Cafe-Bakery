@@ -116,7 +116,7 @@ const AdminOrders: React.FC = () => {
           timeout: 30000,
           forceNew: true,
           autoConnect: true,
-          withCredentials: true
+          withCredentials: false
         });
         socketRef.current = socket;
 
@@ -125,7 +125,7 @@ const AdminOrders: React.FC = () => {
           try {
             // Use admin-specific endpoint
             const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-            const response = await fetch(`${API_URL}/api/admin/orders`, { credentials: 'include' });
+            const response = await fetch(`${API_URL}/api/admin/orders`, { credentials: 'omit' });
             if (response.ok) {
               const data = await response.json();
               if (data.success && isMounted) {
@@ -208,7 +208,7 @@ const AdminOrders: React.FC = () => {
     try {
       if (!silent) setLoading(true);
       // Use staff orders endpoint to ensure pending_verification orders and camelCase fields
-      const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'omit' });
       const data = response.ok ? await response.json() : null;
 
       if (data && data.success) {
@@ -275,7 +275,7 @@ const AdminOrders: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ status }),
       });
 
@@ -303,7 +303,7 @@ const AdminOrders: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ 
           verifiedBy: 'admin', 
           paymentMethod 
@@ -348,7 +348,7 @@ const AdminOrders: React.FC = () => {
           if (socketRef.current) {
             const silentRefetch = async () => {
               try {
-                const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'include' });
+                const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'omit' });
                 if (response.ok) {
                   const data = await response.json();
                   if (data.success) {
@@ -1145,3 +1145,4 @@ const AdminOrders: React.FC = () => {
 };
 
 export default AdminOrders; 
+

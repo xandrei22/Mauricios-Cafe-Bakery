@@ -78,7 +78,7 @@ const POSDashboard: React.FC = () => {
           timeout: 30000,
           forceNew: true,
           autoConnect: true,
-          withCredentials: true
+          withCredentials: false
         });
         setSocket(newSocket);
 
@@ -169,7 +169,7 @@ const POSDashboard: React.FC = () => {
     try {
       // Use role-appropriate endpoint
       const endpoint = isAdminRoute ? '/api/orders' : '/api/staff/orders';
-      const response = await fetch(endpoint, { credentials: 'include' });
+      const response = await fetch(endpoint, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
         console.log('📋 Fetched orders:', data.orders.length, 'orders');
@@ -200,7 +200,7 @@ const POSDashboard: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/orders/stats`, { credentials: 'include' });
+      const response = await fetch(`/api/orders/stats`, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
         setStats({

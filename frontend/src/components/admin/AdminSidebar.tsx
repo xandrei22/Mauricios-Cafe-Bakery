@@ -45,7 +45,7 @@ const AdminSidebar: React.FC = () => {
     );
     if (result.isConfirmed) {
       try {
-        await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
+        await fetch('/api/admin/logout', { method: 'POST', credentials: 'omit' });
       } catch (error) {
         console.error('Logout error:', error);
       } finally {

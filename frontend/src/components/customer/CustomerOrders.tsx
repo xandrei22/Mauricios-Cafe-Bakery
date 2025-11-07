@@ -72,7 +72,7 @@ const CustomerOrders: React.FC = () => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const newSocket = io(API_URL, {
         transports: ['websocket', 'polling'],
-        withCredentials: true,
+        withCredentials: false,
         timeout: 30000,
         forceNew: true,
         autoConnect: true
@@ -227,7 +227,7 @@ const CustomerOrders: React.FC = () => {
             console.log('⚠️ No orders found via customer API, trying test endpoint...');
             // Try the test endpoint first
             try {
-              const testResponse = await fetch(`${API_URL}/api/customer/test-orders/${user.email}`, { credentials: 'include' });
+              const testResponse = await fetch(`${API_URL}/api/customer/test-orders/${user.email}`, { credentials: 'omit' });
               if (testResponse.ok) {
                 const testData = await testResponse.json();
                 console.log('  - Test endpoint response:', testData);
@@ -243,7 +243,7 @@ const CustomerOrders: React.FC = () => {
             
             // Try fetching all orders and filtering client-side as fallback
             try {
-              const altResponse = await fetch(`${API_URL}/api/orders`, { credentials: 'include' });
+              const altResponse = await fetch(`${API_URL}/api/orders`, { credentials: 'omit' });
               if (altResponse.ok) {
                 const altData = await altResponse.json();
                 if (altData.success) {
@@ -527,7 +527,7 @@ const CustomerOrders: React.FC = () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/feedback/check-order?order_id=${encodeURIComponent(orderId)}&customer_email=${encodeURIComponent(user?.email || '')}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -555,7 +555,7 @@ const CustomerOrders: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           customer_name: user.name || user.email,
           rating: feedbackRating,

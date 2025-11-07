@@ -55,7 +55,7 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -93,7 +93,7 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
   const fetchOrders = async () => {
     try {
       setRefreshing(true);
-      const response = await fetch(`${API_URL}/api/customer/orders/${customerEmail}`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/customer/orders/${customerEmail}`, { credentials: 'omit' });
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -378,3 +378,4 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
 };
 
 export default CustomerOrderTracking;
+

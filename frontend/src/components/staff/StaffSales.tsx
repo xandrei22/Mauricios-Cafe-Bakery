@@ -135,7 +135,7 @@ const StaffSales: React.FC = () => {
       }
 
       const response = await fetch(`/api/admin/sales?${params.toString()}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -171,7 +171,7 @@ const StaffSales: React.FC = () => {
       }
 
       const response = await fetch(`/api/admin/transactions/sales?${params}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -213,7 +213,7 @@ const StaffSales: React.FC = () => {
       console.log('Full URL:', `/api/admin/sales/download?${params}`);
 
       const response = await fetch(`/api/admin/sales/download?${params}`, {
-        credentials: 'include',
+        credentials: 'omit',
         method: 'GET'
       });
 

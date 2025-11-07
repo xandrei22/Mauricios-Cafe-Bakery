@@ -20,7 +20,7 @@ const CustomerEmailVerification: React.FC = () => {
         const checkAuthImmediately = async () => {
             try {
                 const response = await fetch(`${API_URL}/api/customer/profile`, {
-                    credentials: 'include'
+                    credentials: 'omit'
                 });
                 if (response.ok) {
                     console.log('✅ User already authenticated - redirecting to dashboard');
@@ -53,7 +53,7 @@ const CustomerEmailVerification: React.FC = () => {
             try {
                 console.log('🔍 Checking authentication status...');
                 const response = await fetch(`${API_URL}/api/customer/profile`, {
-                    credentials: 'include'
+                    credentials: 'omit'
                 });
                 console.log('🔍 Auth check response status:', response.status);
                 

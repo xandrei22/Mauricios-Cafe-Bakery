@@ -61,7 +61,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   const fetchUserEvents = async () => {
     try {
       const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -80,7 +80,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -187,7 +187,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       const res = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify(formData),
       });
       

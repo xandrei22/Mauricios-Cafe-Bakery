@@ -171,7 +171,7 @@ const AdminSales: React.FC = () => {
       }
 
       const response = await fetch(`/api/admin/sales?${params.toString()}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -198,7 +198,7 @@ const AdminSales: React.FC = () => {
         params.append('period', selectedPeriod);
       }
       const response = await fetch(`/api/admin/sales/events?${params.toString()}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -235,7 +235,7 @@ const AdminSales: React.FC = () => {
       console.log('Fetching transactions from:', url);
       
       const response = await fetch(url, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       console.log('Response status:', response.status);
@@ -287,7 +287,7 @@ const AdminSales: React.FC = () => {
       console.log('Full URL:', `${endpoint}?${params}`);
 
       const response = await fetch(`${endpoint}?${params}`, {
-        credentials: 'include',
+        credentials: 'omit',
         method: 'GET'
       });
 
@@ -348,7 +348,7 @@ const AdminSales: React.FC = () => {
       console.log('Exporting transaction details with params:', params.toString());
       
       const response = await fetch(`/api/admin/sales/download?${params.toString()}`, {
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       if (!response.ok) {
@@ -1244,7 +1244,7 @@ const AdminSales: React.FC = () => {
                                         headers: {
                                           'Content-Type': 'application/json',
                                         },
-                                        credentials: 'include',
+                                        credentials: 'omit',
                                         body: JSON.stringify({ amount_to_be_paid: newAmount })
                                       });
                                       
@@ -1336,7 +1336,7 @@ const AdminSales: React.FC = () => {
                                         headers: {
                                           'Content-Type': 'application/json',
                                         },
-                                        credentials: 'include',
+                                        credentials: 'omit',
                                         body: JSON.stringify({ amount_paid: newAmount })
                                       });
                                       
@@ -1419,7 +1419,7 @@ const AdminSales: React.FC = () => {
                                       headers: {
                                         'Content-Type': 'application/json',
                                       },
-                                      credentials: 'include',
+                                      credentials: 'omit',
                                       body: JSON.stringify({ status: newStatus })
                                     });
                                     

@@ -57,7 +57,7 @@ const AdminMenu: React.FC = () => {
     try {
       setLoading(true);
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/menu`, { credentials: 'include' });
+      const response = await fetch(`${API_URL}/api/menu`, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
         // Ensure proper type conversion for numeric fields
@@ -112,7 +112,7 @@ const AdminMenu: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(productData),
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       const data = await response.json();
@@ -145,7 +145,7 @@ const AdminMenu: React.FC = () => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/menu/${id}`, {
         method: 'DELETE',
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       const data = await response.json();
@@ -170,7 +170,7 @@ const AdminMenu: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ [field]: value }),
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       const data = await response.json();

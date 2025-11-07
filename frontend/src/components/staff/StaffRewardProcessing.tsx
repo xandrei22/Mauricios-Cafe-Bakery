@@ -47,7 +47,7 @@ const StaffRewardProcessing: React.FC = () => {
   const fetchPendingRedemptions = async () => {
     try {
       const response = await fetch(`${API_URL}/api/staff/reward-redemptions/pending`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -71,7 +71,7 @@ const StaffRewardProcessing: React.FC = () => {
 
     try {
       const response = await fetch(`${API_URL}/api/staff/reward-redemptions/search/${claimCode}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
 
       if (response.ok) {
@@ -102,7 +102,7 @@ const StaffRewardProcessing: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include'
+        credentials: 'omit'
       });
 
       if (response.ok) {

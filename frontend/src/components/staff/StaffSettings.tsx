@@ -32,7 +32,7 @@ const StaffSettings: React.FC = () => {
         try {
             setLoading(true);
             const response = await fetch(`${API_URL}/api/settings/staff/settings`, {
-                credentials: 'include'
+                credentials: 'omit'
             });
 
             if (response.ok) {
@@ -61,7 +61,7 @@ const StaffSettings: React.FC = () => {
             const response = await fetch(`${API_URL}/api/settings/staff/password/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
+                credentials: 'omit'
             });
             const data = await response.json();
             if (response.ok && data.success) {

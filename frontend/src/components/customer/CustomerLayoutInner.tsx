@@ -129,7 +129,7 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     );
     if (result.isConfirmed) {
       try {
-        await fetch('/api/customer/logout', { method: 'POST', credentials: 'include' });
+        await fetch('/api/customer/logout', { method: 'POST', credentials: 'omit' });
       } catch (error) {
         console.error('Logout error:', error);
       } finally {

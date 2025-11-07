@@ -56,7 +56,7 @@ const WorkingPOS: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch(`/api/staff/orders`, { credentials: 'include' });
+      const response = await fetch(`/api/staff/orders`, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
         const normalized = (data.orders || []).map((o: any) => ({

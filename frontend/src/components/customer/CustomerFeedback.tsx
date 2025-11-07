@@ -61,7 +61,7 @@ export default function CustomerFeedback() {
       checkCustomerOrders();
       
       // Initialize Socket.IO connection
-      const newSocket = io(API_URL, { transports: ['polling','websocket'], path: '/socket.io', withCredentials: true });
+      const newSocket = io(API_URL, { transports: ['polling','websocket'], path: '/socket.io', withCredentials: false });
       setSocket(newSocket);
 
       // Join customer room for real-time updates
@@ -92,7 +92,7 @@ export default function CustomerFeedback() {
     try {
       setCheckingOrders(true);
       const response = await fetch(`${API_URL}/api/feedback/check-orders?customer_email=${encodeURIComponent(user.email)}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -113,7 +113,7 @@ export default function CustomerFeedback() {
   const fetchFeedbacks = async () => {
     try {
       const response = await fetch(`${API_URL}/api/feedback`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -129,7 +129,7 @@ export default function CustomerFeedback() {
   const fetchMetrics = async () => {
     try {
       const response = await fetch(`${API_URL}/api/feedback/metrics`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();

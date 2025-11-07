@@ -105,7 +105,7 @@ const CustomerMenu: React.FC = () => {
       
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/guest/menu`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (!response.ok) {
@@ -147,7 +147,7 @@ const CustomerMenu: React.FC = () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/menu/categories`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -167,7 +167,7 @@ const CustomerMenu: React.FC = () => {
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -710,7 +710,7 @@ const CustomerMenu: React.FC = () => {
                 
                 response = await fetch('/api/customer/checkout', {
                   method: 'POST',
-                  credentials: 'include',
+                  credentials: 'omit',
                   body: formData,
                 });
               } else {
@@ -720,7 +720,7 @@ const CustomerMenu: React.FC = () => {
                   headers: {
                     'Content-Type': 'application/json',
                   },
-                  credentials: 'include',
+                  credentials: 'omit',
                   body: JSON.stringify(orderData),
                 });
               }
@@ -749,7 +749,7 @@ const CustomerMenu: React.FC = () => {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify(orderData),
               });
 

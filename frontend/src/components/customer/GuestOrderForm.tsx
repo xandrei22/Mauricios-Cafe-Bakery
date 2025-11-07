@@ -138,7 +138,7 @@ export default function GuestOrderForm({ cartItems, onOrderPlaced, onClose, tabl
 
       const response = await fetch(`${API_URL}/api/guest/checkout`, {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'omit',
         body: formData
       });
 

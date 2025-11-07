@@ -50,7 +50,7 @@ const AdminSettings: React.FC = () => {
         try {
             setLoading(true);
             const response = await fetch(`${API_URL}/api/settings/admin/settings`, {
-                credentials: 'include'
+                credentials: 'omit'
             });
 
             if (response.ok) {
@@ -83,7 +83,7 @@ const AdminSettings: React.FC = () => {
             const response = await fetch(`${API_URL}/api/settings/admin/username/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify({
                     newUsername: newUsername.trim(),
                     currentPassword: usernamePassword
@@ -118,7 +118,7 @@ const AdminSettings: React.FC = () => {
             const response = await fetch(`${API_URL}/api/settings/admin/email/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify({
                     newEmail: newEmail.trim(),
                     currentPassword: emailPassword
@@ -148,7 +148,7 @@ const AdminSettings: React.FC = () => {
             const response = await fetch(`${API_URL}/api/settings/admin/password/request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
+                credentials: 'omit'
             });
             const data = await response.json();
             if (response.ok && data.success) {

@@ -62,7 +62,7 @@ export default function AdminFeedback() {
   const fetchFeedbacks = async () => {
     try {
       const response = await fetch('/api/feedback', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -78,7 +78,7 @@ export default function AdminFeedback() {
   const fetchMetrics = async () => {
     try {
       const response = await fetch('/api/feedback/metrics', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -104,7 +104,7 @@ export default function AdminFeedback() {
       try {
         const response = await fetch(`/api/feedback/${feedbackId}`, {
           method: 'DELETE',
-          credentials: 'include'
+          credentials: 'omit'
         });
 
         if (response.ok) {

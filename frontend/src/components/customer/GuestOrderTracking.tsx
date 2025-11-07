@@ -160,7 +160,7 @@ const GuestOrderTracking: React.FC = () => {
     const s = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -199,12 +199,12 @@ const GuestOrderTracking: React.FC = () => {
           customerName: '',
           status: payload.status || 'pending',
           paymentStatus: payload.paymentStatus || 'unpaid',
-          paymentMethod: payload.paymentMethod || prev?.paymentMethod || 'cash',
-          orderTime: prev?.orderTime || new Date().toISOString(),
-          estimatedReadyTime: prev?.estimatedReadyTime || '',
-          totalPrice: prev?.totalPrice || 0,
-          tableNumber: prev?.tableNumber ?? null,
-          customerEmail: prev?.customerEmail || ''
+          paymentMethod: (payload as any).paymentMethod || (prev as any)?.paymentMethod || 'cash',
+          orderTime: (prev as any)?.orderTime || new Date().toISOString(),
+          estimatedReadyTime: (prev as any)?.estimatedReadyTime || '',
+          totalPrice: (prev as any)?.totalPrice || 0,
+          tableNumber: (prev as any)?.tableNumber ?? null,
+          customerEmail: (prev as any)?.customerEmail || ''
         } as Order;
         
         const updatedOrder = {
@@ -602,3 +602,4 @@ const GuestOrderTracking: React.FC = () => {
 };
 
 export default GuestOrderTracking;
+

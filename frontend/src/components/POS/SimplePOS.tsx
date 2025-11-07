@@ -69,7 +69,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 		const newSocket = io(API_URL, {
 			transports: ['polling', 'websocket'],
 			path: '/socket.io',
-			withCredentials: true,
+			withCredentials: false,
 			timeout: 30000,
 			forceNew: true,
 			autoConnect: true,
@@ -191,7 +191,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				credentials: 'include',
+				credentials: 'omit',
 				body: JSON.stringify(orderData),
 			});
 

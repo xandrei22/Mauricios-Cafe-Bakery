@@ -38,7 +38,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, { credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, { credentials: 'omit' });
       const data = await res.json();
       if (res.ok && data.success) {
         const pendingEvents = data.events.filter((event: any) => event.status === 'pending');
@@ -137,7 +137,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
       // Prefer polling first to avoid early WS-close errors, then upgrade
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -290,7 +290,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include session cookies for authentication
+        credentials: 'omit', // Include session cookies for authentication
         body: JSON.stringify(orderData),
       });
 

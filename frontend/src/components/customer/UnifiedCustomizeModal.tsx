@@ -148,7 +148,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
       try {
         // Use only the global ingredients endpoint
         const response = await fetch(`${API_BASE}/api/menu/ingredients`, {
-          credentials: 'include'
+          credentials: 'omit'
         });
         
         if (response.ok) {
@@ -245,7 +245,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     const fetchItemAllowedIngredients = async () => {
       try {
         if (!item?.id) return setFallbackOptions();
-        const res = await fetch(`${API_BASE}/api/menu/items/${item.id}/ingredients`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE}/api/menu/items/${item.id}/ingredients`, { credentials: 'omit' });
         if (!res.ok) return setFallbackOptions();
         const data = await res.json();
         if (!data?.success || !Array.isArray(data.ingredients)) return setFallbackOptions();
@@ -313,7 +313,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify(requestBody)
       });
       

@@ -167,7 +167,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       const response = await fetch(`${API_URL}/api/upload/menu-image`, {
         method: 'POST',
         body: uploadFormData,
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       if (response.ok) {

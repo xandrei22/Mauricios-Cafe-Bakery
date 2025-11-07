@@ -130,7 +130,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ 
           paymentMethod: selectedOrder?.paymentMethod,
           verifiedBy: 'admin',

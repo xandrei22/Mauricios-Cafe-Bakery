@@ -116,7 +116,7 @@ const StaffDashboard: React.FC = () => {
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
       const response = await fetch(`${API_URL}/api/staff/dashboard/staff-performance?period=${period}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -193,7 +193,7 @@ const StaffDashboard: React.FC = () => {
     try {
       // Fetch sales data - use admin endpoints for consistency
       const salesResponse = await fetch(`${API_URL}/api/admin/dashboard/sales`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let salesData = null;
       if (salesResponse.ok) {
@@ -228,7 +228,7 @@ const StaffDashboard: React.FC = () => {
 
       // Fetch ingredients usage data - use admin endpoints for consistency
       const ingredientsResponse = await fetch('/api/admin/dashboard/ingredients', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let ingredientsData = null;
       if (ingredientsResponse.ok) {
@@ -257,7 +257,7 @@ const StaffDashboard: React.FC = () => {
 
       // Fetch menu items data - use admin endpoints for consistency
       const menuItemsResponse = await fetch('/api/admin/dashboard/menu-items', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let menuItemsData = null;
       if (menuItemsResponse.ok) {
@@ -361,7 +361,7 @@ const StaffDashboard: React.FC = () => {
       
       // Fetch dashboard data - use admin endpoints for consistency
       const staffResponse = await fetch(`${API_URL}/api/admin/dashboard`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (staffResponse.status === 401) {
@@ -461,7 +461,7 @@ const StaffDashboard: React.FC = () => {
       socket = io(API_URL, {
         transports: ['polling', 'websocket'],
         path: '/socket.io',
-        withCredentials: true,
+        withCredentials: false,
         timeout: 30000,
         forceNew: true,
         autoConnect: true

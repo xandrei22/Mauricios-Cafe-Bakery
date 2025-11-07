@@ -105,7 +105,7 @@ const CustomerLoyalty: React.FC = () => {
       const newSocket = io(API_URL, {
         transports: ['polling', 'websocket'],
         path: '/socket.io',
-        withCredentials: true,
+        withCredentials: false,
         timeout: 30000,
         forceNew: true,
         autoConnect: true,
@@ -227,10 +227,10 @@ const CustomerLoyalty: React.FC = () => {
       const API_URL = getApiUrl();
 
       const [pointsRes, rewardsRes, historyRes, pointsHistoryRes] = await Promise.all([
-        fetch(`${API_URL}/api/customers/${customerId}/loyalty`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/loyalty/available-rewards/${customerId}`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/loyalty/redemption-history/${customerId}`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/customers/${customerId}/points-earned-history`, { credentials: 'include' })
+        fetch(`${API_URL}/api/customers/${customerId}/loyalty`, { credentials: 'omit' }),
+        fetch(`${API_URL}/api/loyalty/available-rewards/${customerId}`, { credentials: 'omit' }),
+        fetch(`${API_URL}/api/loyalty/redemption-history/${customerId}`, { credentials: 'omit' }),
+        fetch(`${API_URL}/api/customers/${customerId}/points-earned-history`, { credentials: 'omit' })
       ]);
 
       if (pointsRes.ok && rewardsRes.ok && historyRes.ok && pointsHistoryRes.ok) {
@@ -312,7 +312,7 @@ const CustomerLoyalty: React.FC = () => {
       const res = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           customerId,
           rewardId: reward.id,
@@ -892,3 +892,4 @@ const CustomerLoyalty: React.FC = () => {
 };
 
 export default CustomerLoyalty;
+

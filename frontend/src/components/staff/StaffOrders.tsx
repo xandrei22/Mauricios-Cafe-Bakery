@@ -62,7 +62,7 @@ const StaffOrders: React.FC = () => {
     fetchOrders();
     // live updates like admin
     const socket = io(API_URL, {
-      withCredentials: true,
+      withCredentials: false,
       transports: ['websocket', 'polling']
     });
     socket.emit('join-staff-room');
@@ -86,7 +86,7 @@ const StaffOrders: React.FC = () => {
     try {
       if (!silent) setLoading(true);
       const response = await fetch(`${API_URL}/api/staff/orders`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -124,7 +124,7 @@ const StaffOrders: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({ status }),
       });
 

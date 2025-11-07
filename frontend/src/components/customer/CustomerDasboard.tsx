@@ -189,7 +189,7 @@ export default function CustomerDasboard() {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/menu/popular?limit=5`, {
         method: 'GET',
-        credentials: 'include',
+        credentials: 'omit',
         headers: {
           'Content-Type': 'application/json',
         }
@@ -213,7 +213,7 @@ export default function CustomerDasboard() {
       if (!user?.id) return;
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/loyalty/available-rewards/${user.id}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (!response.ok) {
         // 401 or any error -> hide section by clearing items
@@ -278,7 +278,7 @@ export default function CustomerDasboard() {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           customerId: user.id,
           rewardId: item.id,

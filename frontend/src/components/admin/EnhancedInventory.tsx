@@ -152,7 +152,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/admin/inventory', { credentials: 'include' });
+      const response = await fetch('/api/admin/inventory', { credentials: 'omit' });
       
       if (!response.ok) {
         throw new Error('Failed to fetch inventory data');
@@ -197,7 +197,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
 
   const fetchTransactions = async (page: number = txPage) => {
     try {
-      const res = await fetch(`/api/inventory/transactions?group=1&page=${page}&limit=${txLimit}`, { credentials: 'include' });
+      const res = await fetch(`/api/inventory/transactions?group=1&page=${page}&limit=${txLimit}`, { credentials: 'omit' });
       if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
@@ -210,7 +210,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
   // Fetch categories separately - REMOVED: Using predefined categories only
   // const fetchCategories = async () => {
   //   try {
-  //     const response = await fetch('/api/admin/inventory/categories', { credentials: 'include' });
+  //     const response = await fetch('/api/admin/inventory/categories', { credentials: 'omit' });
   //     if (response.ok) {
   //       const data = await response.json();
   //       if (data.success) {
@@ -311,7 +311,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
       const response = await fetch('/api/admin/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           name: addForm.name,
           category: addForm.category,
@@ -362,7 +362,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
     try {
       const response = await fetch(`/api/admin/inventory/${id}`, {
         method: 'DELETE',
-        credentials: 'include'
+        credentials: 'omit'
       });
 
       if (response.ok) {
@@ -385,7 +385,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
       const response = await fetch(`/api/admin/inventory/${editForm.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           name: editForm.name,
           category: editForm.category,
@@ -451,7 +451,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify({
           visible_in_customization: !currentVisibility
         })
@@ -489,7 +489,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
 
       const response = await fetch('/api/admin/inventory/bulk', {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'omit',
         body: formDataToSend
       });
 

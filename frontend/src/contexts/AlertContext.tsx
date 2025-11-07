@@ -58,11 +58,11 @@ export const AlertProvider: React.FC<AlertProviderProps> = ({ children }) => {
       const API_URL = getApiUrl();
       
       // Check if user is staff or admin by trying staff endpoint first
-      let response = await fetch(`${API_URL}/api/staff/low-stock/alert-status`, { credentials: 'include' });
+      let response = await fetch(`${API_URL}/api/staff/low-stock/alert-status`, { credentials: 'omit' });
       
       // If staff endpoint fails with 500 or other error, try admin endpoint
       if (!response.ok && response.status !== 500) {
-        response = await fetch(`${API_URL}/api/low-stock/alert-status`, { credentials: 'include' });
+        response = await fetch(`${API_URL}/api/low-stock/alert-status`, { credentials: 'omit' });
       }
       
       if (response.ok) {

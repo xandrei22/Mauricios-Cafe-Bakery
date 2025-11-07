@@ -31,7 +31,7 @@ const AdminLoyaltySettings: React.FC = () => {
         setLoading(true);
         try {
             const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
-                credentials: 'include'
+                credentials: 'omit'
             });
             if (res.ok) {
                 const data = await res.json();
@@ -68,7 +68,7 @@ const AdminLoyaltySettings: React.FC = () => {
             const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify({ settings: settingsToUpdate })
             });
             const responseData = await res.json();
@@ -102,7 +102,7 @@ const AdminLoyaltySettings: React.FC = () => {
             const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify({ settings: { [settingKey]: newValue } })
             });
             const responseData = await res.json();

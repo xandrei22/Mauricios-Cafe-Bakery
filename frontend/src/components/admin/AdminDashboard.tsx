@@ -125,7 +125,7 @@ const AdminDashboard: React.FC = () => {
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
       const response = await fetch(`/api/admin/dashboard/staff-performance?period=${period}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -209,7 +209,7 @@ const AdminDashboard: React.FC = () => {
     try {
       // Fetch sales data
       const salesResponse = await fetch('/api/admin/dashboard/sales', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let salesData = null;
       if (salesResponse.ok) {
@@ -244,7 +244,7 @@ const AdminDashboard: React.FC = () => {
 
       // Fetch ingredients usage data
       const ingredientsResponse = await fetch('/api/admin/dashboard/ingredients', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let ingredientsData = null;
       if (ingredientsResponse.ok) {
@@ -273,7 +273,7 @@ const AdminDashboard: React.FC = () => {
 
       // Fetch menu items data
       const menuItemsResponse = await fetch('/api/admin/dashboard/menu-items', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       let menuItemsData = null;
       if (menuItemsResponse.ok) {
@@ -351,7 +351,7 @@ const AdminDashboard: React.FC = () => {
       
       // Fetch unified metrics for 365 days (year view) for total revenue
       const metricsResponse = await fetch('/api/admin/metrics/summary?range=365d', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (metricsResponse.status === 401) {
@@ -365,7 +365,7 @@ const AdminDashboard: React.FC = () => {
         yearMetrics = await metricsResponse.json();
       } else {
         // Fallback to legacy dashboard endpoint to avoid blank screen
-        const legacyResponse = await fetch('/api/admin/dashboard', { credentials: 'include' });
+        const legacyResponse = await fetch('/api/admin/dashboard', { credentials: 'omit' });
         if (!legacyResponse.ok) {
           throw new Error('Failed to fetch metrics data');
         }
@@ -380,7 +380,7 @@ const AdminDashboard: React.FC = () => {
       }
 
       // Fetch today's metrics for daily revenue card
-      const todayResponse = await fetch('/api/admin/metrics/summary?range=today', { credentials: 'include' });
+      const todayResponse = await fetch('/api/admin/metrics/summary?range=today', { credentials: 'omit' });
       let todayMetrics: any = null;
       if (todayResponse.ok) {
         todayMetrics = await todayResponse.json();
@@ -445,7 +445,7 @@ const AdminDashboard: React.FC = () => {
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true

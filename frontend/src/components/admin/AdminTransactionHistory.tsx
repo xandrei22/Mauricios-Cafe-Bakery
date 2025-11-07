@@ -84,13 +84,13 @@ const AdminTransactionHistory: React.FC = () => {
       
       const [ordersRes, salesRes, paymentsRes] = await Promise.all([
         fetch(`/api/admin/transactions/orders?date=${dateFilter}&status=${statusFilter}`, {
-          credentials: 'include'
+          credentials: 'omit'
         }),
         fetch(`/api/admin/transactions/sales?date=${dateFilter}&status=${statusFilter}`, {
-          credentials: 'include'
+          credentials: 'omit'
         }),
         fetch(`/api/admin/transactions/payments?date=${dateFilter}&status=${statusFilter}`, {
-          credentials: 'include'
+          credentials: 'omit'
         })
       ]);
       

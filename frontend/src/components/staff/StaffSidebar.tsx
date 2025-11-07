@@ -47,7 +47,7 @@ const StaffSidebar: React.FC = () => {
         // Call staff logout API
         await fetch('/api/staff/logout', {
           method: 'POST',
-          credentials: 'include'
+          credentials: 'omit'
         });
       } catch (error) {
         console.error('Logout error:', error);
