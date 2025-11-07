@@ -107,29 +107,46 @@ const allowedOrigins = [
 
 function isAllowedOrigin(origin) {
     // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return true;
+    if (!origin) {
+        console.log('✅ CORS: No origin (mobile app/Postman) - allowed');
+        return true;
+    }
 
     try {
         const hostname = new URL(origin).hostname;
-        const isAllowed = (
-            allowedOrigins.includes(origin) ||
-            hostname.endsWith('.vercel.app') ||
-            hostname === 'vercel.app' ||
-            hostname.endsWith('.onrender.com') ||
-            hostname === 'localhost' ||
-            hostname === '127.0.0.1'
-        );
 
-        console.log('🔍 CORS Origin Check:', {
+        // Check if in allowed origins list
+        if (allowedOrigins.includes(origin)) {
+            console.log('✅ CORS: Origin in allowed list:', origin);
+            return true;
+        }
+
+        // Allow all Vercel URLs (production and preview)
+        if (hostname.endsWith('.vercel.app') || hostname.includes('vercel.app')) {
+            console.log('✅ CORS: Vercel origin allowed:', origin);
+            return true;
+        }
+
+        // Allow Render URLs
+        if (hostname.endsWith('.onrender.com') || hostname === 'onrender.com') {
+            console.log('✅ CORS: Render origin allowed:', origin);
+            return true;
+        }
+
+        // Allow localhost for development
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            console.log('✅ CORS: Localhost origin allowed:', origin);
+            return true;
+        }
+
+        console.log('❌ CORS: Origin NOT allowed:', {
             origin: origin,
             hostname: hostname,
-            isAllowed: isAllowed,
             allowedOrigins: allowedOrigins
         });
-
-        return isAllowed;
+        return false;
     } catch (error) {
-        console.error('❌ CORS Origin Check Error:', error);
+        console.error('❌ CORS Origin Check Error:', error.message);
         return false;
     }
 }
@@ -219,36 +236,20 @@ app.use((req, res, next) => {
     next();
 });
 
-// CRITICAL: Response interceptor to ensure CORS headers are ALWAYS on responses
+// CRITICAL: Middleware to ensure CORS headers are on ALL responses
+// This runs after routes but before response is sent
 app.use((req, res, next) => {
-    const originalJson = res.json;
-    const originalSend = res.send;
+    // Store original end function
     const originalEnd = res.end;
 
-    // Override res.json to always add CORS headers
-    res.json = function(body) {
-        if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
-            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
-            res.header('Access-Control-Allow-Credentials', 'false');
-        }
-        return originalJson.call(this, body);
-    };
-
-    // Override res.send to always add CORS headers
-    res.send = function(body) {
-        if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
-            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
-            res.header('Access-Control-Allow-Credentials', 'false');
-        }
-        return originalSend.call(this, body);
-    };
-
-    // Override res.end to always add CORS headers
+    // Override end to add CORS headers before sending
     res.end = function(chunk, encoding) {
+        // Add CORS headers if origin is allowed
         if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
-            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
-            res.header('Access-Control-Allow-Credentials', 'false');
+            res.setHeader('Access-Control-Allow-Origin', res.locals.corsOrigin);
+            res.setHeader('Access-Control-Allow-Credentials', 'false');
         }
+        // Call original end
         return originalEnd.call(this, chunk, encoding);
     };
 
@@ -311,7 +312,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Session configuration for user authentication with MySQL store
+// ✅ HYBRID SETUP: Sessions only for Google OAuth, JWT for everything else
+// Session configuration for Google OAuth (Passport.js requires sessions)
 // IMPORTANT: Reuse the main DB pool to avoid a second pool that may drop
 const sessionOptions = {
     clearExpired: true,
@@ -331,80 +333,38 @@ sessionStore.on('error', (error) => {
 });
 
 sessionStore.on('connect', () => {
-    console.log('Session store connected successfully');
+    console.log('✅ Session store connected (for Google OAuth only)');
 });
 
-// Build cookie config - mobile Safari requires no domain for cross-origin
-// IMPORTANT: NEVER set domain for cross-origin cookies (frontend Vercel → backend Render)
-// Mobile Safari's ITP (Intelligent Tracking Prevention) rejects cookies with explicit domains
-// Note: secure flag will be dynamically set based on request (see session middleware below)
+// Build cookie config for Google OAuth sessions only
+// Note: These cookies are only sent for /api/auth/google routes
 const cookieConfig = {
     httpOnly: true,
-    secure: true, // Must be true for sameSite: 'none' to work (will be set dynamically)
-    sameSite: 'none', // Required for cross-origin cookies (mobile Safari needs this)
-    maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    secure: process.env.NODE_ENV === 'production', // true in production (HTTPS)
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' for cross-origin in production
+    maxAge: 1000 * 60 * 60, // 1 hour (OAuth flow is quick)
     path: '/'
-        // Intentionally NOT setting domain - mobile Safari works better without it for cross-origin
+        // Intentionally NOT setting domain - works better for cross-origin
 };
 
-// Log warning if COOKIE_DOMAIN is set (but ignore it for cookie compatibility)
-if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim() !== '') {
-    console.log('⚠️ WARNING: COOKIE_DOMAIN is set to:', process.env.COOKIE_DOMAIN);
-    console.log('⚠️ This environment variable is being IGNORED for mobile Safari compatibility');
-    console.log('⚠️ Mobile Safari rejects cross-origin cookies with explicit domains');
-    console.log('⚠️ To remove this warning, delete COOKIE_DOMAIN from Render environment variables');
-} else {
-    console.log('✅ Cookie domain not set - optimal for mobile Safari cross-origin cookies');
-}
-
-app.use(session({
-    secret: process.env.SESSION_SECRET,
+// ✅ Create session middleware (but don't apply it globally)
+const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET || 'change-me-in-prod',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false, // Don't extend session on every request (OAuth is quick)
     proxy: true,
-    name: 'connect.sid', // Explicit session cookie name
+    name: 'connect.sid',
     cookie: cookieConfig
-}));
+});
 
-
-// Initialize Passport.js for authentication
+// ✅ Initialize Passport.js (needed for Google OAuth)
 passportConfig(passport, db);
 app.use(passport.initialize());
-app.use(passport.session());
+// NOTE: passport.session() will be applied ONLY to Google OAuth routes below
 
-// Session refresh middleware - extend session on each request
-app.use((req, res, next) => {
-    if (req.session) {
-        // Add debugging for mobile devices
-        const userAgent = req.headers['user-agent'] || '';
-        const isMobile = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-
-        if (isMobile) {
-            // Log cookie header to see if it's being sent
-            const cookieHeader = req.headers.cookie || 'NO COOKIES';
-            const hasSessionCookie = cookieHeader.includes('connect.sid');
-
-            console.log('📱 Mobile device detected:', {
-                userAgent: userAgent.substring(0, 100),
-                sessionId: req.sessionID,
-                hasSessionCookie: hasSessionCookie,
-                cookieHeader: cookieHeader.substring(0, 150),
-                hasAdminUser: !!req.session.adminUser,
-                hasStaffUser: !!req.session.staffUser,
-                hasCustomerUser: !!req.session.customerUser
-            });
-
-            // Cookies are optional now (JWT preferred); don't warn if missing
-        }
-
-        // JWT-only authentication: Admin, Staff, and Customer all use JWT tokens
-        // No session refresh needed - sessions are only used for Google OAuth flow
-        // If you see session data here, it's from Google OAuth or legacy sessions
-    }
-    next();
-});
+console.log('✅ Hybrid auth mode: JWT for normal logins, Sessions only for Google OAuth');
 
 // Debug endpoint for mobile session testing
 app.get('/api/debug/session', (req, res) => {
@@ -552,6 +512,10 @@ app.use((req, res, next) => {
     }
     next();
 });
+
+// ✅ Apply session middleware ONLY to Google OAuth routes
+// This allows Passport.js to work for OAuth while keeping JWT-only for normal logins
+app.use('/api/auth/google', sessionMiddleware, passport.session());
 
 // Register routes with /api prefix
 // IMPORTANT: authRoutes must come FIRST to handle login endpoints before specific routes
