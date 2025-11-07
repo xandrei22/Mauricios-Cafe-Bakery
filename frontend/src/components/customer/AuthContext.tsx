@@ -620,7 +620,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           currentPath.startsWith('/visit-mauricio') ||
           currentPath === '/privacy' ||
           currentPath === '/terms' ||
-          currentPath === '/accessibility') {
+          currentPath === '/accessibility' ||
+          currentPath.startsWith('/customer/forgot-password') ||
+          currentPath.startsWith('/customer/reset-password')) {
         console.log('ℹ️ Public page - skipping auth check');
         setLoading(false);
         return;
