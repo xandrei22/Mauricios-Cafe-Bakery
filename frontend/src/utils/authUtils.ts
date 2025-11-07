@@ -343,8 +343,9 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
     });
     return response.data;
   } catch (error: any) {
+    const errorStatus = error.response?.status;
     console.error('❌ checkCustomerSession error:', {
-      status: error.response?.status,
+      status: errorStatus,
       message: error.message,
       responseData: error.response?.data,
       config: error.config ? {
@@ -354,14 +355,21 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
       } : null
     });
     
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Token expired or invalid
+    // Only clear auth data if we actually had a token (don't clear if token was already missing)
+    if ((errorStatus === 401 || errorStatus === 403) && token) {
+      // Token expired or invalid - only clear if we had a token to begin with
       console.warn('⚠️ Token expired or invalid, clearing auth data');
       localStorage.removeItem('authToken');
       localStorage.removeItem('customerUser');
       localStorage.removeItem('loginTimestamp');
       return { success: false, authenticated: false };
     }
+    
+    // For other errors or if no token existed, just return unauthenticated
+    if (errorStatus === 401 || errorStatus === 403) {
+      return { success: false, authenticated: false };
+    }
+    
     throw error;
   }
 }

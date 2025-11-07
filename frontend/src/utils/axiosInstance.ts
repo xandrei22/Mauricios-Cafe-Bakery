@@ -44,18 +44,21 @@ axiosInstance.interceptors.request.use(
         config.headers = {} as any;
       }
       
-      // Set Authorization header (axios handles case-insensitivity internally)
-      config.headers['Authorization'] = `Bearer ${token}`;
+      // Set Authorization header - use both lowercase and capitalized versions to ensure it works
+      const authHeader = `Bearer ${token}`;
+      config.headers['Authorization'] = authHeader;
+      config.headers['authorization'] = authHeader; // Also set lowercase for compatibility
       
       console.log('✅ Authorization header added:', {
         headerValue: `Bearer ${token.substring(0, 30)}...`,
-        headerLength: `Bearer ${token}`.length,
-        configHeaders: Object.keys(config.headers || {})
+        headerLength: authHeader.length,
+        configHeaders: Object.keys(config.headers || {}),
+        hasAuthHeader: !!(config.headers['Authorization'] || config.headers['authorization'])
       });
     } else {
       console.warn('⚠️ No token found - request will fail if endpoint requires auth', {
         url: config.url,
-        localStorageKeys: Object.keys(localStorage)
+        localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
       });
     }
 
