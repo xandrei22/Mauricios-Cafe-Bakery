@@ -56,47 +56,9 @@ const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-// ✅ FIX: Proper Socket.IO CORS configuration
-const io = socketIo(server, {
-    cors: {
-        origin: function(origin, callback) {
-            // Allow requests with no origin (mobile apps, Postman, etc.)
-            if (!origin) return callback(null, true);
-
-            const allowedOrigins = [
-                process.env.FRONTEND_URL,
-                "https://mauricios-cafe-bakery.vercel.app",
-                "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
-                "https://mauricios-cafe-bakery.onrender.com",
-                "http://localhost:5173",
-                "http://127.0.0.1:5173"
-            ];
-
-            try {
-                const hostname = new URL(origin).hostname;
-                if (
-                    allowedOrigins.includes(origin) ||
-                    hostname.endsWith(".vercel.app") ||
-                    hostname.endsWith("vercel.app")
-                ) {
-                    console.log("✅ Socket.IO CORS allowed for origin:", origin);
-                    return callback(null, true);
-                }
-                console.error("❌ Socket.IO CORS blocked for origin:", origin);
-                return callback(new Error('Not allowed by CORS'));
-            } catch (err) {
-                console.error("❌ Socket.IO CORS error:", err);
-                return callback(new Error('Invalid origin'));
-            }
-        },
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
-
 const PORT = process.env.PORT || 5001;
 
-// ✅ FIX: Apply CORS middleware early
+// ✅ FIX: Apply CORS middleware early - MUST be defined before Socket.IO
 const allowedOrigins = [
     process.env.FRONTEND_URL,
     "https://mauricios-cafe-bakery.vercel.app",
@@ -113,28 +75,34 @@ function isAllowedOrigin(origin) {
     }
 
     try {
-        const hostname = new URL(origin).hostname;
+        const url = new URL(origin);
+        const hostname = url.hostname.toLowerCase();
 
-        // Check if in allowed origins list
-        if (allowedOrigins.includes(origin)) {
+        // Check if in allowed origins list (case-insensitive)
+        const normalizedOrigin = origin.toLowerCase();
+        if (allowedOrigins.some(allowed => allowed && allowed.toLowerCase() === normalizedOrigin)) {
             console.log('✅ CORS: Origin in allowed list:', origin);
             return true;
         }
 
-        // Allow all Vercel URLs (production and preview)
-        if (hostname.endsWith('.vercel.app') || hostname.includes('vercel.app')) {
+        // Allow all Vercel URLs (production and preview) - more permissive check
+        if (hostname.endsWith('.vercel.app') ||
+            hostname.includes('.vercel.app') ||
+            hostname === 'vercel.app') {
             console.log('✅ CORS: Vercel origin allowed:', origin);
             return true;
         }
 
         // Allow Render URLs
-        if (hostname.endsWith('.onrender.com') || hostname === 'onrender.com') {
+        if (hostname.endsWith('.onrender.com') ||
+            hostname.includes('.onrender.com') ||
+            hostname === 'onrender.com') {
             console.log('✅ CORS: Render origin allowed:', origin);
             return true;
         }
 
-        // Allow localhost for development
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // Allow localhost for development (any port)
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
             console.log('✅ CORS: Localhost origin allowed:', origin);
             return true;
         }
@@ -146,10 +114,32 @@ function isAllowedOrigin(origin) {
         });
         return false;
     } catch (error) {
-        console.error('❌ CORS Origin Check Error:', error.message);
+        console.error('❌ CORS Origin Check Error:', error.message, 'Origin:', origin);
+        // In case of error, be more permissive in production to avoid blocking legitimate requests
+        if (process.env.NODE_ENV === 'production') {
+            console.log('⚠️ CORS: Production mode - allowing origin due to parse error');
+            return true;
+        }
         return false;
     }
 }
+
+// ✅ FIX: Proper Socket.IO CORS configuration - MUST be after isAllowedOrigin function
+const io = socketIo(server, {
+    cors: {
+        origin: function(origin, callback) {
+            // Use the same origin check function for consistency
+            if (isAllowedOrigin(origin)) {
+                console.log("✅ Socket.IO CORS allowed for origin:", origin || 'NO ORIGIN');
+                return callback(null, true);
+            }
+            console.error("❌ Socket.IO CORS blocked for origin:", origin);
+            return callback(new Error('Not allowed by CORS'));
+        },
+        methods: ["GET", "POST"],
+        credentials: false // JWT-only, no cookies
+    }
+});
 
 const corsOptions = {
     origin: function(origin, callback) {
@@ -210,7 +200,10 @@ app.use((req, res, next) => {
     if (isAllowedOrigin(origin)) {
         // Apply CORS headers to ALL requests (not just preflight)
         // NOTE: Access-Control-Allow-Credentials is NOT set (omitted = no cookies, JWT-only)
-        res.header('Access-Control-Allow-Origin', origin || '*');
+        // CRITICAL: Only set origin if it exists, never use '*' as fallback
+        if (origin) {
+            res.header('Access-Control-Allow-Origin', origin);
+        }
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -226,6 +219,8 @@ app.use((req, res, next) => {
     } else if (origin) {
         console.error('❌ CORS: Origin not allowed:', origin);
         console.error('❌ CORS: Allowed origins:', allowedOrigins);
+        // Don't set CORS headers - browser will handle the CORS error
+        // But continue processing so we can log the attempt
     } else {
         // No origin header (same-origin request or mobile app)
         console.log('⚠️ CORS: No origin header (same-origin or mobile app)');
