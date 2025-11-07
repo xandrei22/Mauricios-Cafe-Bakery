@@ -544,11 +544,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Logout error:', err);
     }
     
-    // Clear storage (customerLogout already clears authToken, but we clear everything)
+    // Clear only auth-related storage (don't use localStorage.clear() as it clears everything)
     localStorage.removeItem('customerUser');
     localStorage.removeItem('loginTimestamp');
     localStorage.removeItem('authToken');
-    localStorage.clear();
+    // Don't use localStorage.clear() - it clears ALL data including cart, etc.
     sessionStorage.clear();
     setAuthenticated(false);
     setUser(null);
