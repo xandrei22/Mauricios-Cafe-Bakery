@@ -212,6 +212,46 @@ app.use((req, res, next) => {
         console.log('⚠️ CORS: No origin header (same-origin or mobile app)');
     }
 
+    // CRITICAL: Store origin in res.locals so we can apply headers in response interceptor
+    res.locals.corsOrigin = origin;
+    res.locals.isAllowedOrigin = isAllowedOrigin(origin);
+
+    next();
+});
+
+// CRITICAL: Response interceptor to ensure CORS headers are ALWAYS on responses
+app.use((req, res, next) => {
+    const originalJson = res.json;
+    const originalSend = res.send;
+    const originalEnd = res.end;
+
+    // Override res.json to always add CORS headers
+    res.json = function(body) {
+        if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
+            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
+            res.header('Access-Control-Allow-Credentials', 'false');
+        }
+        return originalJson.call(this, body);
+    };
+
+    // Override res.send to always add CORS headers
+    res.send = function(body) {
+        if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
+            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
+            res.header('Access-Control-Allow-Credentials', 'false');
+        }
+        return originalSend.call(this, body);
+    };
+
+    // Override res.end to always add CORS headers
+    res.end = function(chunk, encoding) {
+        if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
+            res.header('Access-Control-Allow-Origin', res.locals.corsOrigin);
+            res.header('Access-Control-Allow-Credentials', 'false');
+        }
+        return originalEnd.call(this, chunk, encoding);
+    };
+
     next();
 });
 
