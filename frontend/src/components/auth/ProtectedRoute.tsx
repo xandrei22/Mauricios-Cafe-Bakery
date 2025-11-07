@@ -80,7 +80,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                       headers.set('Authorization', `Bearer ${token}`);
                     }
                     const res = await fetch(sessionEndpoint, {
-                      credentials: 'include',
+                      credentials: 'omit', // JWT-only: No cookies needed
                       headers: headers
                     });
                     if (res.ok) {
@@ -133,7 +133,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       const token = localStorage.getItem('authToken');
       
       // CRITICAL: On mobile, token is REQUIRED (cookies don't work)
-      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      // Note: isMobile is already declared above on line 41
       if (isMobile && !token) {
         console.error(`❌ CRITICAL: Mobile device but NO TOKEN in localStorage for ${requiredRole}! Authentication will fail!`);
         console.error('❌ localStorage contents:', {
