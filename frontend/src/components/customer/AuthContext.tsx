@@ -2,7 +2,7 @@
 import { checkCustomerSession } from '../../utils/authUtils';
 
 interface User {
-  name: string;
+  name?: string;
   email: string;
   [key: string]: any;
 }
@@ -367,13 +367,10 @@ export function useAuth() {
 } 
   */
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { checkCustomerSession } from '../../utils/authUtils';
-import { getApiUrl } from '../../utils/apiConfig';
-
-const API_URL = getApiUrl();
+import { checkCustomerSession, customerLogout } from '../../utils/authUtils';
 
 interface User {
-  name: string;
+  name?: string;
   email: string;
   [key: string]: any;
 }
@@ -524,23 +521,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      if (token) {
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        };
-        await fetch(`${API_URL}/api/customer/logout`, {
-          method: 'POST',
-          credentials: 'omit',
-          headers
-        });
-      }
+      // Use customerLogout from authUtils which uses axiosInstance
+      await customerLogout();
     } catch (err) {
       console.error('Logout error:', err);
     }
     
-    // Clear storage
+    // Clear storage (customerLogout already clears authToken, but we clear everything)
     localStorage.removeItem('customerUser');
     localStorage.removeItem('loginTimestamp');
     localStorage.removeItem('authToken');

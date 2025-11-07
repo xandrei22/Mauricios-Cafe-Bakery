@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 import { Star, ShoppingBag, Monitor } from "lucide-react";
 import { useCart } from "../../contexts/CartContext";
 import { io, Socket } from 'socket.io-client';
+import axiosInstance from "../../utils/axiosInstance";
 
 interface DashboardData {
   loyaltyPoints: number;
@@ -106,65 +107,47 @@ export default function CustomerDasboard() {
       if (!user) return;
       
       setLoadingDashboard(true);
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       console.log('Fetching dashboard data for user ID:', user.id);
       
-      // Use the dedicated dashboard API endpoint with JWT token
-      const token = localStorage.getItem('authToken');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`${API_URL}/api/customer/dashboard?customerId=${user.id}`, {
-        method: 'GET',
-        credentials: 'omit', // JWT-only: No cookies needed
-        headers: headers
-      });
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/customer/dashboard?customerId=${user.id}`);
       
       console.log('Dashboard API response status:', response.status);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Dashboard API response data:', data);
-        
-        if (data.success) {
-          // Calculate points from last order
-          let pointsFromLastOrder = 0;
-          if (data.orders && data.orders.recent && data.orders.recent.length > 0) {
-            const lastOrder = data.orders.recent[0];
-            pointsFromLastOrder = Math.floor(lastOrder.total || 0);
-          }
-          
-          // Calculate orders this month
-          const currentMonth = new Date().getMonth();
-          const currentYear = new Date().getFullYear();
-          let ordersThisMonth = 0;
-          if (data.orders && data.orders.recent) {
-            ordersThisMonth = data.orders.recent.filter((order: any) => {
-              const orderDate = new Date(order.orderTime);
-              return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-            }).length;
-          }
-          
-          // Set dashboard data with real values
-          setDashboardData({
-            loyaltyPoints: data.loyalty?.points || 0,
-            pointsFromLastOrder,
-            totalOrders: data.orders?.total || 0,
-            ordersThisMonth,
-            currentOrder: data.orders?.current && data.orders.current.length > 0 ? data.orders.current[0] : null,
-            recentOrders: data.orders?.recent || [],
-            popularItems: data.favorites || []
-          });
-        } else {
-          throw new Error('Dashboard API returned unsuccessful response');
+      const data = response.data;
+      console.log('Dashboard API response data:', data);
+      
+      if (data.success) {
+        // Calculate points from last order
+        let pointsFromLastOrder = 0;
+        if (data.orders && data.orders.recent && data.orders.recent.length > 0) {
+          const lastOrder = data.orders.recent[0];
+          pointsFromLastOrder = Math.floor(lastOrder.total || 0);
         }
+        
+        // Calculate orders this month
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        let ordersThisMonth = 0;
+        if (data.orders && data.orders.recent) {
+          ordersThisMonth = data.orders.recent.filter((order: any) => {
+            const orderDate = new Date(order.orderTime);
+            return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
+          }).length;
+        }
+        
+        // Set dashboard data with real values
+        setDashboardData({
+          loyaltyPoints: data.loyalty?.points || 0,
+          pointsFromLastOrder,
+          totalOrders: data.orders?.total || 0,
+          ordersThisMonth,
+          currentOrder: data.orders?.current && data.orders.current.length > 0 ? data.orders.current[0] : null,
+          recentOrders: data.orders?.recent || [],
+          popularItems: data.favorites || []
+        });
       } else {
-        console.error('Dashboard API failed:', response.status, response.statusText);
-        throw new Error(`Dashboard API failed: ${response.status}`);
+        throw new Error('Dashboard API returned unsuccessful response');
       }
       
     } catch (error) {
@@ -186,22 +169,12 @@ export default function CustomerDasboard() {
 
   const fetchPopularItems = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/menu/popular?limit=5`, {
-        method: 'GET',
-        credentials: 'omit',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          console.log('Popular items data:', data.popular_items);
-          setPopularItems(data.popular_items);
-        }
-      } else {
-        console.error('Failed to fetch popular items:', response.status, response.statusText);
+      // Use axiosInstance for consistency (popular items endpoint may be public, but axiosInstance handles it)
+      const response = await axiosInstance.get('/api/menu/popular?limit=5');
+      const data = response.data;
+      if (data.success) {
+        console.log('Popular items data:', data.popular_items);
+        setPopularItems(data.popular_items);
       }
     } catch (error) {
       console.error('Error fetching popular items:', error);
@@ -211,16 +184,9 @@ export default function CustomerDasboard() {
   const fetchRedeemableItems = async () => {
     try {
       if (!user?.id) return;
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/loyalty/available-rewards/${user.id}`, {
-        credentials: 'omit'
-      });
-      if (!response.ok) {
-        // 401 or any error -> hide section by clearing items
-        setRedeemableItems([]);
-        return;
-      }
-      const data = await response.json();
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/loyalty/available-rewards/${user.id}`);
+      const data = response.data;
       const rewards = (data?.availableRewards || []) as any[];
       const normalized = rewards.map((r: any) => ({
         id: r.id,
@@ -229,9 +195,9 @@ export default function CustomerDasboard() {
         image: r.image_url || '/images/mc2.jpg'
       }));
       setRedeemableItems(normalized);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching redeemable items:', error);
-      // Hide section on error
+      // Hide section on error (401 or any error)
       setRedeemableItems([]);
     }
   };

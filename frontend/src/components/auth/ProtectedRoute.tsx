@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { getApiUrl } from '../../utils/apiConfig';
+import axiosInstance from '../../utils/axiosInstance';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,7 +31,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   const checkAuthentication = async () => {
     try {
-      const API_URL = getApiUrl();
       
       // FIRST: Check localStorage BEFORE any network call (critical for mobile)
       // On mobile devices (especially iOS), cookies DON'T work for cross-origin requests
@@ -50,13 +49,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         
         if (requiredRole === 'customer') {
           storedUser = localStorage.getItem('customerUser');
-          sessionEndpoint = `${API_URL}/api/customer/check-session`;
+          sessionEndpoint = '/api/customer/check-session';
         } else if (requiredRole === 'admin') {
           storedUser = localStorage.getItem('adminUser');
-          sessionEndpoint = `${API_URL}/api/admin/check-session`;
+          sessionEndpoint = '/api/admin/check-session';
         } else if (requiredRole === 'staff') {
           storedUser = localStorage.getItem('staffUser');
-          sessionEndpoint = `${API_URL}/api/staff/check-session`;
+          sessionEndpoint = '/api/staff/check-session';
         }
         
         if (storedUser) {
@@ -69,27 +68,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               setIsLoading(false);
               console.log(`✅ ProtectedRoute: Using localStorage FIRST for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
               
-              // Do session check in background
+              // Do session check in background using axiosInstance
               if (sessionEndpoint) {
                 setTimeout(async () => {
                   try {
-                    const token = localStorage.getItem('authToken');
-                    const headers = new Headers();
-                    headers.set('Content-Type', 'application/json');
-                    if (token) {
-                      headers.set('Authorization', `Bearer ${token}`);
-                    }
-                    const res = await fetch(sessionEndpoint, {
-                      credentials: 'omit', // JWT-only: No cookies needed
-                      headers: headers
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      if (data && data.authenticated && data.user) {
-                        console.log(`✅ ProtectedRoute: Cookies eventually worked for ${requiredRole}`);
-                        if (Date.now() - parseInt(loginTimestamp) > 10000) {
-                          localStorage.removeItem('loginTimestamp');
-                        }
+                    // Use axiosInstance which automatically adds Authorization header
+                    const res = await axiosInstance.get(sessionEndpoint);
+                    if (res.data && res.data.authenticated && res.data.user) {
+                      console.log(`✅ ProtectedRoute: Session verified in background for ${requiredRole}`);
+                      if (loginTimestamp && Date.now() - parseInt(loginTimestamp) > 10000) {
+                        localStorage.removeItem('loginTimestamp');
                       }
                     }
                   } catch (err) {
@@ -108,11 +96,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
       
       // Determine which session check endpoint to use based on required role
-      let sessionEndpoint = `${API_URL}/api/admin/check-session`;
+      let sessionEndpoint = '/api/admin/check-session';
       if (requiredRole === 'staff') {
-        sessionEndpoint = `${API_URL}/api/staff/check-session`;
+        sessionEndpoint = '/api/staff/check-session';
       } else if (requiredRole === 'customer') {
-        sessionEndpoint = `${API_URL}/api/customer/check-session`;
+        sessionEndpoint = '/api/customer/check-session';
       }
 
       // CRITICAL: For mobile devices with recent login, wait a bit for token to be saved
@@ -148,39 +136,20 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         return;
       }
       
-      // CRITICAL: Use plain object for headers (Headers object may not serialize correctly in mobile Safari)
-      // Mobile Safari has issues with Headers object, so we use a plain object instead
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
+      // Use axiosInstance which automatically adds Authorization header
+      console.log(`🔑 ProtectedRoute (${requiredRole}): Checking session with axiosInstance`);
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-        console.log(`🔑 ProtectedRoute (${requiredRole}): Sending Authorization header with token`);
-        console.log(`🔑 ProtectedRoute (${requiredRole}): Token length:`, token.length);
-        console.log(`🔑 ProtectedRoute (${requiredRole}): Authorization header value:`, `Bearer ${token.substring(0, 20)}...`);
+        console.log(`🔑 ProtectedRoute (${requiredRole}): Token exists, length:`, token.length);
       } else {
-        console.warn(`⚠️ ProtectedRoute (${requiredRole}): No token in localStorage (desktop may use cookies)`);
+        console.warn(`⚠️ ProtectedRoute (${requiredRole}): No token in localStorage`);
       }
       
-      // Log what we're about to send
-      console.log(`🔑 ProtectedRoute (${requiredRole}) - Fetch options:`, {
-        endpoint: sessionEndpoint,
-        hasAuthorization: !!headers['Authorization'],
-        authorizationValue: headers['Authorization']?.substring(0, 30) + '...',
-        allHeaders: Object.keys(headers)
-      });
-      
-      const response = await fetch(sessionEndpoint, {
-        method: 'GET',
-        credentials: 'omit', // JWT-only: No cookies needed
-        headers: headers
-      });
+      const response = await axiosInstance.get(sessionEndpoint);
       
       console.log(`🔑 ProtectedRoute (${requiredRole}) - Response status:`, response.status);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
         if (data.authenticated && data.user) {
           setIsAuthenticated(true);
           setUserRole(data.user.role);
