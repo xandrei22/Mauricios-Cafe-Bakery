@@ -260,7 +260,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const removeVariant = (id: string) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.filter(v => v.id !== id)
+      variants: prev.variants.filter((v: { id: string }) => v.id !== id)
     }));
   };
 

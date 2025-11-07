@@ -414,7 +414,7 @@ const GuestOrderTracking: React.FC = () => {
                         )}
                         {item.customizations && item.customizations.length > 0 && (
                           <div className="text-sm text-gray-600">
-                            Customizations: {item.customizations.map(c => c.name).join(', ')}
+                            Customizations: {item.customizations.map((c: { name: string }) => c.name).join(', ')}
                           </div>
                         )}
                       </div>
@@ -602,4 +602,3 @@ const GuestOrderTracking: React.FC = () => {
 };
 
 export default GuestOrderTracking;
-
