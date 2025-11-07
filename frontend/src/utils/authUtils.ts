@@ -228,11 +228,24 @@ export async function customerLogin(
   }
 
   // CRITICAL: Store token and user info IMMEDIATELY
+  const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  
   try {
-    console.log('💾 Attempting to save token to localStorage...');
+    console.log('💾 Attempting to save token to localStorage...', {
+      device: isMobile ? (isIOS ? 'iOS' : 'Android') : 'Desktop'
+    });
+    
+    // Save to localStorage
     localStorage.setItem('authToken', data.token);
     localStorage.setItem('customerUser', JSON.stringify(data.user));
     localStorage.setItem('loginTimestamp', Date.now().toString());
+    
+    // On mobile devices, add a small delay to ensure localStorage is synced
+    if (isMobile) {
+      await new Promise(resolve => setTimeout(resolve, isIOS ? 50 : 30));
+    }
+    
     console.log('💾 localStorage.setItem calls completed');
   } catch (storageError: any) {
     console.error('❌ CRITICAL: Failed to save to localStorage!', {
@@ -244,9 +257,16 @@ export async function customerLogin(
     throw new Error('Failed to save authentication data. Please check your browser settings.');
   }
   
-  // Verify storage immediately
-  const savedToken = localStorage.getItem('authToken');
-  const savedUser = localStorage.getItem('customerUser');
+  // Verify storage immediately (with retry for mobile)
+  let savedToken = localStorage.getItem('authToken');
+  let savedUser = localStorage.getItem('customerUser');
+  
+  // Retry on mobile if not found immediately
+  if (isMobile && (!savedToken || !savedUser)) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    savedToken = localStorage.getItem('authToken');
+    savedUser = localStorage.getItem('customerUser');
+  }
   
   console.log('✅ Customer login - Token storage verification:', {
     tokenSaved: !!savedToken,

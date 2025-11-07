@@ -49,31 +49,63 @@ export function LoginForm({
     
     try {
       const hasTable = !!tableFromUrl;
-      const data = await customerLogin(email, password, hasTable, false);
+      await customerLogin(email, password, hasTable, false);
       
-      // Verify token was saved
-      const savedToken = localStorage.getItem('authToken');
-      const savedUser = localStorage.getItem('customerUser');
-      console.log('✅ Customer login - Token saved:', savedToken ? 'YES' : 'NO');
-      console.log('✅ Customer login - User saved:', savedUser ? 'YES' : 'NO');
+      // Verify token was saved - with retry for mobile devices
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+      
+      // Retry mechanism for mobile devices (localStorage can be slow on some devices)
+      let savedToken = localStorage.getItem('authToken');
+      let savedUser = localStorage.getItem('customerUser');
+      let retryCount = 0;
+      const maxRetries = isMobile ? 5 : 2;
+      
+      while ((!savedToken || !savedUser) && retryCount < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, isMobile ? 100 : 50));
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('customerUser');
+        retryCount++;
+        console.log(`🔄 Retry ${retryCount}/${maxRetries} - Token: ${savedToken ? 'YES' : 'NO'}, User: ${savedUser ? 'YES' : 'NO'}`);
+      }
+      
+      console.log('✅ Customer login - Final verification:', {
+        tokenSaved: !!savedToken,
+        userSaved: !!savedUser,
+        device: isMobile ? (isIOS ? 'iOS' : 'Android') : 'Desktop',
+        retries: retryCount
+      });
       
       if (!savedToken || !savedUser) {
-        console.error('❌ CRITICAL: Customer token or user not saved to localStorage!');
-        setError("Failed to save authentication token. Please try again.");
+        console.error('❌ CRITICAL: Customer token or user not saved to localStorage after retries!', {
+          tokenExists: !!savedToken,
+          userExists: !!savedUser,
+          localStorageAvailable: typeof localStorage !== 'undefined',
+          localStorageKeys: Object.keys(localStorage)
+        });
+        setError("Failed to save authentication data. Please check your browser settings and try again.");
         return;
       }
       
-      // Small delay to ensure localStorage is synced (especially on mobile)
-      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const delay = isMobile ? 200 : 100;
+      // Delay to ensure localStorage is fully synced (especially on mobile/iOS)
+      const delay = isIOS ? 300 : isMobile ? 200 : 100;
       
       setTimeout(() => {
-        console.log(`Customer login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
+        // Final verification before redirect
+        const finalToken = localStorage.getItem('authToken');
+        const finalUser = localStorage.getItem('customerUser');
+        console.log(`🚀 Customer login redirect - Final check: Token=${!!finalToken}, User=${!!finalUser}`);
+        
+        if (!finalToken || !finalUser) {
+          console.error('❌ Token lost before redirect!');
+          setError("Authentication data was lost. Please try logging in again.");
+          return;
+        }
+        
         // Redirect based on table presence
         if (tableFromUrl) {
           window.location.href = `/customer/menu?table=${tableFromUrl}`;
         } else {
-          // ✅ FIX: Use correct route path
           window.location.href = '/customer/dashboard';
         }
       }, delay);
