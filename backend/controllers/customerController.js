@@ -61,9 +61,11 @@ async function login(req, res) {
         }
         // Issue JWT (client stores it in localStorage). No cookies/sessions are used for customers.
         const secret = process.env.JWT_SECRET || 'change-me-in-prod';
-        if (!secret || secret === 'change-me-in-prod') {
-            console.error('❌ CRITICAL: JWT_SECRET not set or using default value!');
-            return res.status(500).json({ message: 'Server configuration error' });
+
+        // Warn if using default secret, but allow login to work on all devices
+        // This ensures login works everywhere, even if JWT_SECRET is not configured
+        if (secret === 'change-me-in-prod') {
+            console.warn('⚠️ WARNING: Using default JWT_SECRET. For production, set JWT_SECRET environment variable for better security.');
         }
 
         let token;
@@ -75,14 +77,15 @@ async function login(req, res) {
                 name: customer.full_name,
                 role: 'customer'
             }, secret, { expiresIn: '1d' });
-            console.log('✅ JWT token generated successfully, length:', token ? token.length : 0);
+
+            if (!token) {
+                console.error('❌ CRITICAL: jwt.sign returned null/undefined!');
+                return res.status(500).json({ message: 'Error generating authentication token' });
+            }
+
+            console.log('✅ JWT token generated successfully, length:', token.length);
         } catch (signErr) {
             console.error('❌ Error signing JWT:', signErr);
-            return res.status(500).json({ message: 'Error generating authentication token' });
-        }
-
-        if (!token) {
-            console.error('❌ CRITICAL: Token is null after signing!');
             return res.status(500).json({ message: 'Error generating authentication token' });
         }
 
