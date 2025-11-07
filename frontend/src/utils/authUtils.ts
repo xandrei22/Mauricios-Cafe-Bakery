@@ -188,45 +188,96 @@ export async function customerLogin(
     success: data.success,
     hasToken: !!data.token,
     hasUser: !!data.user,
-    tokenLength: data.token ? data.token.length : 0
+    tokenLength: data.token ? data.token.length : 0,
+    tokenType: typeof data.token,
+    tokenValue: data.token ? `${data.token.substring(0, 20)}...` : 'NULL',
+    fullResponse: data
   });
 
-  if (data.success && data.token && data.user) {
-    // CRITICAL: Store token and user info IMMEDIATELY
+  // Check if response is valid
+  if (!data) {
+    console.error('❌ CRITICAL: No response data received!');
+    throw new Error('Invalid response from server');
+  }
+
+  if (!data.success) {
+    console.error('❌ Login failed - success is false:', {
+      message: data.message,
+      data: data
+    });
+    throw new Error(data.message || 'Login failed');
+  }
+
+  if (!data.token) {
+    console.error('❌ CRITICAL: No token in response!', {
+      success: data.success,
+      hasUser: !!data.user,
+      responseKeys: Object.keys(data),
+      fullResponse: data
+    });
+    throw new Error('No authentication token received from server');
+  }
+
+  if (!data.user) {
+    console.error('❌ CRITICAL: No user data in response!', {
+      success: data.success,
+      hasToken: !!data.token,
+      responseKeys: Object.keys(data)
+    });
+    throw new Error('No user data received from server');
+  }
+
+  // CRITICAL: Store token and user info IMMEDIATELY
+  try {
+    console.log('💾 Attempting to save token to localStorage...');
     localStorage.setItem('authToken', data.token);
     localStorage.setItem('customerUser', JSON.stringify(data.user));
     localStorage.setItem('loginTimestamp', Date.now().toString());
-    
-    // Verify storage immediately
-    const savedToken = localStorage.getItem('authToken');
-    const savedUser = localStorage.getItem('customerUser');
-    
-    console.log('✅ Customer login - Token storage verification:', {
-      tokenSaved: !!savedToken,
-      tokenMatches: savedToken === data.token,
-      userSaved: !!savedUser,
-      tokenLength: savedToken ? savedToken.length : 0
+    console.log('💾 localStorage.setItem calls completed');
+  } catch (storageError: any) {
+    console.error('❌ CRITICAL: Failed to save to localStorage!', {
+      error: storageError,
+      errorMessage: storageError?.message,
+      errorName: storageError?.name,
+      isQuotaExceeded: storageError?.name === 'QuotaExceededError'
     });
-    
-    if (!savedToken || savedToken !== data.token) {
-      console.error('❌ CRITICAL: Token not saved correctly!', {
-        expectedLength: data.token.length,
-        actualLength: savedToken ? savedToken.length : 0
-      });
-      throw new Error('Failed to save authentication token');
-    }
-    
-    console.log('✅ Customer login successful - Token saved and verified');
-    return data;
+    throw new Error('Failed to save authentication data. Please check your browser settings.');
   }
-
-  console.error('❌ Login failed - invalid response:', {
-    success: data.success,
-    hasToken: !!data.token,
-    hasUser: !!data.user,
-    message: data.message
+  
+  // Verify storage immediately
+  const savedToken = localStorage.getItem('authToken');
+  const savedUser = localStorage.getItem('customerUser');
+  
+  console.log('✅ Customer login - Token storage verification:', {
+    tokenSaved: !!savedToken,
+    tokenMatches: savedToken === data.token,
+    userSaved: !!savedUser,
+    tokenLength: savedToken ? savedToken.length : 0,
+    savedTokenPreview: savedToken ? `${savedToken.substring(0, 20)}...` : 'NULL',
+    originalTokenPreview: data.token ? `${data.token.substring(0, 20)}...` : 'NULL'
   });
-  throw new Error(data.message || 'Login failed');
+  
+  if (!savedToken) {
+    console.error('❌ CRITICAL: Token not found in localStorage after save!', {
+      attemptedSave: true,
+      localStorageAvailable: typeof localStorage !== 'undefined',
+      localStorageKeys: Object.keys(localStorage)
+    });
+    throw new Error('Failed to save authentication token - localStorage may be disabled');
+  }
+  
+  if (savedToken !== data.token) {
+    console.error('❌ CRITICAL: Token mismatch after save!', {
+      expectedLength: data.token.length,
+      actualLength: savedToken.length,
+      expectedPreview: data.token.substring(0, 30),
+      actualPreview: savedToken.substring(0, 30)
+    });
+    throw new Error('Token verification failed - token mismatch');
+  }
+  
+  console.log('✅ Customer login successful - Token saved and verified');
+  return data;
 }
 
 /**
