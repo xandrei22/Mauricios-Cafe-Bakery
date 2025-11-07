@@ -3,7 +3,8 @@
  * Handles token refresh, expiration, and automatic logout
  */
 
-import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
+import axios from 'axios';
+import type { AxiosInstance, InternalAxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
 import { getApiUrl } from './apiConfig';
 
 // Create axios instance
