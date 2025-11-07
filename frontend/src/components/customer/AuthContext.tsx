@@ -250,8 +250,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hasLocalStorageFallback = true;
             console.log('✅ AuthContext: Immediately using localStorage fallback (iOS cookie workaround - works for ALL iOS versions)');
             console.log('✅ AuthContext: User from localStorage:', user.email);
-            // Still do session check in background to see if cookies eventually work
-            // But don't let it override our localStorage fallback
+            // Still do session check in background to see if cookies eventually work,
+            // but do not override our local fallback if it fails or is null.
             setTimeout(async () => {
               try {
                 const token = localStorage.getItem('authToken');

@@ -4,7 +4,6 @@
  */
 
 import axiosInstance from './axiosInstance';
-import { getApiUrl } from './apiConfig';
 
 // Types
 export interface LoginResponse {
@@ -43,9 +42,7 @@ export async function adminLogin(
   usernameOrEmail: string,
   password: string
 ): Promise<LoginResponse> {
-  const API_URL = getApiUrl();
-  
-  const response = await axiosInstance.post(`${API_URL}/api/admin/login`, {
+  const response = await axiosInstance.post('/api/admin/login', {
     username: usernameOrEmail,
     password,
   });
@@ -70,7 +67,7 @@ export async function adminLogin(
  */
 export async function adminLogout(): Promise<void> {
   try {
-    await axiosInstance.post(`${getApiUrl()}/api/admin/logout`);
+    await axiosInstance.post('/api/admin/logout');
   } catch (error) {
     console.warn('Logout API call failed:', error);
   } finally {
@@ -86,10 +83,8 @@ export async function adminLogout(): Promise<void> {
  * Check admin session
  */
 export async function checkAdminSession(): Promise<SessionResponse> {
-  const API_URL = getApiUrl();
-  
   try {
-    const response = await axiosInstance.get(`${API_URL}/api/admin/check-session`);
+    const response = await axiosInstance.get('/api/admin/check-session');
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401 || error.response?.status === 403) {
@@ -112,9 +107,7 @@ export async function staffLogin(
   usernameOrEmail: string,
   password: string
 ): Promise<LoginResponse> {
-  const API_URL = getApiUrl();
-  
-  const response = await axiosInstance.post(`${API_URL}/api/staff/login`, {
+  const response = await axiosInstance.post('/api/staff/login', {
     username: usernameOrEmail,
     password,
   });
@@ -139,7 +132,7 @@ export async function staffLogin(
  */
 export async function staffLogout(): Promise<void> {
   try {
-    await axiosInstance.post(`${getApiUrl()}/api/staff/logout`);
+    await axiosInstance.post('/api/staff/logout');
   } catch (error) {
     console.warn('Logout API call failed:', error);
   } finally {
@@ -155,10 +148,8 @@ export async function staffLogout(): Promise<void> {
  * Check staff session
  */
 export async function checkStaffSession(): Promise<SessionResponse> {
-  const API_URL = getApiUrl();
-  
   try {
-    const response = await axiosInstance.get(`${API_URL}/api/staff/check-session`);
+    const response = await axiosInstance.get('/api/staff/check-session');
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401 || error.response?.status === 403) {
@@ -183,9 +174,7 @@ export async function customerLogin(
   hasTable?: boolean,
   hasRedirect?: boolean
 ): Promise<LoginResponse> {
-  const API_URL = getApiUrl();
-  
-  const response = await axiosInstance.post(`${API_URL}/api/customer/login`, {
+  const response = await axiosInstance.post('/api/customer/login', {
     email,
     password,
     hasTable,
@@ -212,7 +201,7 @@ export async function customerLogin(
  */
 export async function customerLogout(): Promise<void> {
   try {
-    await axiosInstance.post(`${getApiUrl()}/api/customer/logout`);
+    await axiosInstance.post('/api/customer/logout');
   } catch (error) {
     console.warn('Logout API call failed:', error);
   } finally {
@@ -228,10 +217,8 @@ export async function customerLogout(): Promise<void> {
  * Check customer session
  */
 export async function checkCustomerSession(): Promise<SessionResponse> {
-  const API_URL = getApiUrl();
-  
   try {
-    const response = await axiosInstance.get(`${API_URL}/api/customer/check-session`);
+    const response = await axiosInstance.get('/api/customer/check-session');
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401 || error.response?.status === 403) {
