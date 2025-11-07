@@ -60,9 +60,14 @@ async function login(req, res) {
             postLoginRedirect = `${frontendBase}/customer/dashboard?table=${encodeURIComponent(String(table))}`;
         }
         // Issue JWT (client stores it in localStorage). No cookies/sessions are used for customers.
-        let token = null;
+        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+        if (!secret || secret === 'change-me-in-prod') {
+            console.error('❌ CRITICAL: JWT_SECRET not set or using default value!');
+            return res.status(500).json({ message: 'Server configuration error' });
+        }
+
+        let token;
         try {
-            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
             token = jwt.sign({
                 id: customer.id,
                 username: customer.username,
@@ -70,10 +75,18 @@ async function login(req, res) {
                 name: customer.full_name,
                 role: 'customer'
             }, secret, { expiresIn: '1d' });
+            console.log('✅ JWT token generated successfully, length:', token ? token.length : 0);
         } catch (signErr) {
-            console.error('Error signing JWT:', signErr);
+            console.error('❌ Error signing JWT:', signErr);
+            return res.status(500).json({ message: 'Error generating authentication token' });
         }
 
+        if (!token) {
+            console.error('❌ CRITICAL: Token is null after signing!');
+            return res.status(500).json({ message: 'Error generating authentication token' });
+        }
+
+        console.log('✅ Customer login successful - returning token and user data');
         return res.json({
             success: true,
             user: {
