@@ -58,6 +58,20 @@ const server = http.createServer(app);
 
 const PORT = process.env.PORT || 5001;
 
+// ✅ Helper to normalize origins (remove trailing slash, lowercase)
+function normalizeOrigin(origin) {
+    if (!origin) {
+        return '';
+    }
+
+    try {
+        const parsed = new URL(origin.trim());
+        return parsed.origin.toLowerCase();
+    } catch (error) {
+        return origin.trim().toLowerCase();
+    }
+}
+
 // ✅ FIX: Apply CORS middleware early - MUST be defined before Socket.IO
 const allowedOrigins = [
     process.env.FRONTEND_URL,
@@ -65,7 +79,14 @@ const allowedOrigins = [
     "https://mauricios-cafe-bakery.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173"
-].filter(Boolean);
+].filter(Boolean).map((origin) => origin.trim());
+
+const normalizedAllowedOrigins = allowedOrigins
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+console.log('🔐 Allowed origins (raw):', allowedOrigins);
+console.log('🔐 Allowed origins (normalized):', normalizedAllowedOrigins);
 
 function isAllowedOrigin(origin) {
     // Allow requests with no origin (like mobile apps or Postman)
@@ -78,9 +99,9 @@ function isAllowedOrigin(origin) {
         const url = new URL(origin);
         const hostname = url.hostname.toLowerCase();
 
-        // Check if in allowed origins list (case-insensitive)
-        const normalizedOrigin = origin.toLowerCase();
-        if (allowedOrigins.some(allowed => allowed && allowed.toLowerCase() === normalizedOrigin)) {
+        // Check if in allowed origins list (case-insensitive, normalized)
+        const normalizedOrigin = normalizeOrigin(origin);
+        if (normalizedAllowedOrigins.includes(normalizedOrigin)) {
             console.log('✅ CORS: Origin in allowed list:', origin);
             return true;
         }
@@ -110,7 +131,8 @@ function isAllowedOrigin(origin) {
         console.log('❌ CORS: Origin NOT allowed:', {
             origin: origin,
             hostname: hostname,
-            allowedOrigins: allowedOrigins
+            normalizedOrigin,
+            normalizedAllowedOrigins
         });
         return false;
     } catch (error) {
