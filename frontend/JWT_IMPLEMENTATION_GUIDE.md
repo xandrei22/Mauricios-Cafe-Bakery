@@ -255,3 +255,5 @@ The axios interceptor automatically handles token expiration:
 - **Automatic Token Injection**: The axios instance automatically adds the Authorization header to all requests, so you don't need to manually add it.
 - **Error Handling**: The axios interceptor handles 401/403 responses automatically, but you should still handle other errors in your components.
 
+
+
