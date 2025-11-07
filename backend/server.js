@@ -239,28 +239,62 @@ app.use((req, res, next) => {
 // CRITICAL: Middleware to ensure CORS headers are on ALL responses
 // This runs after routes but before response is sent
 app.use((req, res, next) => {
-    // Store original end function
+    // Store original functions
+    const originalJson = res.json;
+    const originalSend = res.send;
     const originalEnd = res.end;
 
-    // Override end to add CORS headers before sending
-    res.end = function(chunk, encoding) {
-        // Add CORS headers if origin is allowed
+    // Helper function to set CORS headers
+    const setCorsHeaders = () => {
         if (res.locals.isAllowedOrigin && res.locals.corsOrigin) {
             res.setHeader('Access-Control-Allow-Origin', res.locals.corsOrigin);
             res.setHeader('Access-Control-Allow-Credentials', 'false');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
         }
-        // Call original end
+    };
+
+    // Override json to add CORS headers
+    res.json = function(body) {
+        setCorsHeaders();
+        return originalJson.call(this, body);
+    };
+
+    // Override send to add CORS headers
+    res.send = function(body) {
+        setCorsHeaders();
+        return originalSend.call(this, body);
+    };
+
+    // Override end to add CORS headers
+    res.end = function(chunk, encoding) {
+        setCorsHeaders();
         return originalEnd.call(this, chunk, encoding);
     };
 
     next();
 });
 
-// Apply CORS middleware (this handles additional CORS logic)
+// Apply CORS middleware (this handles preflight and basic CORS)
+// Note: Our manual headers above ensure CORS headers are on ALL responses
 app.use(cors(corsOptions));
 
 // Ensure preflight handled for all routes
 app.options('*', cors(corsOptions));
+
+// CRITICAL: Apply CORS headers AFTER cors() middleware to ensure they're not overwritten
+// This ensures headers are on actual responses (not just preflight)
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (isAllowedOrigin(origin) && origin) {
+        // Ensure CORS headers are set (cors() package might not set them for all responses)
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'false');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    }
+    next();
+});
 
 // Extra CORS guard specifically for Socket.IO polling/websocket endpoints
 // Note: Socket.IO may need credentials for its own auth, but API routes use JWT
