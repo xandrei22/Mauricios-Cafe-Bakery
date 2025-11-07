@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log('🔑 AuthContext: Background session check - Sending Authorization header with token');
                 
                 const res = await fetch(`${API_URL}/api/customer/check-session`, {
-                  credentials: 'include',
+                  credentials: 'omit', // JWT-only: No cookies needed
                   headers
                 });
                 
@@ -209,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       await fetch(`${API_URL}/api/customer/logout`, {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'omit', // JWT-only: No cookies needed
         headers
       });
     } catch {}
@@ -260,7 +260,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   headers['Authorization'] = `Bearer ${token}`;
                 }
                 const res = await fetch(`${API_URL}/api/customer/check-session`, {
-                  credentials: 'include',
+                  credentials: 'omit', // JWT-only: No cookies needed
                   headers
                 });
                 if (res.ok) {
