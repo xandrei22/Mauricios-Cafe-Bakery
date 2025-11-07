@@ -206,7 +206,7 @@ const CustomerOrders: React.FC = () => {
       }
       
       const response = await fetch(url, { 
-        credentials: 'include',
+        credentials: 'omit', // JWT-only: No cookies needed
         headers: headers
       });
       console.log('  - Response status:', response.status);

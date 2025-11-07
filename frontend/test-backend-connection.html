@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Backend Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        
+        .test {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Backend Connection Diagnostic</h1>
+    <div id="results"></div>
+    <button onclick="runTests()">Run All Tests</button>
+
+    <script>
+        const API_URL = 'https://mauricios-cafe-bakery.onrender.com';
+
+        function addResult(test, success, message) {
+            const div = document.createElement('div');
+            div.className = `test ${success ? 'success' : 'error'}`;
+            div.innerHTML = `<strong>${test}:</strong> ${message}`;
+            document.getElementById('results').appendChild(div);
+        }
+
+        async function runTests() {
+            document.getElementById('results').innerHTML = '';
+
+            // Test 1: Check API URL
+            const envApiUrl = 'VITE_API_URL not accessible in HTML';
+            addResult('API URL Check', true, `Using: ${API_URL}`);
+
+            // Test 2: Health Check
+            try {
+                const healthRes = await fetch(`${API_URL}/api/health`, {
+                    method: 'GET',
+                    credentials: 'omit'
+                });
+                if (healthRes.ok) {
+                    const data = await healthRes.json();
+                    addResult('Health Check', true, `Backend is running: ${JSON.stringify(data)}`);
+                } else {
+                    addResult('Health Check', false, `Status: ${healthRes.status}`);
+                }
+            } catch (error) {
+                addResult('Health Check', false, `Error: ${error.message}`);
+            }
+
+            // Test 3: CORS Preflight
+            try {
+                const preflightRes = await fetch(`${API_URL}/api/customer/login`, {
+                    method: 'OPTIONS',
+                    credentials: 'omit',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type, Authorization'
+                    }
+                });
+                if (preflightRes.status === 204) {
+                    addResult('CORS Preflight', true, 'Preflight successful (204)');
+                } else {
+                    addResult('CORS Preflight', false, `Status: ${preflightRes.status}`);
+                }
+            } catch (error) {
+                addResult('CORS Preflight', false, `Error: ${error.message}`);
+            }
+
+            // Test 4: CORS Headers Check
+            try {
+                const testRes = await fetch(`${API_URL}/api/health`, {
+                    method: 'GET',
+                    credentials: 'omit'
+                });
+                const corsOrigin = testRes.headers.get('Access-Control-Allow-Origin');
+                const corsCreds = testRes.headers.get('Access-Control-Allow-Credentials');
+
+                if (corsOrigin) {
+                    addResult('CORS Headers', true, `Origin: ${corsOrigin}, Credentials: ${corsCreds}`);
+                } else {
+                    addResult('CORS Headers', false, 'No CORS headers in response');
+                }
+            } catch (error) {
+                addResult('CORS Headers', false, `Error: ${error.message}`);
+            }
+
+            // Test 5: Test Login Endpoint (without credentials)
+            try {
+                const loginRes = await fetch(`${API_URL}/api/customer/login`, {
+                    method: 'POST',
+                    credentials: 'omit',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    body: JSON.stringify({
+                        email: 'test@test.com',
+                        password: 'test'
+                    })
+                });
+
+                const corsError = loginRes.status === 0 || loginRes.type === 'opaque';
+                if (corsError) {
+                    addResult('Login Endpoint CORS', false, 'CORS error - request blocked');
+                } else {
+                    addResult('Login Endpoint CORS', true, `Status: ${loginRes.status} (CORS headers present)`);
+                }
+            } catch (error) {
+                if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+                    addResult('Login Endpoint CORS', false, `CORS error: ${error.message}`);
+                } else {
+                    addResult('Login Endpoint CORS', true, `Request sent (error is expected for invalid credentials)`);
+                }
+            }
+        }
+
+        // Auto-run on load
+        window.onload = () => {
+            addResult('Page Load', true, 'Diagnostic tool ready');
+            runTests();
+        };
+    </script>
+</body>
+
+</html>
