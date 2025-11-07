@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+/*import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { checkCustomerSession } from '../../utils/authUtils';
 
 interface User {
@@ -365,3 +365,316 @@ export function useAuth() {
   }
   return context;
 } 
+  */
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { checkCustomerSession } from '../../utils/authUtils';
+import { getApiUrl } from '../../utils/apiConfig';
+
+const API_URL = getApiUrl();
+
+interface User {
+  name: string;
+  email: string;
+  [key: string]: any;
+}
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  authenticated: boolean;
+  refreshSession: () => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [lastSessionCheck, setLastSessionCheck] = useState<number>(0);
+  
+  const checkSession = useCallback(async () => {
+    // ⭐ CRITICAL FIX: Check if token exists BEFORE making any API calls
+    const token = localStorage.getItem('authToken');
+    
+    if (!token) {
+      // No token = not logged in = no need to check session
+      console.log('ℹ️ AuthContext: No token found, skipping session check');
+      setLoading(false);
+      setAuthenticated(false);
+      setUser(null);
+      return;
+    }
+    
+    // Detect device type
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+    
+    // Check localStorage for recent login
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const recentLoginWindow = isMobile ? 30000 : 10000;
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+    
+    // For mobile devices or recent logins, check localStorage first
+    if (isMobile || isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          setAuthenticated(true);
+          setUser(user);
+          setLoading(false);
+          console.log(`✅ AuthContext: Using localStorage (${isMobile ? 'mobile device' : 'recent login'})`);
+          
+          // For mobile, verify token immediately
+          if (isMobile) {
+            console.log('📱 Mobile device - verifying token with backend');
+            // Continue to token verification below
+          } else {
+            // For desktop, verify in background
+            setTimeout(async () => {
+              try {
+                const data = await checkCustomerSession();
+                if (data && data.authenticated && data.user) {
+                  console.log('✅ Token verified, updating user');
+                  setUser(data.user);
+                  const currentTimestamp = localStorage.getItem('loginTimestamp');
+                  if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                    localStorage.removeItem('loginTimestamp');
+                  }
+                }
+              } catch (err) {
+                console.error('Background token verification failed:', err);
+              }
+            }, 500);
+            return; // Exit early for desktop
+          }
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+        }
+      }
+    }
+    
+    // Debounce: prevent rapid successive calls
+    const now = Date.now();
+    if (now - lastSessionCheck < 2000) {
+      return;
+    }
+    setLastSessionCheck(now);
+    
+    // Add delay for iOS to process cookies
+    if (isRecentLogin && isIOS) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+
+    setLoading(true);
+    try {
+      console.log('🔑 AuthContext: Checking session with JWT token');
+      const data = await checkCustomerSession();
+      
+      if (data && data.authenticated && data.user) {
+        setAuthenticated(true);
+        setUser(data.user);
+        if (isRecentLogin) {
+          localStorage.removeItem('loginTimestamp');
+        }
+      } else {
+        // Fallback to localStorage
+        const storedUser = localStorage.getItem('customerUser');
+        const storedToken = localStorage.getItem('authToken');
+        if (storedUser && storedToken && (isIOS || isRecentLogin)) {
+          try {
+            const user = JSON.parse(storedUser);
+            setAuthenticated(true);
+            setUser(user);
+            console.log('✅ Using localStorage fallback');
+            return;
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
+          }
+        }
+        setAuthenticated(false);
+        setUser(null);
+      }
+    } catch (e: any) {
+      console.error('Session check error:', e);
+      
+      // Fallback to localStorage on error
+      const storedUser = localStorage.getItem('customerUser');
+      const storedToken = localStorage.getItem('authToken');
+      if (storedUser && storedToken && (isIOS || isRecentLogin)) {
+        try {
+          const user = JSON.parse(storedUser);
+          setAuthenticated(true);
+          setUser(user);
+          console.log('✅ Error fallback to localStorage');
+        } catch (parseErr) {
+          setAuthenticated(false);
+          setUser(null);
+        }
+      } else {
+        setAuthenticated(false);
+        setUser(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [lastSessionCheck]);
+
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        };
+        await fetch(`${API_URL}/api/customer/logout`, {
+          method: 'POST',
+          credentials: 'omit',
+          headers
+        });
+      }
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+    
+    // Clear storage
+    localStorage.removeItem('customerUser');
+    localStorage.removeItem('loginTimestamp');
+    localStorage.removeItem('authToken');
+    localStorage.clear();
+    sessionStorage.clear();
+    setAuthenticated(false);
+    setUser(null);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Check for recent login with localStorage
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const recentLoginWindow = isIOS ? 30000 : 10000;
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+    let hasLocalStorageFallback = false;
+    
+    console.log('AuthContext mount - recent login:', isRecentLogin);
+    
+    // Immediate localStorage check for recent logins
+    if (isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      const storedToken = localStorage.getItem('authToken');
+      
+      if (storedUser && storedToken) {
+        try {
+          const user = JSON.parse(storedUser);
+          if (isMounted) {
+            setAuthenticated(true);
+            setUser(user);
+            setLoading(false);
+            hasLocalStorageFallback = true;
+            console.log('✅ Using localStorage immediately (recent login)');
+            
+            // Background verification
+            setTimeout(async () => {
+              try {
+                const data = await checkCustomerSession();
+                if (data && data.authenticated && data.user) {
+                  console.log('✅ Session verified in background');
+                  setUser(data.user);
+                  const currentTimestamp = localStorage.getItem('loginTimestamp');
+                  if (currentTimestamp && (Date.now() - parseInt(currentTimestamp)) > 10000) {
+                    localStorage.removeItem('loginTimestamp');
+                  }
+                }
+              } catch (err) {
+                console.log('Background check failed, using localStorage');
+              }
+            }, 3000);
+          }
+        } catch (e) {
+          console.error('Failed to parse stored user:', e);
+        }
+      }
+    }
+    
+    // Check session only on customer routes
+    const checkSessionIfNeeded = async () => {
+      if (hasLocalStorageFallback) {
+        return;
+      }
+      
+      const currentPath = window.location.pathname;
+      
+      // ⭐ CRITICAL: Skip session check on public/non-customer pages
+      if (currentPath.startsWith('/staff') || 
+          currentPath.startsWith('/admin') ||
+          currentPath === '/' ||
+          currentPath === '/login' ||
+          currentPath === '/customer-signup' ||
+          currentPath === '/customer-login' ||
+          currentPath.startsWith('/guest') ||
+          currentPath.startsWith('/qr-codes') ||
+          currentPath.startsWith('/visit-mauricio') ||
+          currentPath === '/privacy' ||
+          currentPath === '/terms' ||
+          currentPath === '/accessibility') {
+        console.log('ℹ️ Public page - skipping auth check');
+        setLoading(false);
+        return;
+      }
+      
+      // Only check on customer routes
+      if (currentPath.startsWith('/customer') && isMounted) {
+        await checkSession();
+      } else {
+        setLoading(false);
+      }
+    };
+    
+    if (!hasLocalStorageFallback) {
+      checkSessionIfNeeded();
+    }
+    
+    // Event listeners for tab visibility and periodic checks
+    const onVisibility = () => { 
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/customer') && 
+          document.visibilityState === 'visible') {
+        checkSession();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', onVisibility);
+    
+    // Periodic check every 5 minutes (only on customer routes)
+    const interval = setInterval(() => {
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/customer')) {
+        checkSession();
+      }
+    }, 300000);
+    
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [checkSession]);
+
+  return (
+    <AuthContext.Provider value={{ user, loading, authenticated, refreshSession: checkSession, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
