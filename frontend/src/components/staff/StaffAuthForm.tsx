@@ -81,7 +81,22 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       
     } catch (err: any) {
       console.error('Staff login error:', err);
-      setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+      
+      // Handle network/CORS errors
+      if (err.isNetworkError || err.message?.includes('Network') || err.message?.includes('CORS') || err.message?.includes('Failed to fetch')) {
+        console.error('🚨 Network/CORS error detected:', err);
+        setError("Cannot connect to server. Please check your connection and try again.");
+        return;
+      }
+      
+      // Handle different error types
+      if (err.response?.data?.errorType === 'unauthorized_access') {
+        setError('You are not authorized to access the staff portal. Please contact your administrator.');
+      } else if (err.response?.data?.errorType === 'inactive_account') {
+        setError('Your account is not active. Please contact your administrator.');
+      } else {
+        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

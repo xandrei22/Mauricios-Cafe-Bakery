@@ -12,6 +12,7 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import React from "react";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
+import { adminLogout } from '../../utils/authUtils';
 
 const menuItems = [
   { label: "Dashboard", path: "/admin/dashboard", icon: "/images/dashboard.png" },
@@ -45,7 +46,8 @@ const AdminSidebar: React.FC = () => {
     );
     if (result.isConfirmed) {
       try {
-        await fetch('/api/admin/logout', { method: 'POST', credentials: 'omit' });
+        // Use axiosInstance via adminLogout (includes Authorization header)
+        await adminLogout();
       } catch (error) {
         console.error('Logout error:', error);
       } finally {

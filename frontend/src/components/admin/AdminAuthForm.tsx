@@ -32,7 +32,7 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
     try {
       console.log('Attempting admin login with:', { username: usernameOrEmail });
       
-      const data = await adminLogin(usernameOrEmail, password);
+      await adminLogin(usernameOrEmail, password);
       
       console.log('Admin login successful, checking for alerts');
       
@@ -84,6 +84,13 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
 
     } catch (err: any) {
       console.error("Admin login error:", err);
+      
+      // Handle network/CORS errors
+      if (err.isNetworkError || err.message?.includes('Network') || err.message?.includes('CORS') || err.message?.includes('Failed to fetch')) {
+        console.error('🚨 Network/CORS error detected:', err);
+        setError("Cannot connect to server. Please check your connection and try again.");
+        return;
+      }
       
       // Handle different error types
       if (err.response?.data?.errorType === 'unauthorized_access') {

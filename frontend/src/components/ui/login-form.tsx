@@ -97,6 +97,14 @@ export function LoginForm({
       }, 200);
     } catch (err: any) {
       console.error("Customer login error:", err);
+      
+      // Handle network/CORS errors
+      if (err.isNetworkError || err.message?.includes('Network') || err.message?.includes('CORS') || err.message?.includes('Failed to fetch')) {
+        console.error('🚨 Network/CORS error detected:', err);
+        setError("Cannot connect to server. Please check your connection and try again.");
+        return;
+      }
+      
       const msg =
         err.response?.data?.message ||
         err.message ||
