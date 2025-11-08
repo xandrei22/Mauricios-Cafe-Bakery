@@ -1,6 +1,7 @@
 const express = require('express');
 const { submitFeedback, getAllFeedback, getFeedbackMetrics, deleteFeedback } = require('../controllers/feedbackController');
-const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
+// Note: ensureAdminAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 const pool = require('../config/db');
 const router = express.Router();
 
@@ -13,8 +14,8 @@ router.get('/feedback', getAllFeedback);
 // Route for getting feedback metrics (admin only, if applicable)
 router.get('/feedback/metrics', getFeedbackMetrics);
 
-// Route for deleting feedback (admin only)
-router.delete('/feedback/:id', ensureAdminAuthenticated, deleteFeedback);
+// Route for deleting feedback (admin only) - requires authentication
+router.delete('/feedback/:id', authenticateJWT, deleteFeedback);
 
 // Route for checking if customer has orders and has submitted feedback
 router.get('/feedback/check-orders', async(req, res) => {

@@ -2012,8 +2012,8 @@ router.get('/metrics/admins/count', authenticateJWT, countAdmins);
 router.delete('/staff/:id', authenticateJWT, deleteStaff);
 
 // Loyalty Management Routes
-// Get loyalty settings
-router.get('/loyalty/settings', async(req, res) => {
+// Get loyalty settings - requires authentication
+router.get('/loyalty/settings', authenticateJWT, async(req, res) => {
     try {
         const [settings] = await db.query('SELECT * FROM loyalty_settings ORDER BY setting_key');
 
@@ -2034,22 +2034,19 @@ router.get('/loyalty/settings', async(req, res) => {
     }
 });
 
-// Update loyalty settings
-router.put('/loyalty/settings', async(req, res) => {
+// Update loyalty settings - requires authentication
+router.put('/loyalty/settings', authenticateJWT, async(req, res) => {
     try {
         console.log('Loyalty settings update request received');
         console.log('Request body:', req.body);
-        console.log('Session data:', {
-            adminUser: req.session.adminUser,
-            admin: req.session.admin,
-            user: req.session.user
-        });
+        console.log('JWT User:', req.user);
 
         const { settings } = req.body;
-        const adminId = (req.session.adminUser && req.session.adminUser.id) || (req.session.admin && req.session.admin.id) || null; // Get admin ID from session
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
 
         if (!adminId) {
-            console.log('No admin ID found in session');
+            console.log('No admin ID found in JWT token');
             return res.status(401).json({ success: false, error: 'Admin not authenticated' });
         }
 
@@ -2086,8 +2083,8 @@ router.put('/loyalty/settings', async(req, res) => {
     }
 });
 
-// Get loyalty rewards
-router.get('/loyalty/rewards', ensureAdminAuthenticated, async(req, res) => {
+// Get loyalty rewards - requires authentication
+router.get('/loyalty/rewards', authenticateJWT, async(req, res) => {
     try {
         const [rewards] = await db.query('SELECT * FROM loyalty_rewards ORDER BY points_required ASC');
         res.json({ success: true, rewards });
@@ -2097,8 +2094,8 @@ router.get('/loyalty/rewards', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Create new loyalty reward
-router.post('/loyalty/rewards', ensureAdminAuthenticated, async(req, res) => {
+// Create new loyalty reward - requires authentication
+router.post('/loyalty/rewards', authenticateJWT, async(req, res) => {
     try {
         const { name, description, points_required, reward_type, discount_percentage, image_url } = req.body;
 
@@ -2119,8 +2116,8 @@ router.post('/loyalty/rewards', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Update loyalty reward
-router.put('/loyalty/rewards/:id', ensureAdminAuthenticated, async(req, res) => {
+// Update loyalty reward - requires authentication
+router.put('/loyalty/rewards/:id', authenticateJWT, async(req, res) => {
     try {
         const { id } = req.params;
         const { name, description, points_required, reward_type, discount_percentage, image_url, is_active } = req.body;
@@ -2139,8 +2136,8 @@ router.put('/loyalty/rewards/:id', ensureAdminAuthenticated, async(req, res) => 
     }
 });
 
-// Delete loyalty reward
-router.delete('/loyalty/rewards/:id', ensureAdminAuthenticated, async(req, res) => {
+// Delete loyalty reward - requires authentication
+router.delete('/loyalty/rewards/:id', authenticateJWT, async(req, res) => {
     try {
         const { id } = req.params;
 
@@ -2153,8 +2150,8 @@ router.delete('/loyalty/rewards/:id', ensureAdminAuthenticated, async(req, res) 
     }
 });
 
-// Toggle reward status
-router.patch('/loyalty/rewards/:id/toggle', ensureAdminAuthenticated, async(req, res) => {
+// Toggle reward status - requires authentication
+router.patch('/loyalty/rewards/:id/toggle', authenticateJWT, async(req, res) => {
     try {
         const { id } = req.params;
 
@@ -2179,8 +2176,8 @@ router.patch('/loyalty/rewards/:id/toggle', ensureAdminAuthenticated, async(req,
     }
 });
 
-// Get loyalty statistics
-router.get('/loyalty/stats', ensureAdminAuthenticated, async(req, res) => {
+// Get loyalty statistics - requires authentication
+router.get('/loyalty/stats', authenticateJWT, async(req, res) => {
     try {
         // Get total customers with loyalty points
         const [customerStats] = await db.query(`
@@ -2244,8 +2241,8 @@ router.get('/loyalty/stats', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Get customer loyalty details
-router.get('/loyalty/customers', ensureAdminAuthenticated, async(req, res) => {
+// Get customer loyalty details - requires authentication
+router.get('/loyalty/customers', authenticateJWT, async(req, res) => {
     try {
         const { page = 1, limit = 20, search = '' } = req.query;
         const offset = (page - 1) * limit;
@@ -2290,8 +2287,8 @@ router.get('/loyalty/customers', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Adjust customer points (admin)
-router.post('/loyalty/customers/:customerId/adjust', ensureAdminAuthenticated, async(req, res) => {
+// Adjust customer points (admin) - requires authentication
+router.post('/loyalty/customers/:customerId/adjust', authenticateJWT, async(req, res) => {
     try {
         const { customerId } = req.params;
         const { pointsAdjustment, reason, adminId } = req.body;
@@ -2348,8 +2345,8 @@ router.post('/loyalty/customers/:customerId/adjust', ensureAdminAuthenticated, a
     }
 });
 
-// NEW: Get all loyalty reward redemptions (admin only)
-router.get('/loyalty/redemptions', async(req, res) => {
+// NEW: Get all loyalty reward redemptions (admin only) - requires authentication
+router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
     try {
         const { page = 1, limit = 20, status, customerId, rewardId } = req.query;
         const offset = (page - 1) * limit;
@@ -2419,8 +2416,8 @@ router.get('/loyalty/redemptions', async(req, res) => {
     }
 });
 
-// NEW: Get loyalty redemption details (admin only)
-router.get('/loyalty/redemptions/:redemptionId', async(req, res) => {
+// NEW: Get loyalty redemption details (admin only) - requires authentication
+router.get('/loyalty/redemptions/:redemptionId', authenticateJWT, async(req, res) => {
     try {
         const { redemptionId } = req.params;
 
@@ -2501,11 +2498,11 @@ router.get('/loyalty/redemptions/:redemptionId', async(req, res) => {
     }
 });
 
-// NEW: Update redemption status (admin only)
-router.put('/loyalty/redemptions/:redemptionId/status', async(req, res) => {
+// NEW: Update redemption status (admin only) - requires authentication
+router.put('/loyalty/redemptions/:redemptionId/status', authenticateJWT, async(req, res) => {
     try {
         const { redemptionId } = req.params;
-        const { status, notes, adminId } = req.body;
+        const { status, notes } = req.body;
 
         // Validate status
         const validStatuses = ['pending', 'completed', 'cancelled', 'expired'];
@@ -2516,14 +2513,12 @@ router.put('/loyalty/redemptions/:redemptionId/status', async(req, res) => {
             });
         }
 
-        // Verify admin
-        const [admins] = await db.query(`
-            SELECT id FROM users WHERE id = ? AND role IN ('admin', 'manager')
-        `, [adminId]);
-
-        if (admins.length === 0) {
-            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        // Verify admin from JWT user (authenticateJWT middleware)
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized - Admin access required' });
         }
+        
+        const adminId = req.user.id;
 
         // Get current redemption
         const [redemptions] = await db.query(`
@@ -2595,8 +2590,8 @@ router.put('/loyalty/redemptions/:redemptionId/status', async(req, res) => {
     }
 });
 
-// NEW: Get loyalty system statistics (admin only)
-router.get('/loyalty/statistics', async(req, res) => {
+// NEW: Get loyalty system statistics (admin only) - requires authentication
+router.get('/loyalty/statistics', authenticateJWT, async(req, res) => {
     try {
         const { period = 'month' } = req.query;
 

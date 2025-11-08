@@ -1,4 +1,4 @@
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');

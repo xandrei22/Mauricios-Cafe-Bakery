@@ -12,21 +12,14 @@ function generateClaimCode() {
     return result;
 }
 const qrService = require('../services/qrService');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
+// Note: ensureAuthenticated and ensureStaffAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
-// Apply authentication to all loyalty routes
-router.use(ensureAuthenticated);
+// Apply authentication to all loyalty routes - uses JWT
+router.use(authenticateJWT);
 
-// Get customer loyalty points
-router.get('/points/:customerId', (req, res, next) => {
-    // Check if staff is authenticated, otherwise use regular auth
-    if (req.session.staffUser && (req.session.staffUser.role === 'staff' || req.session.staffUser.role === 'admin')) {
-        return next();
-    }
-    // Fall back to regular authentication
-    return ensureAuthenticated(req, res, next);
-}, async(req, res) => {
+// Get customer loyalty points - requires authentication
+router.get('/points/:customerId', async(req, res) => {
     try {
         const { customerId } = req.params;
 
@@ -628,7 +621,7 @@ router.post('/redeem', (req, res, next) => {
         return next();
     }
     // Fall back to regular authentication
-    return ensureAuthenticated(req, res, next);
+    return authenticateJWT(req, res, next);
 }, async(req, res) => {
     try {
         const { customerId, pointsToRedeem, redemptionType, description } = req.body;
