@@ -10,6 +10,12 @@ import { getApiUrl } from './apiConfig';
 // ✅ Create axios instance
 // Use JWT Authorization headers (not cookies) - JWT-only authentication
 // ⭐ CRITICAL: withCredentials MUST be false to prevent CORS errors
+
+// ⭐ CRITICAL: Ensure axios defaults don't have credentials
+if ((axios.defaults as any).withCredentials !== undefined) {
+  (axios.defaults as any).withCredentials = false;
+}
+
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: getApiUrl() || 'https://mauricios-cafe-bakery.onrender.com',
   headers: {
@@ -18,6 +24,9 @@ const axiosInstance: AxiosInstance = axios.create({
   timeout: 30000, // 30 seconds
   withCredentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
 });
+
+// ⭐ CRITICAL: Double-check instance defaults
+(axiosInstance.defaults as any).withCredentials = false;
 
 // ====================== REQUEST INTERCEPTOR ======================
 // ⭐ CRITICAL: This interceptor MUST run for ALL requests
@@ -108,10 +117,29 @@ axiosInstance.interceptors.request.use(
 
     // ⭐ CRITICAL: JWT-only - NEVER send credentials (no cookies)
     // This MUST be false to prevent CORS errors
+    // Force set multiple times to ensure it's never overridden
     config.withCredentials = false;
+    (config as any).withCredentials = false;
+    if (config.headers) {
+      (config.headers as any).withCredentials = false;
+    }
     
     // Double-check: Force remove any credentials that might have been set
     if ((config as any).credentials) {
+      delete (config as any).credentials;
+    }
+    
+    // ⭐ CRITICAL: Runtime verification - log if credentials are being sent
+    const hasCredentials = (config as any).withCredentials === true || (config as any).credentials === 'include';
+    if (hasCredentials) {
+      console.error('❌❌❌ CRITICAL: Credentials detected in request! This should NEVER happen! ❌❌❌', {
+        url: config.url,
+        withCredentials: (config as any).withCredentials,
+        credentials: (config as any).credentials,
+        config: config
+      });
+      // Force fix it
+      config.withCredentials = false;
       delete (config as any).credentials;
     }
 

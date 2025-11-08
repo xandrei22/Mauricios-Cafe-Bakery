@@ -59,7 +59,7 @@ function isAllowedOrigin(origin) {
 // -------------------
 // CORS middleware
 // -------------------
-app.use(cors({
+const corsOptions = {
     origin: (origin, callback) => {
         if (isAllowedOrigin(origin)) return callback(null, true);
         console.warn('CORS: Origin not allowed, but temporarily allowed for debugging:', origin);
@@ -67,10 +67,12 @@ app.use(cors({
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: false, // JWT-only
+    credentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
     optionsSuccessStatus: 204
-}));
-app.options('*', cors()); // preflight
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // ⭐ CRITICAL: Preflight must use same options
 
 // -------------------
 // Body parsing
