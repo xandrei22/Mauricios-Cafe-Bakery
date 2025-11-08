@@ -1055,7 +1055,7 @@ router.get('/staff/pending', async(req, res) => {
 });
 
 // Staff: Process redemption (complete or cancel)
-router.post('/staff/:redemptionId/:action', ensureStaffAuthenticated, async(req, res) => {
+router.post('/staff/:redemptionId/:action', authenticateJWT, async(req, res) => {
     try {
         const { redemptionId, action } = req.params;
         const staffId = req.user.id;
