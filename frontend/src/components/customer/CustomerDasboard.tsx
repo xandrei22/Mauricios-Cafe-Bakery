@@ -45,6 +45,46 @@ export default function CustomerDasboard() {
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
 
+  // Handle Google OAuth token from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const token = urlParams.get('token');
+    const isGoogleAuth = urlParams.get('google') === 'true';
+    
+    if (token && isGoogleAuth) {
+      console.log('✅ Google OAuth: Token received in URL, storing in localStorage');
+      
+      // Extract user info from token (decode JWT payload)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userData = {
+          id: payload.id,
+          username: payload.username,
+          email: payload.email,
+          name: payload.name,
+          role: payload.role
+        };
+        
+        // Store token and user in localStorage (same as regular login)
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('customerUser', JSON.stringify(userData));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+        
+        console.log('✅ Google OAuth: Token and user data stored successfully');
+        
+        // Remove token from URL (clean URL)
+        const newUrl = window.location.pathname + (location.search.replace(/[?&]token=[^&]*/, '').replace(/[?&]google=[^&]*/, '').replace(/^\?$/, '') || '');
+        window.history.replaceState({}, '', newUrl);
+        
+        // Refresh page to trigger auth context update
+        window.location.reload();
+      } catch (error) {
+        console.error('❌ Error processing Google OAuth token:', error);
+        navigate('/customer-login?error=GOOGLE_AUTH_ERROR');
+      }
+    }
+  }, [location.search, navigate]);
+
   useEffect(() => {
     if (!loading && !authenticated) {
       navigate("/customer-login");
