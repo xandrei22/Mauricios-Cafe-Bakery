@@ -29,11 +29,16 @@ const axiosInstance: AxiosInstance = axios.create({
 });
 
 // ==========================================
-// ✅ Request Interceptor
+// ✅ Request Interceptor - Automatically adds Authorization header
 // ==========================================
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 🔑 Get token from localStorage (same key used by all user types)
     const token = localStorage.getItem('authToken');
+
+    // 🚫 Ensure no cookies or credentials are ever sent
+    config.withCredentials = false;
+    delete (config as any).credentials;
 
     // 🔑 Add Authorization header if token exists
     if (token && token.trim()) {
@@ -41,23 +46,45 @@ axiosInstance.interceptors.request.use(
       if (!config.headers) {
         config.headers = {} as any;
       }
+      
       // Set Authorization header (works with both AxiosHeaders and plain objects)
-      config.headers['Authorization'] = `Bearer ${token.trim()}`;
-      config.headers['authorization'] = `Bearer ${token.trim()}`; // lowercase fallback
-    }
-
-    // 🚫 Ensure no cookies or credentials are ever sent
-    config.withCredentials = false;
-    delete (config as any).credentials;
-
-    // Debug logs for session checks
-    if (config.url?.includes('check-session')) {
-      console.log('🔍 AXIOS REQUEST', {
-        url: config.url,
-        hasToken: !!token,
-        headers: config.headers,
-        withCredentials: config.withCredentials,
-      });
+      const bearerToken = `Bearer ${token.trim()}`;
+      config.headers['Authorization'] = bearerToken;
+      config.headers['authorization'] = bearerToken; // lowercase fallback for compatibility
+      
+      // Debug log for protected endpoints
+      if (config.url && (
+        config.url.includes('/check-session') || 
+        config.url.includes('/admin/') || 
+        config.url.includes('/staff/') || 
+        config.url.includes('/customer/') ||
+        config.url.includes('/api/orders') ||
+        config.url.includes('/api/menu') ||
+        config.url.includes('/api/loyalty')
+      )) {
+        console.log('✅ AXIOS REQUEST - Authorization header attached', {
+          url: config.url,
+          method: config.method,
+          hasToken: true,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 20) + '...',
+          headerSet: !!config.headers['Authorization']
+        });
+      }
+    } else {
+      // Warn if protected endpoint is called without token
+      if (config.url && (
+        config.url.includes('/check-session') || 
+        config.url.includes('/admin/') || 
+        config.url.includes('/staff/') ||
+        (config.url.includes('/customer/') && !config.url.includes('/customer/signup'))
+      )) {
+        console.warn('⚠️ AXIOS REQUEST - No token found for protected endpoint', {
+          url: config.url,
+          method: config.method,
+          localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User'))
+        });
+      }
     }
 
     return config;
