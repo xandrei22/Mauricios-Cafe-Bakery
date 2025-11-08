@@ -32,13 +32,23 @@ function normalizeOrigin(origin) {
 // -------------------
 // Allowed origins
 // -------------------
+// Parse CORS_ALLOWED_ORIGINS if set (comma-separated list)
+const corsAllowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS ?
+    process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) :
+    [];
+
 const allowedOrigins = [
     process.env.FRONTEND_URL,
+    ...corsAllowedOriginsEnv,
     "https://mauricios-cafe-bakery.vercel.app",
     "https://mauricios-cafe-bakery.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173"
 ].filter(Boolean).map(normalizeOrigin);
+
+console.log('🌐 CORS Allowed Origins:', allowedOrigins);
+console.log('🌐 CORS_ALLOWED_ORIGINS env:', process.env.CORS_ALLOWED_ORIGINS || 'not set');
+console.log('🌐 FRONTEND_URL env:', process.env.FRONTEND_URL || 'not set');
 
 function isAllowedOrigin(origin) {
     if (!origin) return true; // mobile app/Postman
@@ -61,18 +71,45 @@ function isAllowedOrigin(origin) {
 // -------------------
 const corsOptions = {
     origin: (origin, callback) => {
-        if (isAllowedOrigin(origin)) return callback(null, true);
-        console.warn('CORS: Origin not allowed, but temporarily allowed for debugging:', origin);
+        if (isAllowedOrigin(origin)) {
+            console.log('✅ CORS: Allowing origin:', origin);
+            return callback(null, true);
+        }
+        console.warn('⚠️ CORS: Origin not in allowed list, but allowing for debugging:', origin);
         callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Type', 'Authorization'],
     credentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
+    maxAge: 86400 // Cache preflight for 24 hours
 };
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // ⭐ CRITICAL: Preflight must use same options
+
+// Additional CORS headers for all responses (backup to ensure headers are set)
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        if (isAllowedOrigin(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+            res.setHeader('Access-Control-Max-Age', '86400');
+        } else {
+            // In production, be permissive if origin check fails
+            if (process.env.NODE_ENV === 'production') {
+                console.warn('⚠️ CORS: Allowing origin in production (permissive mode):', origin);
+                res.setHeader('Access-Control-Allow-Origin', origin);
+                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+            }
+        }
+    }
+    next();
+});
 
 // -------------------
 // Body parsing
