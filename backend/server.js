@@ -17,83 +17,16 @@ const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 
 // -------------------
-// Helper: Normalize origin
+// CORS - SIMPLE AND WORKING
 // -------------------
-function normalizeOrigin(origin) {
-    if (!origin) return '';
-    try {
-        const url = new URL(origin.trim());
-        return url.origin.toLowerCase();
-    } catch {
-        return origin.trim().toLowerCase();
-    }
-}
-
-// -------------------
-// Allowed origins
-// -------------------
-const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    "https://mauricios-cafe-bakery.vercel.app",
-    "https://mauricios-cafe-bakery.onrender.com",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173"
-].filter(Boolean).map(normalizeOrigin);
-
-function isAllowedOrigin(origin) {
-    if (!origin) return true; // mobile app/Postman
-    try {
-        const normalized = normalizeOrigin(origin);
-        const hostname = new URL(origin).hostname.toLowerCase();
-        return allowedOrigins.includes(normalized) ||
-            hostname.endsWith('.vercel.app') ||
-            hostname.endsWith('.onrender.com') ||
-            hostname === 'localhost' ||
-            hostname === '127.0.0.1' ||
-            hostname === '::1';
-    } catch {
-        return process.env.NODE_ENV === 'production'; // be permissive in production
-    }
-}
-
-// -------------------
-// CORS middleware - CRITICAL: Must be before all routes
-// -------------------
-// Simple, explicit CORS configuration that always allows Vercel origin
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-
-    // Always allow Vercel frontend and other allowed origins
-    if (origin) {
-        if (origin.includes('vercel.app') || origin.includes('mauricios-cafe-bakery.vercel.app') || isAllowedOrigin(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin);
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-            res.setHeader('Access-Control-Allow-Credentials', 'false');
-            res.setHeader('Access-Control-Max-Age', '86400');
-
-            console.log('✅ CORS headers set for origin:', origin);
-        }
-    }
-
-    // Handle preflight OPTIONS requests
-    if (req.method === 'OPTIONS') {
-        console.log('✅ Handling OPTIONS preflight request');
-        return res.status(204).end();
-    }
-
-    next();
-});
-
-// Also use cors library as backup
-const corsOptions = {
-    origin: true, // Allow all origins (we filter manually above)
+// Simple CORS that just works - allow all origins for now
+app.use(cors({
+    origin: true, // Allow all origins
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-    credentials: false,
+    credentials: false, // JWT-only, no cookies
     optionsSuccessStatus: 204
-};
-app.use(cors(corsOptions));
+}));
 
 // -------------------
 // Body parsing
@@ -216,12 +149,6 @@ app.use('/api/daily-reset', dailyResetRoutes);
 // Health check endpoint
 // -------------------
 app.get('/api/health', (req, res) => {
-    const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    }
     res.json({
         success: true,
         message: 'Server is running',
@@ -254,12 +181,6 @@ app.set('io', io);
 // 404 handler
 // -------------------
 app.use((req, res) => {
-    const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    }
     res.status(404).json({
         success: false,
         message: 'Route not found'
@@ -278,16 +199,7 @@ app.use((err, req, res, next) => {
     });
     if (res.headersSent) return next(err);
 
-    const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        if (req.path.startsWith('/api/auth/google')) {
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-        }
-    }
-
+    // CORS is handled by cors middleware above, just send error
     res.status(err.status || 500).json({
         success: false,
         message: err.message || 'Internal server error'
