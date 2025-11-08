@@ -15,8 +15,8 @@ const { authenticateJWT } = require('../middleware/jwtAuth');
 const { checkStaffSession } = require('../controllers/adminController');
 router.get('/check-session', authenticateJWT, checkStaffSession);
 
-// Staff dashboard data endpoint
-router.get('/dashboard', async(req, res) => {
+// Staff dashboard data endpoint - requires authentication
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
         console.log('Fetching staff dashboard data...');
 
@@ -539,8 +539,8 @@ router.post('/dashboard/create-sample-data', async(req, res) => {
     }
 });
 
-// Staff dashboard: staff performance data
-router.get('/dashboard/staff-performance', async(req, res) => {
+// Staff dashboard: staff performance data - requires authentication
+router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
     try {
         const { period = 'month' } = req.query; // 'day' or 'month'
 
@@ -557,12 +557,13 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         }
 
         // Get current staff member's performance data only
-        const currentStaffId = req.session.staffUser ? req.session.staffUser.id : null;
+        // Use JWT user from authenticateJWT middleware instead of session
+        const currentStaffId = req.user ? req.user.id : null;
 
         if (!currentStaffId) {
             return res.status(401).json({
                 success: false,
-                error: 'Staff session required'
+                error: 'Staff authentication required'
             });
         }
 

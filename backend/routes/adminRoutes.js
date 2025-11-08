@@ -64,8 +64,8 @@ router.get('/test-auth', (req, res) => {
     });
 });
 
-// Unified metrics summary for admin and staff
-router.get('/metrics/summary', async(req, res) => {
+// Unified metrics summary for admin and staff - requires authentication
+router.get('/metrics/summary', authenticateJWT, async(req, res) => {
     try {
         const { range = 'today' } = req.query;
         let startFilter = '';
@@ -185,8 +185,8 @@ router.get('/dashboard/stream', (req, res) => {
     });
 });
 
-// Admin dashboard data endpoint
-router.get('/dashboard', async(req, res) => {
+// Admin dashboard data endpoint - requires authentication
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
         // Get revenue metrics
         const [revenueResult] = await db.query(`
@@ -272,9 +272,9 @@ router.get('/dashboard', async(req, res) => {
     }
 });
 
-// Chart data endpoints
+// Chart data endpoints - require authentication
 // Sales trend data for line chart
-router.get('/dashboard/sales', async(req, res) => {
+router.get('/dashboard/sales', authenticateJWT, async(req, res) => {
     try {
         // Get daily sales for the last 7 days
         const [salesData] = await db.query(`
@@ -318,8 +318,8 @@ router.get('/dashboard/sales', async(req, res) => {
     }
 });
 
-// Ingredients usage data for pie chart
-router.get('/dashboard/ingredients', async(req, res) => {
+// Ingredients usage data for pie chart - requires authentication
+router.get('/dashboard/ingredients', authenticateJWT, async(req, res) => {
     try {
         // First try to get real ingredient usage from orders
         const [orders] = await db.query(`
@@ -411,8 +411,8 @@ router.get('/dashboard/ingredients', async(req, res) => {
     }
 });
 
-// Menu items popularity data for bar chart
-router.get('/dashboard/menu-items', async(req, res) => {
+// Menu items popularity data for bar chart - requires authentication
+router.get('/dashboard/menu-items', authenticateJWT, async(req, res) => {
     try {
         // Fetch recent orders and aggregate ALL items with proper menu item names
         const [orders] = await db.query(`
@@ -478,8 +478,8 @@ router.get('/dashboard/menu-items', async(req, res) => {
     }
 });
 
-// Staff sales performance data for horizontal bar chart
-router.get('/dashboard/staff-sales', async(req, res) => {
+// Staff sales performance data for horizontal bar chart - requires authentication
+router.get('/dashboard/staff-sales', authenticateJWT, async(req, res) => {
     try {
         let [staffData] = await db.query(`
             SELECT 
@@ -535,8 +535,8 @@ router.get('/dashboard/staff-sales', async(req, res) => {
     }
 });
 
-// Staff performance data with daily and monthly breakdowns
-router.get('/dashboard/staff-performance', async(req, res) => {
+// Staff performance data with daily and monthly breakdowns - requires authentication
+router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
     try {
         const { period = 'month' } = req.query; // 'day' or 'month'
 

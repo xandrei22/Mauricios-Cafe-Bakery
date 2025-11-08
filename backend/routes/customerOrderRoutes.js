@@ -7,6 +7,7 @@ const ingredientDeductionService = require('../services/ingredientDeductionServi
 const adminInventoryService = require('../services/adminInventoryService');
 const db = require('../config/db');
 const { ensureAuthenticated } = require('../middleware/authMiddleware');
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
 // Configure multer for receipt uploads
 const storage = multer.diskStorage({
@@ -116,16 +117,24 @@ router.get('/orders/:customerEmail', async(req, res) => {
     }
 });
 
-// Customer dashboard data endpoint (TEMPORARILY NO AUTH REQUIRED FOR TESTING)
-router.get('/dashboard', async(req, res) => {
+// Customer dashboard data endpoint - requires authentication
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
-        // Get customer ID from query parameter
-        const customerId = req.query.customerId;
+        // Get customer ID from JWT user (authenticateJWT middleware) or query parameter
+        const customerId = req.query.customerId || (req.user && req.user.id);
 
         if (!customerId) {
             return res.status(400).json({
                 success: false,
                 error: 'Customer ID is required'
+            });
+        }
+        
+        // Verify customer ID matches authenticated user (security check)
+        if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied: Customer ID mismatch'
             });
         }
 
@@ -699,16 +708,24 @@ router.put('/status/:orderId', async(req, res) => {
     }
 });
 
-// Customer dashboard data endpoint
-router.get('/dashboard', async(req, res) => {
+// Customer dashboard data endpoint - requires authentication (duplicate route, keeping for compatibility)
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
-        // Get customer ID from session or query
-        const customerId = req.query.customerId || (req.session && req.session.customerUser && req.session.customerUser.id);
+        // Get customer ID from JWT user (authenticateJWT middleware) or query parameter
+        const customerId = req.query.customerId || (req.user && req.user.id);
 
         if (!customerId) {
             return res.status(400).json({
                 success: false,
                 error: 'Customer ID is required'
+            });
+        }
+        
+        // Verify customer ID matches authenticated user (security check)
+        if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied: Customer ID mismatch'
             });
         }
 
@@ -941,3 +958,4 @@ router.post('/orders/:orderId/rate', async(req, res) => {
     }
 });
 module.exports = router;
+
