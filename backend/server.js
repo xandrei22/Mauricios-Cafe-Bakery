@@ -176,7 +176,7 @@ const corsOptions = {
         console.error('❌ CORS: Origin NOT allowed:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
-    credentials: true,
+    credentials: false, // ✅ JWT-only: No cookies needed - all auth via Authorization header
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // ✅ Must include Authorization
     exposedHeaders: ['Content-Type', 'Authorization'],
@@ -219,8 +219,7 @@ app.use((req, res, next) => {
 
     if (isAllowedOrigin(origin)) {
         // Apply CORS headers to ALL requests (not just preflight)
-        // NOTE: We now explicitly set Access-Control-Allow-Credentials to support frontend requests
-        // that send credentials: 'include' (browser requirement)
+        // ✅ JWT-only: No credentials needed - all auth via Authorization header
         // CRITICAL: Only set origin if it exists, never use '*' as fallback
         if (origin) {
             res.header('Access-Control-Allow-Origin', origin);
@@ -228,7 +227,7 @@ app.use((req, res, next) => {
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        res.header('Access-Control-Allow-Credentials', 'true');
+        // Note: Access-Control-Allow-Credentials removed - JWT-only, no cookies
         res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
 
         // Handle preflight requests IMMEDIATELY

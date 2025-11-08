@@ -4191,7 +4191,7 @@ router.get('/inventory/download', async(req, res) => {
 });
 
 // Get detailed order transaction history
-router.get('/transactions/orders', ensureAdminAuthenticated, async(req, res) => {
+router.get('/transactions/orders', authenticateJWT, async(req, res) => {
     try {
         const { date, status } = req.query;
 
@@ -4405,7 +4405,7 @@ router.get('/transactions/sales', async(req, res) => {
 });
 
 // Get detailed payment transaction history
-router.get('/transactions/payments', ensureAdminAuthenticated, async(req, res) => {
+router.get('/transactions/payments', authenticateJWT, async(req, res) => {
     try {
         const { date, status } = req.query;
 

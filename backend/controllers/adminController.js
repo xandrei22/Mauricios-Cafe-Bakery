@@ -39,7 +39,7 @@ async function login(req, res) {
     try {
         console.log('🔐 ADMIN LOGIN REQUEST RECEIVED');
         console.log('🔐 Request origin:', req.headers.origin);
-        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+        // Note: JWT-only authentication - cookies not used
 
         const { username, password } = req.body;
 

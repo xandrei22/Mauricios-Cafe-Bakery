@@ -10,7 +10,7 @@ async function login(req, res) {
     try {
         console.log('🔐 CUSTOMER LOGIN REQUEST RECEIVED');
         console.log('🔐 Request origin:', req.headers.origin);
-        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+        // Note: JWT-only authentication - cookies not used
         console.log('🔐 Request body received:', {
             email: req.body && typeof req.body.email !== 'undefined' ? '***' : 'MISSING',
             password: req.body && typeof req.body.password !== 'undefined' ? '***' : 'MISSING',
