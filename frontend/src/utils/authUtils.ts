@@ -81,12 +81,69 @@ export async function adminLogin(
   const data = response.data;
 
   if (data.success && data.token && data.user) {
-    // Store token and user info
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('adminUser', JSON.stringify(data.user));
-    localStorage.setItem('loginTimestamp', Date.now().toString());
+    // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
+    console.log('💾 SAVING ADMIN TOKEN TO LOCALSTORAGE - CRITICAL STEP');
+    console.log('Token length:', data.token.length);
+    console.log('User data:', data.user);
     
-    console.log('✅ Admin login successful - Token saved');
+    // Clear old data first
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('staffUser');
+      localStorage.removeItem('customerUser');
+      localStorage.removeItem('loginTimestamp');
+    } catch (e) {
+      console.warn('Could not clear old data:', e);
+    }
+
+    // Save with force - multiple synchronous attempts
+    let savedToken: string | null = null;
+    let savedUser: string | null = null;
+
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      try {
+        // Save
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('adminUser', JSON.stringify(data.user));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+
+        // Immediate verification
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('adminUser');
+
+        if (savedToken === data.token && savedUser) {
+          console.log(`✅ ADMIN TOKEN SAVED SUCCESSFULLY on attempt ${attempt}`);
+          break;
+        } else {
+          console.warn(`⚠️ Admin save attempt ${attempt} - Token mismatch. Retrying...`);
+          if (attempt < 10) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Admin save attempt ${attempt} failed:`, error);
+        if (attempt < 10) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+      }
+    }
+
+    // Final verification with multiple checks
+    if (!savedToken || savedToken !== data.token) {
+      // Last resort - try one more time with delay
+      await new Promise(resolve => setTimeout(resolve, 100));
+      savedToken = localStorage.getItem('authToken');
+      savedUser = localStorage.getItem('adminUser');
+    }
+
+    // CRITICAL: If still not saved, throw error
+    if (!savedToken || savedToken !== data.token) {
+      console.error('❌ CRITICAL: Admin token could not be saved after all attempts!');
+      throw new Error('CRITICAL: Failed to save authentication token. Please check browser settings or try a different browser.');
+    }
+    
+    console.log('✅ Admin login successful - Token saved and verified');
     return data;
   }
 
@@ -146,12 +203,69 @@ export async function staffLogin(
   const data = response.data;
 
   if (data.success && data.token && data.user) {
-    // Store token and user info
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('staffUser', JSON.stringify(data.user));
-    localStorage.setItem('loginTimestamp', Date.now().toString());
+    // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
+    console.log('💾 SAVING STAFF TOKEN TO LOCALSTORAGE - CRITICAL STEP');
+    console.log('Token length:', data.token.length);
+    console.log('User data:', data.user);
     
-    console.log('✅ Staff login successful - Token saved');
+    // Clear old data first
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('staffUser');
+      localStorage.removeItem('customerUser');
+      localStorage.removeItem('loginTimestamp');
+    } catch (e) {
+      console.warn('Could not clear old data:', e);
+    }
+
+    // Save with force - multiple synchronous attempts
+    let savedToken: string | null = null;
+    let savedUser: string | null = null;
+
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      try {
+        // Save
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('staffUser', JSON.stringify(data.user));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+
+        // Immediate verification
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('staffUser');
+
+        if (savedToken === data.token && savedUser) {
+          console.log(`✅ STAFF TOKEN SAVED SUCCESSFULLY on attempt ${attempt}`);
+          break;
+        } else {
+          console.warn(`⚠️ Staff save attempt ${attempt} - Token mismatch. Retrying...`);
+          if (attempt < 10) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Staff save attempt ${attempt} failed:`, error);
+        if (attempt < 10) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+      }
+    }
+
+    // Final verification with multiple checks
+    if (!savedToken || savedToken !== data.token) {
+      // Last resort - try one more time with delay
+      await new Promise(resolve => setTimeout(resolve, 100));
+      savedToken = localStorage.getItem('authToken');
+      savedUser = localStorage.getItem('staffUser');
+    }
+
+    // CRITICAL: If still not saved, throw error
+    if (!savedToken || savedToken !== data.token) {
+      console.error('❌ CRITICAL: Staff token could not be saved after all attempts!');
+      throw new Error('CRITICAL: Failed to save authentication token. Please check browser settings or try a different browser.');
+    }
+    
+    console.log('✅ Staff login successful - Token saved and verified');
     return data;
   }
 

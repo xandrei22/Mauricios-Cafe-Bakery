@@ -103,17 +103,31 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = '/api/customer/check-session';
       }
 
-      // CRITICAL: For mobile devices with recent login, wait a bit for token to be saved
+      // CRITICAL: For recent logins, wait for token to be saved to localStorage
       // This ensures localStorage has the token before we check session
-      if (isMobile && isRecentLogin) {
-        console.log('⏳ Waiting for token to be saved to localStorage...');
-        await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms for localStorage sync
-      }
-      
-      // For desktop with recent login, add a small delay
-      if (!isMobile && isRecentLogin) {
-        const delay = 300;
-        await new Promise(resolve => setTimeout(resolve, delay));
+      if (isRecentLogin) {
+        console.log('⏳ ProtectedRoute: Recent login detected - waiting for token to be saved...');
+        const timeSinceLogin = Date.now() - parseInt(loginTimestamp || '0');
+        
+        // If login was VERY recent (less than 1 second), wait longer
+        if (timeSinceLogin < 1000) {
+          const waitTime = isMobile ? 500 : 400; // Longer wait for very recent logins
+          console.log(`⏳ ProtectedRoute: Very recent login (${timeSinceLogin}ms ago) - waiting ${waitTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          // For less recent but still recent logins, shorter wait
+          const waitTime = isMobile ? 300 : 200;
+          console.log(`⏳ ProtectedRoute: Recent login (${timeSinceLogin}ms ago) - waiting ${waitTime}ms`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        // After waiting, verify token exists before proceeding
+        const tokenAfterWait = localStorage.getItem('authToken');
+        if (!tokenAfterWait) {
+          console.warn('⚠️ ProtectedRoute: Token still not found after wait, checking localStorage again...');
+          // One more quick check
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
       // Check if user is logged in by calling the appropriate session check endpoint

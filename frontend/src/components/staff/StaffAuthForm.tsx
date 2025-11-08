@@ -33,17 +33,37 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       
       console.log('Staff login successful, checking for alerts');
       
-      // Verify token was saved
-      const savedToken = localStorage.getItem('authToken');
-      const savedUser = localStorage.getItem('staffUser');
-      console.log('✅ Staff login - Token saved:', savedToken ? 'YES' : 'NO');
-      console.log('✅ Staff login - User saved:', savedUser ? 'YES' : 'NO');
+      // ⭐ CRITICAL: Verify token is saved before redirect (with retry)
+      console.log('🔍 Verifying staff token was saved...');
       
-      if (!savedToken) {
-        console.error('❌ CRITICAL: Staff token not saved to localStorage!');
-        setError("Failed to save authentication token. Please try again.");
+      let savedToken = localStorage.getItem('authToken');
+      let savedUser = localStorage.getItem('staffUser');
+      
+      // Wait up to 1 second for token to be saved (for slow devices)
+      for (let i = 0; i < 10; i++) {
+        if (savedToken && savedUser) {
+          console.log(`✅ Staff token verified after ${i * 100}ms`);
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('staffUser');
+      }
+      
+      // Final check
+      if (!savedToken || !savedUser) {
+        console.error('❌ CRITICAL: Staff token not found after login!', {
+          token: !!savedToken,
+          user: !!savedUser,
+          allKeys: Object.keys(localStorage)
+        });
+        setError("Authentication failed. Please try again.");
         return;
       }
+      
+      console.log('✅ STAFF LOGIN SUCCESSFUL - Redirecting...');
+      console.log('Token exists:', !!savedToken);
+      console.log('User exists:', !!savedUser);
 
       // Check for alerts immediately after successful login
       checkLowStockAlert().catch(err => {
@@ -52,7 +72,7 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       
       // Small delay to ensure localStorage is synced (especially on mobile)
       const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const delay = isMobile ? 200 : 100;
+      const delay = isMobile ? 300 : 150;
       
       setTimeout(() => {
         console.log(`Staff login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
