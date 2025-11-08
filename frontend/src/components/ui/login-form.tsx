@@ -17,7 +17,6 @@ import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { customerLogin } from "../../utils/authUtils";
 import { getApiUrl } from "../../utils/apiConfig";
-import axiosInstance from "../../utils/axiosInstance"; // ✅ Import your JWT-safe axios
 
 export function LoginForm({
   className,

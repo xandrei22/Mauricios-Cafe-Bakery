@@ -34,8 +34,7 @@ function normalizeOrigin(origin) {
 // -------------------
 // Parse CORS_ALLOWED_ORIGINS if set (comma-separated list)
 const corsAllowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS ?
-    process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) :
-    [];
+    process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) : [];
 
 const allowedOrigins = [
     process.env.FRONTEND_URL,
@@ -69,47 +68,13 @@ function isAllowedOrigin(origin) {
 // -------------------
 // CORS middleware
 // -------------------
-const corsOptions = {
-    origin: (origin, callback) => {
-        if (isAllowedOrigin(origin)) {
-            console.log('✅ CORS: Allowing origin:', origin);
-            return callback(null, true);
-        }
-        console.warn('⚠️ CORS: Origin not in allowed list, but allowing for debugging:', origin);
-        callback(null, true);
-    },
+// Simple CORS configuration - similar to your example but with credentials: false for JWT
+app.use(cors({
+    origin: "https://mauricios-cafe-bakery.vercel.app", // Your frontend domain
+    credentials: false, // ⭐ CRITICAL: false for JWT (not cookies)
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-    exposedHeaders: ['Content-Type', 'Authorization'],
-    credentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
-    optionsSuccessStatus: 204,
-    maxAge: 86400 // Cache preflight for 24 hours
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // ⭐ CRITICAL: Preflight must use same options
-
-// Additional CORS headers for all responses (backup to ensure headers are set)
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-        if (isAllowedOrigin(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin);
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-            res.setHeader('Access-Control-Max-Age', '86400');
-        } else {
-            // In production, be permissive if origin check fails
-            if (process.env.NODE_ENV === 'production') {
-                console.warn('⚠️ CORS: Allowing origin in production (permissive mode):', origin);
-                res.setHeader('Access-Control-Allow-Origin', origin);
-                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-            }
-        }
-    }
-    next();
-});
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
 
 // -------------------
 // Body parsing
@@ -179,7 +144,7 @@ const sessionMiddleware = session({
 const passportConfig = require('./controllers/passport');
 passportConfig(passport, db);
 app.use(passport.initialize());
-app.use('/api/auth/google', sessionMiddleware, passport.session());
+app.use(sessionMiddleware);
 
 // -------------------
 // Routes
@@ -232,11 +197,10 @@ app.use('/api/daily-reset', dailyResetRoutes);
 // Health check endpoint
 // -------------------
 app.get('/api/health', (req, res) => {
+    // CORS is handled by middleware, but set header explicitly for this endpoint
     const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
+    if (origin === 'https://mauricios-cafe-bakery.vercel.app') {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     }
     res.json({
         success: true,
@@ -270,12 +234,7 @@ app.set('io', io);
 // 404 handler
 // -------------------
 app.use((req, res) => {
-    const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    }
+    // CORS is handled by middleware
     res.status(404).json({
         success: false,
         message: 'Route not found'
@@ -294,14 +253,10 @@ app.use((err, req, res, next) => {
     });
     if (res.headersSent) return next(err);
 
+    // CORS is handled by middleware, but set header for errors
     const origin = req.headers.origin;
-    if (isAllowedOrigin(origin) && origin) {
+    if (origin === 'https://mauricios-cafe-bakery.vercel.app') {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        if (req.path.startsWith('/api/auth/google')) {
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
-        }
     }
 
     res.status(err.status || 500).json({

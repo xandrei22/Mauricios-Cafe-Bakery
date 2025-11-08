@@ -16,8 +16,13 @@ import { getApiUrl } from './apiConfig';
 // ==========================================
 // ✅ Create axios instance (NO CREDENTIALS)
 // ==========================================
+const apiUrl = getApiUrl() || 'https://mauricios-cafe-bakery.onrender.com';
+console.log('🌐 Axios instance configured with API URL:', apiUrl);
+console.log('🌐 VITE_API_URL from env:', import.meta.env.VITE_API_URL || 'NOT SET');
+console.log('🌐 Current hostname:', window.location.hostname);
+
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: getApiUrl() || 'https://mauricios-cafe-bakery.onrender.com',
+  baseURL: apiUrl,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
   withCredentials: false, // ❌ No cookies — critical for JWT
@@ -68,6 +73,32 @@ axiosInstance.interceptors.response.use(
   (error: AxiosError) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
+    const baseURL = error.config?.baseURL || '';
+
+    // Handle network errors (CORS, connection refused, etc.)
+    if (!error.response) {
+      const isNetworkError = error.code === 'ERR_NETWORK' || 
+                             error.message?.includes('Network Error') ||
+                             error.message?.includes('CORS') ||
+                             error.message?.includes('Failed to fetch');
+      
+      if (isNetworkError) {
+        console.error('🚨 Network/CORS Error:', {
+          message: error.message,
+          code: error.code,
+          url: requestUrl,
+          baseURL: baseURL,
+          fullUrl: baseURL + requestUrl,
+          apiUrl: getApiUrl()
+        });
+        
+        // Create a more descriptive error for network issues
+        const networkError = new Error('Cannot connect to server. Please check your connection and try again.');
+        (networkError as any).isNetworkError = true;
+        (networkError as any).originalError = error;
+        return Promise.reject(networkError);
+      }
+    }
 
     if (status === 401) {
       console.warn('⚠️ 401 Unauthorized', requestUrl);
