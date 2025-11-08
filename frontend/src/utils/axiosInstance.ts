@@ -33,6 +33,12 @@ const axiosInstance: AxiosInstance = axios.create({
 // ==========================================
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 🔍 DIAGNOSTIC: Log the full URL being requested
+    const fullUrl = `${config.baseURL}${config.url}`;
+    console.log('🌐 AXIOS REQUEST URL:', fullUrl);
+    console.log('🌐 Base URL:', config.baseURL);
+    console.log('🌐 Request URL:', config.url);
+    
     // 🔑 Get token from localStorage (same key used by all user types)
     const token = localStorage.getItem('authToken');
 
