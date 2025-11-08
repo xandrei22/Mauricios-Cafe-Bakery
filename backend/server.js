@@ -173,8 +173,11 @@ const corsOptions = {
             return callback(null, true);
         }
 
-        console.error('❌ CORS: Origin NOT allowed:', origin);
-        return callback(new Error('Not allowed by CORS'));
+        // ⭐ CRITICAL: Temporarily allow all origins to ensure requests reach backend
+        // This helps debug why requests are pending
+        console.warn('⚠️ CORS: Origin not in allowed list, but allowing for debugging:', origin);
+        console.warn('⚠️ CORS: Allowed origins:', allowedOrigins);
+        return callback(null, true); // Allow for debugging
     },
     credentials: false, // ✅ JWT-only: No cookies needed - all auth via Authorization header
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -240,8 +243,18 @@ app.use((req, res, next) => {
     } else if (origin) {
         console.error('❌ CORS: Origin not allowed:', origin);
         console.error('❌ CORS: Allowed origins:', allowedOrigins);
-        // Don't set CORS headers - browser will handle the CORS error
-        // But continue processing so we can log the attempt
+        // ⭐ CRITICAL: Still set CORS headers even if origin not in list
+        // This ensures request reaches backend for debugging
+        if (origin) {
+            res.header('Access-Control-Allow-Origin', origin);
+        }
+        res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        // Handle preflight even if origin not in list
+        if (req.method === 'OPTIONS') {
+            console.log('⚠️ CORS Preflight: Origin not in list, but allowing for debugging');
+            return res.sendStatus(204);
+        }
     } else {
         // No origin header (same-origin request or mobile app)
         console.log('⚠️ CORS: No origin header (same-origin or mobile app)');
@@ -268,7 +281,8 @@ app.use((req, res, next) => {
             res.setHeader('Access-Control-Allow-Origin', res.locals.corsOrigin);
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
             res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
+            // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
+            // Note: Access-Control-Allow-Credentials should NOT be set when credentials: false
         }
     };
 
@@ -309,13 +323,14 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
+        // Note: Setting Access-Control-Allow-Credentials: 'true' with credentials: false causes browser to reject requests
     }
     next();
 });
 
 // Extra CORS guard specifically for Socket.IO polling/websocket endpoints
-// Note: Socket.IO may need credentials for its own auth, but API routes use JWT
+// Note: Socket.IO uses JWT for auth (no cookies) - matches corsOptions.credentials: false
 app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
     const origin = req.headers.origin;
     if (isAllowedOrigin(origin)) {
@@ -323,7 +338,7 @@ app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        res.header('Access-Control-Allow-Credentials', 'true');
+        // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
         if (req.method === 'OPTIONS') return res.sendStatus(204);
     }
     next();
