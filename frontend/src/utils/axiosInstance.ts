@@ -1,195 +1,91 @@
 /**
- * Axios instance with automatic JWT token injection
- * Handles token refresh, expiration, and automatic logout
+ * ✅ Secure Axios instance for JWT-only authentication
+ * - Automatically injects JWT from localStorage
+ * - Prevents CORS issues by disabling cookies
+ * - Handles 401/403 and redirects per user role
  */
 
-import axios from 'axios';
-import type { AxiosInstance, InternalAxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
+import axios, {
+  type AxiosInstance,
+  type InternalAxiosRequestConfig,
+  type AxiosError,
+  type AxiosResponse
+} from 'axios';
 import { getApiUrl } from './apiConfig';
 
-// ✅ Create axios instance
-// Use JWT Authorization headers (not cookies) - JWT-only authentication
-// ⭐ CRITICAL: withCredentials MUST be false to prevent CORS errors
-
-// ⭐ CRITICAL: Ensure axios defaults don't have credentials
-if ((axios.defaults as any).withCredentials !== undefined) {
-  (axios.defaults as any).withCredentials = false;
-}
-
+// ==========================================
+// ✅ Create axios instance (NO CREDENTIALS)
+// ==========================================
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: getApiUrl() || 'https://mauricios-cafe-bakery.onrender.com',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000, // 30 seconds
-  withCredentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
+  withCredentials: false, // ❌ No cookies — critical for JWT
 });
 
-// ⭐ CRITICAL: Double-check instance defaults
-(axiosInstance.defaults as any).withCredentials = false;
-
-// ====================== REQUEST INTERCEPTOR ======================
-// ⭐ CRITICAL: This interceptor MUST run for ALL requests
+// ==========================================
+// ✅ Request Interceptor
+// ==========================================
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // ⭐ CRITICAL: Get token from localStorage FIRST
     const token = localStorage.getItem('authToken');
-    
-    // ⭐ CRITICAL: Log for ALL requests to verify interceptor is running
-    if (config.url?.includes('check-session')) {
-      console.log('🔍🔍🔍 AXIOS INTERCEPTOR RUNNING FOR CHECK-SESSION 🔍🔍🔍');
-      console.log('Token exists:', !!token);
-      console.log('Token length:', token?.length || 0);
-      console.log('Config URL:', config.url);
-      console.log('Config method:', config.method);
-      console.log('Config headers BEFORE:', config.headers ? Object.keys(config.headers) : 'NO HEADERS');
-    }
-    
-    // ⭐ CRITICAL: Always add Authorization header if token exists
+
+    // 🔑 Add Authorization header if token exists
     if (token && token.trim()) {
-      // CRITICAL: Set header - use axios's proper header setting
-      const authHeader = `Bearer ${token.trim()}`;
-      
       // Ensure headers object exists
       if (!config.headers) {
         config.headers = {} as any;
       }
-      
-      // CRITICAL: Set header using multiple methods to ensure it works
-      // Method 1: Direct assignment
-      config.headers['Authorization'] = authHeader;
-      config.headers['authorization'] = authHeader;
-      
-      // Method 2: Use setHeader if available (for AxiosHeaders)
-      if (typeof (config.headers as any).set === 'function') {
-        try {
-          (config.headers as any).set('Authorization', authHeader);
-        } catch (e) {
-          console.warn('Could not use headers.set():', e);
-        }
-      }
-      
-      // Method 3: Force set on the config object directly
-      (config as any).headers = {
-        ...config.headers,
-        'Authorization': authHeader,
-        'authorization': authHeader
-      };
-      
-      // ALWAYS log for check-session to debug
-      if (config.url?.includes('check-session')) {
-        console.log('🔑🔑🔑 AUTHORIZATION HEADER SET 🔑🔑🔑', {
-          url: config.url,
-          hasToken: !!token,
-          tokenLength: token.length,
-          tokenPreview: token.substring(0, 30) + '...',
-          headerSet: !!(config.headers['Authorization'] || config.headers['authorization']),
-          headerValue: (config.headers['Authorization'] || config.headers['authorization'])?.substring(0, 40) + '...',
-          allHeaderKeys: Object.keys(config.headers || {}),
-          configHeadersType: typeof config.headers,
-          configHeadersConstructor: config.headers?.constructor?.name
-        });
-        
-        // CRITICAL: Final verification - check if header is actually set
-        const finalHeader = config.headers['Authorization'] || config.headers['authorization'];
-        if (!finalHeader) {
-          console.error('❌❌❌ CRITICAL: Header was set but is now missing! ❌❌❌');
-          console.error('Config headers after setting:', config.headers);
-        } else {
-          console.log('✅ Header verified in config:', finalHeader.substring(0, 40) + '...');
-        }
-      }
-    } else {
-      // ALWAYS error for check-session if no token
-      if (config.url?.includes('check-session')) {
-        console.error('❌❌❌ NO TOKEN IN LOCALSTORAGE FOR CHECK-SESSION ❌❌❌', {
-          url: config.url,
-          localStorageKeys: Object.keys(localStorage),
-          localStorageContent: {
-            authToken: localStorage.getItem('authToken') ? 'EXISTS' : 'MISSING',
-            customerUser: localStorage.getItem('customerUser') ? 'EXISTS' : 'MISSING',
-            loginTimestamp: localStorage.getItem('loginTimestamp')
-          },
-          tokenValue: localStorage.getItem('authToken')
-        });
-      }
+      // Set Authorization header (works with both AxiosHeaders and plain objects)
+      config.headers['Authorization'] = `Bearer ${token.trim()}`;
+      config.headers['authorization'] = `Bearer ${token.trim()}`; // lowercase fallback
     }
 
-    // ⭐ CRITICAL: JWT-only - NEVER send credentials (no cookies)
-    // This MUST be false to prevent CORS errors
-    // Force set multiple times to ensure it's never overridden
+    // 🚫 Ensure no cookies or credentials are ever sent
     config.withCredentials = false;
-    (config as any).withCredentials = false;
-    if (config.headers) {
-      (config.headers as any).withCredentials = false;
-    }
-    
-    // Double-check: Force remove any credentials that might have been set
-    if ((config as any).credentials) {
-      delete (config as any).credentials;
-    }
-    
-    // ⭐ CRITICAL: Runtime verification - log if credentials are being sent
-    const hasCredentials = (config as any).withCredentials === true || (config as any).credentials === 'include';
-    if (hasCredentials) {
-      console.error('❌❌❌ CRITICAL: Credentials detected in request! This should NEVER happen! ❌❌❌', {
+    delete (config as any).credentials;
+
+    // Debug logs for session checks
+    if (config.url?.includes('check-session')) {
+      console.log('🔍 AXIOS REQUEST', {
         url: config.url,
-        withCredentials: (config as any).withCredentials,
-        credentials: (config as any).credentials,
-        config: config
+        hasToken: !!token,
+        headers: config.headers,
+        withCredentials: config.withCredentials,
       });
-      // Force fix it
-      config.withCredentials = false;
-      delete (config as any).credentials;
     }
 
     return config;
   },
-  (error: AxiosError) => {
-    console.error('❌ Axios request interceptor error:', error);
-    return Promise.reject(error);
-  }
+  (error: AxiosError) => Promise.reject(error)
 );
 
-// ====================== RESPONSE INTERCEPTOR ======================
+// ==========================================
+// ✅ Response Interceptor
+// ==========================================
 axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => {
-    // ✅ Return successful response
-    return response;
-  },
+  (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    // Handle 401 Unauthorized (token expired or invalid)
-    if (error.response?.status === 401) {
-      const requestUrl = error.config?.url || 'unknown';
-      const requestMethod = error.config?.method?.toUpperCase() || 'unknown';
-      const hasAuthHeader = !!error.config?.headers?.Authorization;
+    const status = error.response?.status;
+    const requestUrl = error.config?.url || '';
 
-      console.warn('⚠️ Axios: 401 Unauthorized', {
-        url: requestUrl,
-        method: requestMethod,
-        hasAuthHeader,
-        responseData: error.response?.data,
-        tokenExists: !!localStorage.getItem('authToken'),
-      });
+    if (status === 401) {
+      console.warn('⚠️ 401 Unauthorized', requestUrl);
 
-      // Only clear auth data and redirect if this is NOT a check-session endpoint
+      // Do not auto-logout on session check
       const isSessionCheck = requestUrl.includes('/check-session');
-
       if (!isSessionCheck) {
-        // Clear auth data
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('adminUser');
-        localStorage.removeItem('staffUser');
-        localStorage.removeItem('customerUser');
-        localStorage.removeItem('loginTimestamp');
+        // Clear local storage
+        ['authToken', 'adminUser', 'staffUser', 'customerUser', 'loginTimestamp']
+          .forEach(key => localStorage.removeItem(key));
 
-        // Redirect based on current route
-        const currentPath = window.location.pathname;
-        if (currentPath.startsWith('/admin')) {
+        // Redirect user to appropriate login
+        const path = window.location.pathname;
+        if (path.startsWith('/admin')) {
           window.location.href = '/admin/login';
-        } else if (currentPath.startsWith('/staff')) {
+        } else if (path.startsWith('/staff')) {
           window.location.href = '/staff/login';
-        } else if (currentPath.startsWith('/customer')) {
+        } else if (path.startsWith('/customer')) {
           window.location.href = '/customer-login';
         } else {
           window.location.href = '/login';
@@ -197,12 +93,10 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    // Handle 403 Forbidden
-    if (error.response?.status === 403) {
-      console.warn('⚠️ Axios: 403 Forbidden - Access denied', {
+    if (status === 403) {
+      console.warn('🚫 403 Forbidden', {
         url: error.config?.url,
         method: error.config?.method,
-        responseData: error.response?.data,
       });
     }
 
@@ -210,8 +104,9 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-// ⭐ CRITICAL: Verify interceptor is registered
-console.log('✅ Axios instance created and interceptor registered');
+// ==========================================
+// ✅ Debug confirmation
+// ==========================================
+console.log('✅ Secure Axios instance initialized (JWT-only, no credentials)');
 
-// Export the instance
 export default axiosInstance;
