@@ -155,8 +155,9 @@ const io = socketIo(server, {
                 console.log("✅ Socket.IO CORS allowed for origin:", origin || 'NO ORIGIN');
                 return callback(null, true);
             }
-            console.error("❌ Socket.IO CORS blocked for origin:", origin);
-            return callback(new Error('Not allowed by CORS'));
+            // ⭐ CRITICAL: Allow all origins for debugging (same as corsOptions)
+            console.warn("⚠️ Socket.IO CORS: Origin not in list, but allowing for debugging:", origin);
+            return callback(null, true);
         },
         methods: ["GET", "POST"],
         credentials: false // JWT-only, no cookies
@@ -230,7 +231,10 @@ app.use((req, res, next) => {
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // Note: Access-Control-Allow-Credentials removed - JWT-only, no cookies
+        // ⭐ CRITICAL: Explicitly DO NOT set Access-Control-Allow-Credentials
+        // This ensures browser knows credentials are NOT allowed (JWT-only)
+        // If we don't set it at all, browser will reject requests with credentials: 'include'
+        // This is the correct behavior for JWT-only authentication
         res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
 
         // Handle preflight requests IMMEDIATELY
@@ -281,8 +285,9 @@ app.use((req, res, next) => {
             res.setHeader('Access-Control-Allow-Origin', res.locals.corsOrigin);
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
             res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-            // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
-            // Note: Access-Control-Allow-Credentials should NOT be set when credentials: false
+            // ⭐ CRITICAL: Explicitly DO NOT set Access-Control-Allow-Credentials
+            // JWT-only authentication - credentials are NOT allowed
+            // If frontend sends credentials: 'include', browser will reject it (correct behavior)
         }
     };
 
@@ -307,7 +312,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Apply CORS middleware (this handles preflight and basic CORS)
+// ⭐ CRITICAL: Apply CORS middleware BEFORE body parsing
+// This ensures CORS headers are set for all requests, including preflight
 // Note: Our manual headers above ensure CORS headers are on ALL responses
 app.use(cors(corsOptions));
 
@@ -323,8 +329,9 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
-        // Note: Setting Access-Control-Allow-Credentials: 'true' with credentials: false causes browser to reject requests
+        // ⭐ CRITICAL: Explicitly DO NOT set Access-Control-Allow-Credentials
+        // JWT-only authentication - credentials are NOT allowed
+        // This ensures browser rejects any requests with credentials: 'include' (correct behavior)
     }
     next();
 });
@@ -338,7 +345,8 @@ app.use(['/socket.io', '/socket.io/*'], (req, res, next) => {
         res.header('Vary', 'Origin');
         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // ✅ JWT-only: No credentials header - matches corsOptions.credentials: false
+        // ⭐ CRITICAL: Explicitly DO NOT set Access-Control-Allow-Credentials
+        // JWT-only authentication - credentials are NOT allowed
         if (req.method === 'OPTIONS') return res.sendStatus(204);
     }
     next();
