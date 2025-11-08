@@ -9,13 +9,14 @@ import { getApiUrl } from './apiConfig';
 
 // ✅ Create axios instance
 // Use JWT Authorization headers (not cookies) - JWT-only authentication
+// ⭐ CRITICAL: withCredentials MUST be false to prevent CORS errors
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: getApiUrl() || 'https://mauricios-cafe-bakery.onrender.com',
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 30000, // 30 seconds
-  withCredentials: false, // ✅ JWT-only: No cookies needed - all auth via Authorization header
+  withCredentials: false, // ⭐ CRITICAL: JWT-only - MUST be false (no cookies)
 });
 
 // ====================== REQUEST INTERCEPTOR ======================
@@ -105,8 +106,14 @@ axiosInstance.interceptors.request.use(
       }
     }
 
-    // JWT-only: No credentials needed (no cookies)
+    // ⭐ CRITICAL: JWT-only - NEVER send credentials (no cookies)
+    // This MUST be false to prevent CORS errors
     config.withCredentials = false;
+    
+    // Double-check: Force remove any credentials that might have been set
+    if ((config as any).credentials) {
+      delete (config as any).credentials;
+    }
 
     return config;
   },
