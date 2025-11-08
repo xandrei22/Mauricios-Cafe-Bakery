@@ -9,99 +9,81 @@ import { Label } from "./label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card"
 import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { customerLogin } from "../../utils/authUtils";
 import { getApiUrl } from "../../utils/apiConfig";
+import { customerLogin } from "../../utils/authUtils";
 
-export function LoginForm({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+interface LoginFormProps extends React.ComponentProps<"div"> {
+  onLoginSuccess?: () => void;
+}
+
+export function LoginForm({ className, onLoginSuccess, ...props }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Get table number from URL if present
   const urlParams = new URLSearchParams(window.location.search);
   const tableFromUrl = urlParams.get('table');
-  
-  // Check for Google OAuth verification error
+
   useEffect(() => {
-    const error = urlParams.get('error');
+    const errorParam = urlParams.get('error');
     const message = urlParams.get('message');
     
-    if (error === 'EMAIL_VERIFICATION_REQUIRED') {
-      setError(message || 'Please verify your email address before logging in. Check your email for the verification link.');
-    } else if (error === 'EMAIL_REGISTERED_PASSWORD') {
-      setError('This email is already registered with a password. Please log in using your email and password.');
-    } else if (error === 'GOOGLE_AUTH_NOT_CONFIGURED') {
-      setError('Google authentication is not configured. Please use email and password to login.');
-    } else if (error === 'GOOGLE_AUTH_ERROR') {
-      setError('Google authentication failed. Please try again or use email and password.');
+    switch (errorParam) {
+      case 'EMAIL_VERIFICATION_REQUIRED':
+        setError(message || 'Please verify your email address before logging in. Check your email for the verification link.');
+        break;
+      case 'EMAIL_REGISTERED_PASSWORD':
+        setError('This email is already registered with a password. Please log in using your email and password.');
+        break;
+      case 'GOOGLE_AUTH_NOT_CONFIGURED':
+        setError('Google authentication is not configured. Please use email and password to login.');
+        break;
+      case 'GOOGLE_AUTH_ERROR':
+        setError('Google authentication failed. Please try again or use email and password.');
+        break;
+      default:
+        break;
     }
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    
+
     try {
       const hasTable = !!tableFromUrl;
+
       await customerLogin(email, password, hasTable, false);
-      
-      // ⭐ CRITICAL: Verify token is saved before redirect
-      console.log('🔍 Verifying token was saved...');
-      
-      let savedToken = localStorage.getItem('authToken');
-      let savedUser = localStorage.getItem('customerUser');
-      
-      // Wait up to 1 second for token to be saved (for slow devices)
-      for (let i = 0; i < 10; i++) {
-        if (savedToken && savedUser) {
-          console.log(`✅ Token verified after ${i * 100}ms`);
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-        savedToken = localStorage.getItem('authToken');
-        savedUser = localStorage.getItem('customerUser');
-      }
-      
-      // Final check
+
+      const savedToken = localStorage.getItem('authToken');
+      const savedUser = localStorage.getItem('customerUser');
+
       if (!savedToken || !savedUser) {
-        console.error('❌ CRITICAL: Token not found after login!', {
-          token: !!savedToken,
-          user: !!savedUser,
-          allKeys: Object.keys(localStorage)
-        });
         setError("Authentication failed. Please try again.");
+        setLoading(false);
         return;
       }
-      
-      console.log('✅ LOGIN SUCCESSFUL - Redirecting...');
-      console.log('Token exists:', !!savedToken);
-      console.log('User exists:', !!savedUser);
-      
-      // Small delay then redirect
-      setTimeout(() => {
-        window.location.href = tableFromUrl 
-          ? `/customer/menu?table=${tableFromUrl}` 
-          : '/customer/dashboard';
-      }, 150);
-      
-    } catch (err: any) {
-      console.error('Customer login error:', err);
-      
-      if (err.response?.data?.requiresVerification) {
-        setError(err.response.data.message + " Please check your email for the verification link.");
+
+      if (onLoginSuccess) {
+        onLoginSuccess();
       } else {
-        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+        setTimeout(() => {
+          window.location.href = tableFromUrl 
+            ? `/customer/menu?table=${tableFromUrl}` 
+            : '/customer/dashboard';
+        }, 150);
       }
+
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <div className={cn("flex flex-col gap-3 sm:gap-6 max-w-xs sm:max-w-sm md:max-w-md w-full mx-auto p-3 sm:p-4 md:p-0", className)} {...props}>
@@ -163,8 +145,14 @@ export function LoginForm({
                 <Button type="submit" className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white h-10 sm:h-11 text-sm sm:text-base" disabled={loading}>
                   {loading ? "Logging in..." : "Login"}
                 </Button>
-                <Button variant="outline" className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base" type="button" disabled={loading} onClick={() => window.location.href = `${getApiUrl()}/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}` }>
-                  {/* Google "G" logo */}
+                <Button
+                  variant="outline"
+                  className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7] h-10 sm:h-11 text-sm sm:text-base"
+                  type="button"
+                  disabled={loading}
+                  onClick={() => window.location.href = `${getApiUrl()}/api/auth/google${tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ''}`}
+                >
+                  {/* Google Logo */}
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-4 w-4 sm:h-5 sm:w-5">
                     <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.676 32.658 29.223 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.157 7.961 3.039l5.657-5.657C33.64 6.053 29.083 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20c10.494 0 19.126-7.645 19.126-20 0-1.341-.146-2.651-.415-3.917z"/>
                     <path fill="#FF3D00" d="M6.306 14.691l6.571 4.817C14.57 16.23 18.879 12 24 12c3.059 0 5.842 1.157 7.961 3.039l5.657-5.657C33.64 6.053 29.083 4 24 4 16.318 4 9.678 8.337 6.306 14.691z"/>
@@ -193,4 +181,4 @@ export function LoginForm({
       </div>
     </div>
   );
-} 
+}
