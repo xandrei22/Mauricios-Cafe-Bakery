@@ -62,7 +62,6 @@ function isAllowedOrigin(origin) {
 // Simple, explicit CORS configuration that always allows Vercel origin
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    const isGoogleOAuth = req.path.startsWith('/api/auth/google');
 
     // Always allow Vercel frontend and other allowed origins
     if (origin) {
@@ -70,19 +69,10 @@ app.use((req, res, next) => {
             res.setHeader('Access-Control-Allow-Origin', origin);
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-
-            // ✅ Only set Access-Control-Allow-Credentials for Google OAuth (uses sessions)
-            // ❌ DO NOT set it for other routes (JWT-only, no credentials needed)
-            // Setting it to 'false' (string) is interpreted as truthy by browsers!
-            if (isGoogleOAuth) {
-                res.setHeader('Access-Control-Allow-Credentials', 'true');
-                console.log('✅ CORS credentials enabled for Google OAuth:', origin);
-            }
-            // For all other routes, do NOT set Access-Control-Allow-Credentials header
-
+            res.setHeader('Access-Control-Allow-Credentials', 'false');
             res.setHeader('Access-Control-Max-Age', '86400');
 
-            console.log('✅ CORS headers set for origin:', origin, isGoogleOAuth ? '(with credentials)' : '(no credentials)');
+            console.log('✅ CORS headers set for origin:', origin);
         }
     }
 
@@ -231,7 +221,6 @@ app.get('/api/health', (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // No credentials header - JWT-only authentication
     }
     res.json({
         success: true,
@@ -270,7 +259,6 @@ app.use((req, res) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // No credentials header - JWT-only authentication
     }
     res.status(404).json({
         success: false,
@@ -295,12 +283,9 @@ app.use((err, req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-        // Only set credentials header for Google OAuth (which uses sessions)
         if (req.path.startsWith('/api/auth/google')) {
             res.setHeader('Access-Control-Allow-Credentials', 'true');
         }
-        // For all other routes, do NOT set Access-Control-Allow-Credentials
-        // (JWT-only authentication doesn't need credentials)
     }
 
     res.status(err.status || 500).json({
