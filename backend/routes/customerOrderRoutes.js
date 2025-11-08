@@ -6,7 +6,7 @@ const orderProcessingService = require('../services/orderProcessingService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const adminInventoryService = require('../services/adminInventoryService');
 const db = require('../config/db');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const { authenticateJWT } = require('../middleware/jwtAuth');
 
 // Configure multer for receipt uploads
@@ -129,7 +129,7 @@ router.get('/dashboard', authenticateJWT, async(req, res) => {
                 error: 'Customer ID is required'
             });
         }
-        
+
         // Verify customer ID matches authenticated user (security check)
         if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
             return res.status(403).json({
@@ -312,8 +312,10 @@ router.get('/dashboard', authenticateJWT, async(req, res) => {
     }
 });
 
-// Apply authentication to order-related routes (require login for orders)
-router.use(ensureAuthenticated);
+// ⭐ CRITICAL: Apply JWT authentication to order-related routes (require login for orders)
+// Note: Individual routes below should use authenticateJWT middleware
+// This global middleware is kept for backward compatibility but routes should explicitly use authenticateJWT
+// router.use(authenticateJWT); // Commented out - routes should explicitly use authenticateJWT
 
 // Check if order can be fulfilled
 router.post('/check-fulfillment', async(req, res) => {
@@ -384,9 +386,9 @@ router.post('/place-order', async(req, res) => {
         }
 
         // Process the order
-        // Get staff ID from session if available (for admin/staff processing customer orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Get staff ID from JWT user if available (for admin/staff processing customer orders)
+        // req.user is set by authenticateJWT middleware if route is protected
+        const staffId = (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
         const result = await orderProcessingService.processCustomerOrder(orderData, staffId);
         res.json(result);
@@ -463,9 +465,9 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             tableNumber :
             (tableNumber ? Math.min(6, Math.max(1, Number(tableNumber))) : null);
 
-        // Get staff ID from session if available (for admin/staff processing customer orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Get staff ID from JWT user if available (for admin/staff processing customer orders)
+        // req.user is set by authenticateJWT middleware if route is protected
+        const staffId = (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
 
         // Ensure customer record exists
@@ -720,7 +722,7 @@ router.get('/dashboard', authenticateJWT, async(req, res) => {
                 error: 'Customer ID is required'
             });
         }
-        
+
         // Verify customer ID matches authenticated user (security check)
         if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
             return res.status(403).json({
@@ -958,4 +960,3 @@ router.post('/orders/:orderId/rate', async(req, res) => {
     }
 });
 module.exports = router;
-

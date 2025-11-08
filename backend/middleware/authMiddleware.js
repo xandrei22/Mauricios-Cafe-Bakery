@@ -2,13 +2,8 @@ const jwt = require('jsonwebtoken');
 
 function ensureAuthenticated(req, res, next) {
     try {
-        // Accept passport or our manual session users
-        if ((req.isAuthenticated && req.isAuthenticated()) ||
-            req.session.adminUser || req.session.staffUser || req.session.customerUser) {
-            return next();
-        }
-
-        // Fallback: Accept Authorization: Bearer <token>
+        // ⭐ CRITICAL: Prioritize JWT token authentication (primary method)
+        // Check Authorization: Bearer <token> header FIRST
         const authHeader = (req.headers && req.headers.authorization) || '';
         const parts = authHeader.split(' ');
         const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
@@ -20,9 +15,17 @@ function ensureAuthenticated(req, res, next) {
                 const payload = jwt.verify(token, secret);
                 req.user = payload;
                 return next();
-            } catch (_) {
-                // invalid token -> fall through to 401/redirect below
+            } catch (verifyError) {
+                // Token invalid or expired - log but continue to check sessions (for Google OAuth compatibility)
+                console.warn('JWT verification failed:', verifyError.name);
             }
+        }
+
+        // Fallback: Accept passport or our manual session users (for Google OAuth only)
+        // This is kept for backward compatibility with Google OAuth which uses sessions
+        if ((req.isAuthenticated && req.isAuthenticated()) ||
+            req.session.adminUser || req.session.staffUser || req.session.customerUser) {
+            return next();
         }
     } catch (e) {
         // If session is corrupted, clean up to avoid loops

@@ -3,12 +3,11 @@ const router = express.Router();
 const db = require('../config/db');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const orderProcessingService = require('../services/orderProcessingService');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
+// Note: ensureStaffAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const ActivityLogger = require('../utils/activityLogger');
 
-// Apply staff authentication to all staff routes
-// Temporarily bypass authentication for testing
-// router.use(ensureStaffAuthenticated);
+// Note: All staff routes now use authenticateJWT middleware (JWT-only, no sessions)
+// router.use(ensureStaffAuthenticated); // Removed - use authenticateJWT on individual routes
 
 // Staff session check - uses JWT middleware
 const { authenticateJWT } = require('../middleware/jwtAuth');
@@ -747,8 +746,8 @@ router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
     }
 });
 
-// Get all orders for staff management
-router.get('/orders', async(req, res) => {
+// Get all orders for staff management - requires authentication
+router.get('/orders', authenticateJWT, async(req, res) => {
     try {
         const [ordersResult] = await db.query(`
             SELECT 
@@ -846,8 +845,8 @@ router.get('/orders', async(req, res) => {
     }
 });
 
-// Update order status
-router.put('/orders/:orderId/status', async(req, res) => {
+// Update order status - requires authentication
+router.put('/orders/:orderId/status', authenticateJWT, async(req, res) => {
     try {
         const { orderId } = req.params;
         const { status, cancelledBy, cancellationReason, cancelledAt } = req.body;
@@ -884,14 +883,15 @@ router.put('/orders/:orderId/status', async(req, res) => {
                 WHERE order_id = ?
             `, [
                 status,
-                cancelledBy || (req.session.staffUser && req.session.staffUser.id) || 'staff',
+                cancelledBy || (req.user && req.user.id) || 'staff',
                 cancellationReason || 'Cancelled by staff',
                 cancelledAt || new Date(),
                 orderId
             ]);
         } else {
             // Regular status update - also update staff_id to track who processed this order
-            const currentStaffId = req.session.staffUser ? req.session.staffUser.id : null;
+            // Get staff ID from JWT user (authenticateJWT middleware)
+            const currentStaffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
             let updateQuery = 'UPDATE orders SET status = ?, updated_at = NOW()';
             let updateParams = [status];
 
@@ -1222,8 +1222,8 @@ router.get('/events/upcoming', async(req, res) => {
 });
 
 // Payment verification routes for staff (same as admin)
-// Verify payment and process order (Staff)
-router.post('/orders/:orderId/verify-payment', async(req, res) => {
+// Verify payment and process order (Staff) - requires authentication
+router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod, verifiedBy, reference, transactionId } = req.body;
@@ -2796,8 +2796,8 @@ router.get('/orders', async(req, res) => {
     }
 });
 
-// Get staff orders (same as admin orders but for staff)
-router.get('/orders', async(req, res) => {
+// Get staff orders (same as admin orders but for staff) - requires authentication
+router.get('/orders', authenticateJWT, async(req, res) => {
     try {
         const { status, customerId, tableNumber, page = 1, limit = 20 } = req.query;
 

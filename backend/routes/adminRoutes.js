@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
+// Note: ensureAdminAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const { authenticateJWT } = require('../middleware/jwtAuth');
 const { login, checkSession, logout, createStaff, editStaff, getAllStaff, countStaff, countAdmins, deleteStaff, getRevenueMetrics, getOrderMetrics, getInventoryMetrics, forgotPassword, resetPassword } = require('../controllers/adminController');
 const ActivityLogger = require('../utils/activityLogger');
@@ -46,21 +46,19 @@ router.get('/test', async(req, res) => {
     }
 });
 
-// Protected Admin Routes (require authentication and admin role)
-// Temporarily bypass authentication for testing
-// router.use(ensureAdminAuthenticated);
+// Note: All admin routes now use authenticateJWT middleware (JWT-only, no sessions)
+// router.use(ensureAdminAuthenticated); // Removed - use authenticateJWT on individual routes
 
-// Test route to check authentication
-router.get('/test-auth', (req, res) => {
+// Test route to check authentication - uses JWT
+router.get('/test-auth', authenticateJWT, (req, res) => {
     console.log('Test auth route accessed');
-    console.log('Session:', req.session);
-    console.log('User:', req.session.user);
+    console.log('JWT User:', req.user);
 
     res.json({
         success: true,
         message: 'Admin authentication working',
-        user: req.session.user,
-        sessionId: req.sessionID
+        user: req.user,
+        authMethod: 'JWT'
     });
 });
 
@@ -2005,13 +2003,13 @@ router.get('/activity-logs/stats', async(req, res) => {
     }
 });
 
-// Staff Management Routes (require authentication and admin role)
-router.post('/staff', createStaff);
-router.put('/staff/:id', editStaff);
-router.get('/staff', getAllStaff);
-router.get('/metrics/staff/count', countStaff);
-router.get('/metrics/admins/count', countAdmins);
-router.delete('/staff/:id', deleteStaff);
+// Staff Management Routes (require authentication and admin role) - uses JWT
+router.post('/staff', authenticateJWT, createStaff);
+router.put('/staff/:id', authenticateJWT, editStaff);
+router.get('/staff', authenticateJWT, getAllStaff);
+router.get('/metrics/staff/count', authenticateJWT, countStaff);
+router.get('/metrics/admins/count', authenticateJWT, countAdmins);
+router.delete('/staff/:id', authenticateJWT, deleteStaff);
 
 // Loyalty Management Routes
 // Get loyalty settings
