@@ -32,22 +32,13 @@ function normalizeOrigin(origin) {
 // -------------------
 // Allowed origins
 // -------------------
-// Parse CORS_ALLOWED_ORIGINS if set (comma-separated list)
-const corsAllowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS ?
-    process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean) : [];
-
 const allowedOrigins = [
     process.env.FRONTEND_URL,
-    ...corsAllowedOriginsEnv,
     "https://mauricios-cafe-bakery.vercel.app",
     "https://mauricios-cafe-bakery.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173"
 ].filter(Boolean).map(normalizeOrigin);
-
-console.log('🌐 CORS Allowed Origins:', allowedOrigins);
-console.log('🌐 CORS_ALLOWED_ORIGINS env:', process.env.CORS_ALLOWED_ORIGINS || 'not set');
-console.log('🌐 FRONTEND_URL env:', process.env.FRONTEND_URL || 'not set');
 
 function isAllowedOrigin(origin) {
     if (!origin) return true; // mobile app/Postman
@@ -66,15 +57,53 @@ function isAllowedOrigin(origin) {
 }
 
 // -------------------
-// CORS middleware
+// CORS middleware - CRITICAL: Must be before all routes
 // -------------------
-// Simple CORS configuration - similar to your example but with credentials: false for JWT
-app.use(cors({
-    origin: "https://mauricios-cafe-bakery.vercel.app", // Your frontend domain
-    credentials: false, // ⭐ CRITICAL: false for JWT (not cookies)
+// Simple, explicit CORS configuration that always allows Vercel origin
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const isGoogleOAuth = req.path.startsWith('/api/auth/google');
+
+    // Always allow Vercel frontend and other allowed origins
+    if (origin) {
+        if (origin.includes('vercel.app') || origin.includes('mauricios-cafe-bakery.vercel.app') || isAllowedOrigin(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+
+            // ✅ Only set Access-Control-Allow-Credentials for Google OAuth (uses sessions)
+            // ❌ DO NOT set it for other routes (JWT-only, no credentials needed)
+            // Setting it to 'false' (string) is interpreted as truthy by browsers!
+            if (isGoogleOAuth) {
+                res.setHeader('Access-Control-Allow-Credentials', 'true');
+                console.log('✅ CORS credentials enabled for Google OAuth:', origin);
+            }
+            // For all other routes, do NOT set Access-Control-Allow-Credentials header
+
+            res.setHeader('Access-Control-Max-Age', '86400');
+
+            console.log('✅ CORS headers set for origin:', origin, isGoogleOAuth ? '(with credentials)' : '(no credentials)');
+        }
+    }
+
+    // Handle preflight OPTIONS requests
+    if (req.method === 'OPTIONS') {
+        console.log('✅ Handling OPTIONS preflight request');
+        return res.status(204).end();
+    }
+
+    next();
+});
+
+// Also use cors library as backup
+const corsOptions = {
+    origin: true, // Allow all origins (we filter manually above)
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
-}));
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    credentials: false,
+    optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
 
 // -------------------
 // Body parsing
@@ -144,7 +173,7 @@ const sessionMiddleware = session({
 const passportConfig = require('./controllers/passport');
 passportConfig(passport, db);
 app.use(passport.initialize());
-app.use(sessionMiddleware);
+app.use('/api/auth/google', sessionMiddleware, passport.session());
 
 // -------------------
 // Routes
@@ -197,10 +226,12 @@ app.use('/api/daily-reset', dailyResetRoutes);
 // Health check endpoint
 // -------------------
 app.get('/api/health', (req, res) => {
-    // CORS is handled by middleware, but set header explicitly for this endpoint
     const origin = req.headers.origin;
-    if (origin === 'https://mauricios-cafe-bakery.vercel.app') {
+    if (isAllowedOrigin(origin) && origin) {
         res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        // No credentials header - JWT-only authentication
     }
     res.json({
         success: true,
@@ -234,7 +265,13 @@ app.set('io', io);
 // 404 handler
 // -------------------
 app.use((req, res) => {
-    // CORS is handled by middleware
+    const origin = req.headers.origin;
+    if (isAllowedOrigin(origin) && origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        // No credentials header - JWT-only authentication
+    }
     res.status(404).json({
         success: false,
         message: 'Route not found'
@@ -253,10 +290,17 @@ app.use((err, req, res, next) => {
     });
     if (res.headersSent) return next(err);
 
-    // CORS is handled by middleware, but set header for errors
     const origin = req.headers.origin;
-    if (origin === 'https://mauricios-cafe-bakery.vercel.app') {
+    if (isAllowedOrigin(origin) && origin) {
         res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        // Only set credentials header for Google OAuth (which uses sessions)
+        if (req.path.startsWith('/api/auth/google')) {
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
+        // For all other routes, do NOT set Access-Control-Allow-Credentials
+        // (JWT-only authentication doesn't need credentials)
     }
 
     res.status(err.status || 500).json({

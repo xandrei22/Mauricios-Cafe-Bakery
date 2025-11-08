@@ -112,41 +112,54 @@ router.get('/auth/google/callback', async(req, res, next) => {
                     return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
                 }
 
-                // Set customer session with correct key
-                req.session.customerUser = {
-                    id: user.id,
-                    username: user.username,
-                    email: user.email,
-                    fullName: user.full_name,
-                    role: 'customer'
-                };
+                // ⭐ CRITICAL: Generate JWT token for Google OAuth (same as regular login)
+                // Sessions are only used during OAuth flow, but we return JWT for frontend
+                const jwt = require('jsonwebtoken');
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
 
-                console.log('Google OAuth successful - Session set:', req.session.customerUser);
+                let token;
+                try {
+                    token = jwt.sign({
+                        id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        name: user.full_name,
+                        role: 'customer'
+                    }, secret, { expiresIn: '1d' });
 
+                    console.log('✅ Google OAuth: JWT token generated successfully');
+                } catch (tokenErr) {
+                    console.error('❌ Error generating JWT token for Google OAuth:', tokenErr);
+                    return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
+                }
+
+                // Get redirect URL from session or state
+                const isNew = user && user.isNewGoogleUser;
+                let redirectUrl = req.session.postLoginRedirect;
+
+                if (!redirectUrl) {
+                    const oauthStateTable = req.query && req.query.state;
+                    if (oauthStateTable) {
+                        redirectUrl = `${frontendBase}/customer/dashboard?table=${encodeURIComponent(String(oauthStateTable))}`;
+                    }
+                }
+
+                if (!redirectUrl) {
+                    redirectUrl = isNew ? `${frontendBase}/customer/dashboard?google=new` : `${frontendBase}/customer/dashboard`;
+                }
+
+                // Cleanup session (OAuth flow complete, now using JWT)
                 req.session.save(() => {
-                    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
-                    const isNew = user && user.isNewGoogleUser;
-                    console.log('Redirecting user - isNew:', isNew);
-
-                    // Prefer explicit redirect captured prior to OAuth
-                    let redirectUrl = req.session.postLoginRedirect;
-
-                    // Fallbacks: use OAuth state (table), or default dashboard
-                    if (!redirectUrl) {
-                        const oauthStateTable = req.query && req.query.state;
-                        if (oauthStateTable) {
-                            redirectUrl = `${frontendBase}/customer/dashboard?table=${encodeURIComponent(String(oauthStateTable))}`;
-                        }
-                    }
-
-                    if (!redirectUrl) {
-                        redirectUrl = isNew ? `${frontendBase}/customer/dashboard?google=new` : `${frontendBase}/customer/dashboard`;
-                    }
-
-                    // Cleanup transient session keys
                     delete req.session.postLoginRedirect;
+                    delete req.session.customerUser;
 
-                    res.redirect(redirectUrl);
+                    // Redirect to frontend with JWT token in URL
+                    // Frontend will extract token and store in localStorage
+                    const tokenParam = encodeURIComponent(token);
+                    const finalRedirect = `${redirectUrl}${redirectUrl.includes('?') ? '&' : '?'}token=${tokenParam}&google=true`;
+
+                    console.log('✅ Google OAuth: Redirecting to frontend with JWT token');
+                    res.redirect(finalRedirect);
                 });
             });
         })(req, res, next);
