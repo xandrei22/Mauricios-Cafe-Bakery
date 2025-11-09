@@ -72,7 +72,7 @@ app.use(cors({
         'Content-Language'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: true, // Required because old frontend build uses credentials: 'include'
+    credentials: false, // Required because old frontend build uses credentials: 'include'
     optionsSuccessStatus: 204,
     preflightContinue: false,
     maxAge: 86400 // Cache preflight for 24 hours
