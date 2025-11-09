@@ -128,9 +128,51 @@ export async function adminLogin(
       throw new Error('Invalid token format received from server');
     }
 
+    // ⭐ CRITICAL: Clear old data FIRST
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('staffUser');
+      localStorage.removeItem('customerUser');
+      localStorage.removeItem('loginTimestamp');
+    } catch (e) {
+      console.warn('Could not clear old data:', e);
+    }
+
+    // ⭐ CRITICAL: SAVE TOKEN IMMEDIATELY - BEFORE ANY OTHER OPERATIONS
+    console.log('💾 IMMEDIATELY SAVING ADMIN TOKEN TO LOCALSTORAGE');
+    console.log('Token received:', data.token.substring(0, 50) + '...');
+    console.log('Token length:', data.token.length);
+    
+    try {
+      // IMMEDIATE SAVE - no waiting, no retries, just save it NOW
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('adminUser', JSON.stringify(data.user));
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+      
+      // IMMEDIATE VERIFICATION
+      const immediateCheck = localStorage.getItem('authToken');
+      console.log('✅ IMMEDIATE SAVE CHECK:', {
+        saved: !!immediateCheck,
+        matches: immediateCheck === data.token,
+        length: immediateCheck?.length || 0
+      });
+      
+      if (!immediateCheck || immediateCheck !== data.token) {
+        console.error('❌ IMMEDIATE SAVE FAILED - trying again...');
+        // Try one more time
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('adminUser', JSON.stringify(data.user));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+      }
+    } catch (saveError: any) {
+      console.error('❌ CRITICAL: Immediate save failed:', saveError);
+      throw new Error(`Failed to save token: ${saveError.message}`);
+    }
+
     if (data.success && data.token && data.user) {
     // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
-    console.log('💾 SAVING ADMIN TOKEN TO LOCALSTORAGE - CRITICAL STEP');
+    console.log('💾 SAVING ADMIN TOKEN TO LOCALSTORAGE - CRITICAL STEP (retry logic)');
     console.log('Token length:', data.token.length);
     console.log('User data:', data.user);
     
@@ -328,9 +370,51 @@ export async function staffLogin(
       throw new Error('Invalid token format received from server');
     }
 
+    // ⭐ CRITICAL: Clear old data FIRST
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('adminUser');
+      localStorage.removeItem('staffUser');
+      localStorage.removeItem('customerUser');
+      localStorage.removeItem('loginTimestamp');
+    } catch (e) {
+      console.warn('Could not clear old data:', e);
+    }
+
+    // ⭐ CRITICAL: SAVE TOKEN IMMEDIATELY - BEFORE ANY OTHER OPERATIONS
+    console.log('💾 IMMEDIATELY SAVING STAFF TOKEN TO LOCALSTORAGE');
+    console.log('Token received:', data.token.substring(0, 50) + '...');
+    console.log('Token length:', data.token.length);
+    
+    try {
+      // IMMEDIATE SAVE - no waiting, no retries, just save it NOW
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('staffUser', JSON.stringify(data.user));
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+      
+      // IMMEDIATE VERIFICATION
+      const immediateCheck = localStorage.getItem('authToken');
+      console.log('✅ IMMEDIATE SAVE CHECK:', {
+        saved: !!immediateCheck,
+        matches: immediateCheck === data.token,
+        length: immediateCheck?.length || 0
+      });
+      
+      if (!immediateCheck || immediateCheck !== data.token) {
+        console.error('❌ IMMEDIATE SAVE FAILED - trying again...');
+        // Try one more time
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('staffUser', JSON.stringify(data.user));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+      }
+    } catch (saveError: any) {
+      console.error('❌ CRITICAL: Immediate save failed:', saveError);
+      throw new Error(`Failed to save token: ${saveError.message}`);
+    }
+
     if (data.success && data.token && data.user) {
     // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
-    console.log('💾 SAVING STAFF TOKEN TO LOCALSTORAGE - CRITICAL STEP');
+    console.log('💾 SAVING STAFF TOKEN TO LOCALSTORAGE - CRITICAL STEP (retry logic)');
     console.log('Token length:', data.token.length);
     console.log('User data:', data.user);
     
@@ -564,8 +648,51 @@ export async function customerLogin(
     throw new Error('No user data received from server');
   }
 
+  // ⭐ CRITICAL: Clear old data FIRST
+  try {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('customerUser');
+    localStorage.removeItem('adminUser');
+    localStorage.removeItem('staffUser');
+    localStorage.removeItem('loginTimestamp');
+    console.log('✅ Old data cleared from localStorage');
+  } catch (e) {
+    console.error('❌ Could not clear old data:', e);
+  }
+
+  // ⭐ CRITICAL: SAVE TOKEN IMMEDIATELY - BEFORE ANY OTHER OPERATIONS
+  console.log('💾 IMMEDIATELY SAVING CUSTOMER TOKEN TO LOCALSTORAGE');
+  console.log('Token received:', data.token.substring(0, 50) + '...');
+  console.log('Token length:', data.token.length);
+  
+  try {
+    // IMMEDIATE SAVE - no waiting, no retries, just save it NOW
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('customerUser', JSON.stringify(data.user));
+    localStorage.setItem('loginTimestamp', Date.now().toString());
+    
+    // IMMEDIATE VERIFICATION
+    const immediateCheck = localStorage.getItem('authToken');
+    console.log('✅ IMMEDIATE SAVE CHECK:', {
+      saved: !!immediateCheck,
+      matches: immediateCheck === data.token,
+      length: immediateCheck?.length || 0
+    });
+    
+    if (!immediateCheck || immediateCheck !== data.token) {
+      console.error('❌ IMMEDIATE SAVE FAILED - trying again...');
+      // Try one more time
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('customerUser', JSON.stringify(data.user));
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+    }
+  } catch (saveError: any) {
+    console.error('❌ CRITICAL: Immediate save failed:', saveError);
+    throw new Error(`Failed to save token: ${saveError.message}`);
+  }
+
   // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE
-  console.log('💾 SAVING TOKEN TO LOCALSTORAGE - CRITICAL STEP');
+  console.log('💾 SAVING TOKEN TO LOCALSTORAGE - CRITICAL STEP (retry logic)');
   console.log('Token length:', data.token.length);
   console.log('User data:', data.user);
   console.log('localStorage available:', typeof localStorage !== 'undefined');
