@@ -17,6 +17,23 @@ const PORT = process.env.PORT || 5001;
 const server = http.createServer(app);
 
 // -------------------
+// ⭐ CRITICAL: Log ALL incoming headers BEFORE CORS (for debugging)
+// -------------------
+app.use((req, res, next) => {
+    // Only log for check-session requests
+    if (req.path && req.path.includes('check-session')) {
+        console.log('🔍 RAW REQUEST HEADERS (before CORS):', {
+            method: req.method,
+            path: req.path,
+            headers: Object.keys(req.headers),
+            authorization: req.headers['authorization'] || req.headers['Authorization'] || 'NOT FOUND',
+            allHeaderKeys: Object.keys(req.headers)
+        });
+    }
+    next();
+});
+
+// -------------------
 // CORS - SIMPLE AND WORKING
 // -------------------
 // CORS configuration that works with both old and new frontend builds
@@ -42,11 +59,23 @@ app.use(cors({
         callback(null, true); // Allow all for now
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'authorization', 'X-Requested-With', 'Accept'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'authorization',
+        'AUTHORIZATION',
+        'X-Authorization',
+        'x-authorization',
+        'X-Requested-With',
+        'Accept',
+        'Accept-Language',
+        'Content-Language'
+    ],
     exposedHeaders: ['Authorization', 'authorization'],
     credentials: true, // Required because old frontend build uses credentials: 'include'
     optionsSuccessStatus: 204,
-    preflightContinue: false
+    preflightContinue: false,
+    maxAge: 86400 // Cache preflight for 24 hours
 }));
 
 // -------------------

@@ -9,17 +9,29 @@ function authenticateJWT(req, res, next) {
     try {
         // Log all headers for debugging (but not sensitive values)
         const headerKeys = Object.keys(req.headers);
+
+        // ⭐ CRITICAL: Check ALL possible header variations (Express lowercases, but check both)
+        // Also check for custom headers that proxies might use
+        const authHeader = req.headers['authorization'] ||
+            req.headers['Authorization'] ||
+            req.headers['AUTHORIZATION'] ||
+            req.headers['x-authorization'] ||
+            req.headers['X-Authorization'] ||
+            req.headers['x-auth-token'] ||
+            req.headers['X-Auth-Token'];
+
         console.log('🔍 JWT Middleware - Request:', {
             method: req.method,
             path: req.path,
             url: req.url,
             headerKeys: headerKeys,
-            hasAuthorization: !!(req.headers['authorization'] || req.headers['Authorization']),
-            authorizationValue: req.headers['authorization'] || req.headers['Authorization'] ?
-                (req.headers['authorization'] || req.headers['Authorization']).substring(0, 30) + '...' : 'NOT FOUND'
+            hasAuthorization: !!authHeader,
+            authorizationValue: authHeader ? authHeader.substring(0, 30) + '...' : 'NOT FOUND',
+            // Log raw header values for debugging
+            rawAuthHeader: req.headers['authorization'] || 'NOT FOUND (lowercase)',
+            rawAuthHeaderUpper: req.headers['Authorization'] || 'NOT FOUND (uppercase)',
+            rawXAuth: req.headers['x-authorization'] || req.headers['X-Authorization'] || 'NOT FOUND (x-header)'
         });
-
-        const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
         if (!authHeader) {
             console.warn('❌ JWT Middleware: No Authorization header found');
