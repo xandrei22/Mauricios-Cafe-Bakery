@@ -55,12 +55,31 @@ axiosInstance.interceptors.request.use(
       
       // Set Authorization header (works with both AxiosHeaders and plain objects)
       const bearerToken = `Bearer ${token.trim()}`;
-      config.headers['Authorization'] = bearerToken;
-      config.headers['authorization'] = bearerToken; // lowercase fallback for compatibility
       
-      // Debug log for protected endpoints
-      if (config.url && (
-        config.url.includes('/check-session') || 
+      // Use AxiosHeaders API if available, otherwise set directly
+      if (config.headers && typeof config.headers.set === 'function') {
+        config.headers.set('Authorization', bearerToken);
+        config.headers.set('authorization', bearerToken); // lowercase fallback
+      } else {
+        // Fallback for plain object headers
+        config.headers['Authorization'] = bearerToken;
+        config.headers['authorization'] = bearerToken; // lowercase fallback
+      }
+      
+      // Always log for check-session requests
+      if (config.url && config.url.includes('/check-session')) {
+        console.log('✅ AXIOS REQUEST - Authorization header attached for check-session', {
+          url: config.url,
+          method: config.method,
+          fullUrl: fullUrl,
+          hasToken: true,
+          tokenLength: token.length,
+          tokenPreview: token.substring(0, 20) + '...',
+          headerSet: !!(config.headers['Authorization'] || (config.headers as any).get?.('Authorization')),
+          headerValue: config.headers['Authorization'] || (config.headers as any).get?.('Authorization') || 'NOT SET',
+          allHeaders: Object.keys(config.headers || {})
+        });
+      } else if (config.url && (
         config.url.includes('/admin/') || 
         config.url.includes('/staff/') || 
         config.url.includes('/customer/') ||
@@ -88,7 +107,9 @@ axiosInstance.interceptors.request.use(
         console.warn('⚠️ AXIOS REQUEST - No token found for protected endpoint', {
           url: config.url,
           method: config.method,
-          localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User'))
+          fullUrl: fullUrl,
+          localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User')),
+          localStorageAuthToken: localStorage.getItem('authToken') ? 'EXISTS' : 'NOT FOUND'
         });
       }
     }
