@@ -488,8 +488,26 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
   }
   
   try {
-    console.log('📡 checkCustomerSession: Making request with axiosInstance to /api/customer/check-session');
+    // ⭐ CRITICAL: Verify token exists and axiosInstance is configured
+    const tokenCheck = localStorage.getItem('authToken');
+    const axiosBaseURL = (axiosInstance.defaults.baseURL || axiosInstance.defaults.baseURL) || 'NOT SET';
+    
+    console.log('📡 checkCustomerSession: Making request with axiosInstance to /api/customer/check-session', {
+      tokenExists: !!tokenCheck,
+      tokenLength: tokenCheck?.length || 0,
+      axiosBaseURL: axiosBaseURL,
+      fullURL: `${axiosBaseURL}/api/customer/check-session`,
+      axiosInstanceType: typeof axiosInstance,
+      hasGetMethod: typeof axiosInstance.get === 'function'
+    });
+    
     console.log('📡 checkCustomerSession: Token will be added by axios interceptor');
+    
+    if (!tokenCheck) {
+      console.error('❌ CRITICAL: No token in localStorage when calling check-session!');
+      return { success: false, authenticated: false };
+    }
+    
     const response = await axiosInstance.get('/api/customer/check-session');
     console.log('✅ checkCustomerSession: Success', response.data);
     return response.data;

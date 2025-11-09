@@ -56,14 +56,40 @@ axiosInstance.interceptors.request.use(
       // Set Authorization header (works with both AxiosHeaders and plain objects)
       const bearerToken = `Bearer ${token.trim()}`;
       
-      // Use AxiosHeaders API if available, otherwise set directly
-      if (config.headers && typeof config.headers.set === 'function') {
-        config.headers.set('Authorization', bearerToken);
-        config.headers.set('authorization', bearerToken); // lowercase fallback
-      } else {
-        // Fallback for plain object headers
-        config.headers['Authorization'] = bearerToken;
-        config.headers['authorization'] = bearerToken; // lowercase fallback
+      // ⭐ CRITICAL: Set header using multiple methods to ensure it's set
+      // Method 1: Direct assignment (most reliable)
+      if (!config.headers) {
+        config.headers = {} as any;
+      }
+      
+      // Force set as plain object property (most compatible)
+      (config.headers as any)['Authorization'] = bearerToken;
+      (config.headers as any)['authorization'] = bearerToken;
+      
+      // Method 2: Use AxiosHeaders API if available
+      if (config.headers && typeof (config.headers as any).set === 'function') {
+        (config.headers as any).set('Authorization', bearerToken);
+        (config.headers as any).set('authorization', bearerToken);
+      }
+      
+      // Method 3: Use common property access
+      if (config.headers && typeof config.headers === 'object') {
+        (config.headers as Record<string, string>)['Authorization'] = bearerToken;
+        (config.headers as Record<string, string>)['authorization'] = bearerToken;
+      }
+      
+      // ⭐ VERIFY header was set
+      const headerValue = (config.headers as any)?.['Authorization'] || 
+                          (config.headers as any)?.['authorization'] ||
+                          (config.headers as any)?.get?.('Authorization');
+      
+      if (!headerValue || !headerValue.includes('Bearer')) {
+        console.error('❌ CRITICAL: Authorization header NOT SET after all attempts!', {
+          headersType: typeof config.headers,
+          headersKeys: Object.keys(config.headers || {}),
+          hasSetMethod: typeof (config.headers as any)?.set === 'function',
+          hasGetMethod: typeof (config.headers as any)?.get === 'function'
+        });
       }
       
       // Always log for check-session requests
