@@ -664,56 +664,13 @@ export async function customerLogin(
   console.log('💾 IMMEDIATELY SAVING CUSTOMER TOKEN TO LOCALSTORAGE');
   console.log('Token received:', data.token.substring(0, 50) + '...');
   console.log('Token length:', data.token.length);
-  
-  try {
-    // IMMEDIATE SAVE - no waiting, no retries, just save it NOW
-    localStorage.setItem('authToken', data.token);
-    localStorage.setItem('customerUser', JSON.stringify(data.user));
-    localStorage.setItem('loginTimestamp', Date.now().toString());
-    
-    // IMMEDIATE VERIFICATION
-    const immediateCheck = localStorage.getItem('authToken');
-    console.log('✅ IMMEDIATE SAVE CHECK:', {
-      saved: !!immediateCheck,
-      matches: immediateCheck === data.token,
-      length: immediateCheck?.length || 0
-    });
-    
-    if (!immediateCheck || immediateCheck !== data.token) {
-      console.error('❌ IMMEDIATE SAVE FAILED - trying again...');
-      // Try one more time
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('customerUser', JSON.stringify(data.user));
-      localStorage.setItem('loginTimestamp', Date.now().toString());
-    }
-  } catch (saveError: any) {
-    console.error('❌ CRITICAL: Immediate save failed:', saveError);
-    throw new Error(`Failed to save token: ${saveError.message}`);
-  }
-
-  // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE
-  console.log('💾 SAVING TOKEN TO LOCALSTORAGE - CRITICAL STEP (retry logic)');
-  console.log('Token length:', data.token.length);
   console.log('User data:', data.user);
-  console.log('localStorage available:', typeof localStorage !== 'undefined');
-  console.log('Current localStorage keys:', Object.keys(localStorage));
   
-  // Clear old data first
-  try {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('customerUser');
-    localStorage.removeItem('loginTimestamp');
-    console.log('✅ Old data cleared from localStorage');
-  } catch (e) {
-    console.error('❌ Could not clear old data:', e);
-    throw new Error(`Failed to clear old localStorage data: ${e}`);
-  }
-  
-  // Save with force - multiple synchronous attempts
+  // ⭐ CRITICAL: Save with retry logic - GUARANTEED SAVE
   let savedToken: string | null = null;
   let savedUser: string | null = null;
   
-  for (let attempt = 1; attempt <= 10; attempt++) {
+  for (let attempt = 1; attempt <= 20; attempt++) {
     try {
       // Save
       localStorage.setItem('authToken', data.token);
@@ -725,80 +682,65 @@ export async function customerLogin(
       savedUser = localStorage.getItem('customerUser');
       
       if (savedToken === data.token && savedUser) {
-        console.log(`✅ TOKEN SAVED SUCCESSFULLY on attempt ${attempt}`);
+        console.log(`✅ CUSTOMER TOKEN SAVED SUCCESSFULLY on attempt ${attempt}`);
+        console.log('✅ Token in localStorage:', !!savedToken);
+        console.log('✅ User in localStorage:', !!savedUser);
         break;
       } else {
-        console.warn(`⚠️ Attempt ${attempt} - Token mismatch. Retrying...`);
-        if (attempt < 10) {
-          await new Promise(resolve => setTimeout(resolve, 20));
+        console.warn(`⚠️ Customer save attempt ${attempt} - Token mismatch. Retrying...`);
+        if (attempt < 20) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
     } catch (error: any) {
-      console.error(`❌ Save attempt ${attempt} failed:`, error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        localStorageAvailable: typeof localStorage !== 'undefined',
-        localStorageKeys: Object.keys(localStorage || {})
-      });
-      
-      // Check for specific localStorage errors
-      if (error.name === 'QuotaExceededError') {
-        console.error('❌ localStorage quota exceeded! Clearing old data...');
-        try {
-          localStorage.clear();
-        } catch (clearError) {
-          console.error('Failed to clear localStorage:', clearError);
-        }
-      }
-      
-      if (attempt < 10) {
-        await new Promise(resolve => setTimeout(resolve, 20));
+      console.error(`❌ Customer save attempt ${attempt} failed:`, error);
+      if (attempt < 20) {
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
   }
   
-  // Final verification with multiple checks
+  // Final verification
   if (!savedToken || savedToken !== data.token) {
     // Last resort - try one more time with delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     savedToken = localStorage.getItem('authToken');
     savedUser = localStorage.getItem('customerUser');
   }
   
   // CRITICAL: If still not saved, throw error
   if (!savedToken || savedToken !== data.token) {
-    console.error('❌ CRITICAL: Token could not be saved after all attempts!');
+    console.error('❌ CRITICAL: Customer token could not be saved after all attempts!');
     console.error('localStorage state:', {
       available: typeof localStorage !== 'undefined',
       keys: Object.keys(localStorage),
       tokenExists: !!localStorage.getItem('authToken'),
-      tokenValue: localStorage.getItem('authToken')?.substring(0, 20)
+      userExists: !!localStorage.getItem('customerUser')
     });
     throw new Error('CRITICAL: Failed to save authentication token. Please check browser settings or try a different browser.');
   }
   
-  // Final verification
-  console.log('✅ TOKEN SAVE COMPLETE:', {
+  console.log('✅✅✅ CUSTOMER LOGIN SUCCESSFUL - Token is in localStorage ✅✅✅');
+  console.log('Final verification:', {
     tokenSaved: !!savedToken,
     tokenMatches: savedToken === data.token,
     userSaved: !!savedUser,
     tokenLength: savedToken?.length || 0
   });
   
-    console.log('✅✅✅ LOGIN SUCCESSFUL - Token is in localStorage ✅✅✅');
-    
-    // ⭐ FINAL VERIFICATION: Double-check token is actually in localStorage
-    const finalCheck = localStorage.getItem('authToken');
-    if (!finalCheck || finalCheck !== data.token) {
-      console.error('❌ CRITICAL: Token verification failed after save!');
-      console.error('Expected token length:', data.token.length);
-      console.error('Actual token in localStorage:', finalCheck ? finalCheck.length : 'NULL');
-      throw new Error('Token was not saved correctly to localStorage');
-    }
-    
-    return data;
+  // ⭐ FINAL VERIFICATION: Double-check token is actually in localStorage
+  const finalCheck = localStorage.getItem('authToken');
+  const finalUserCheck = localStorage.getItem('customerUser');
+  if (!finalCheck || finalCheck !== data.token || !finalUserCheck) {
+    console.error('❌ CRITICAL: Token verification failed after save!');
+    console.error('Expected token length:', data.token.length);
+    console.error('Actual token in localStorage:', finalCheck ? finalCheck.length : 'NULL');
+    console.error('Actual user in localStorage:', finalUserCheck ? 'EXISTS' : 'NULL');
+    throw new Error('Token was not saved correctly to localStorage');
+  }
+  
+  console.log('✅✅✅ FINAL VERIFICATION PASSED - Customer token and user are in localStorage ✅✅✅');
+  return data;
   } catch (error: any) {
     console.error('❌ Customer login error:', error);
     if (error.response) {
