@@ -474,78 +474,31 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
   // ⭐ CRITICAL: Verify token exists before making request
   const token = localStorage.getItem('authToken');
   
-  console.log('🔍🔍🔍 checkCustomerSession CALLED 🔍🔍🔍', {
-    tokenExists: !!token,
-    tokenLength: token ? token.length : 0,
-    tokenPreview: token ? token.substring(0, 30) + '...' : 'NONE',
-    timestamp: new Date().toISOString(),
-    localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
-  });
-  
+  // If no token, return immediately without making request (silent - this is normal when not logged in)
   if (!token) {
-    console.error('❌❌❌ checkCustomerSession: NO TOKEN IN LOCALSTORAGE ❌❌❌');
-    console.error('localStorage contents:', {
-      allKeys: Object.keys(localStorage),
-      authToken: localStorage.getItem('authToken'),
-      customerUser: localStorage.getItem('customerUser'),
-      loginTimestamp: localStorage.getItem('loginTimestamp')
-    });
     return { success: false, authenticated: false };
   }
   
   try {
-    console.log('🚀 Making check-session request with axiosInstance');
-    console.log('Token being used:', token.substring(0, 30) + '...');
-    console.log('axiosInstance type:', typeof axiosInstance);
-    console.log('axiosInstance has interceptors:', !!(axiosInstance.interceptors));
-    
-    // CRITICAL: Verify token is still in localStorage right before request
-    const tokenBeforeRequest = localStorage.getItem('authToken');
-    if (!tokenBeforeRequest || tokenBeforeRequest !== token) {
-      console.error('❌❌❌ CRITICAL: Token changed or disappeared before request! ❌❌❌', {
-        originalToken: token ? token.substring(0, 30) + '...' : 'NONE',
-        tokenBeforeRequest: tokenBeforeRequest ? tokenBeforeRequest.substring(0, 30) + '...' : 'NONE',
-        tokensMatch: token === tokenBeforeRequest
-      });
-    }
-    
     const response = await axiosInstance.get('/api/customer/check-session');
-    
-    console.log('✅✅✅ check-session SUCCESS ✅✅✅', {
-      authenticated: response.data?.authenticated,
-      hasUser: !!response.data?.user,
-      userEmail: response.data?.user?.email
-    });
     return response.data;
   } catch (error: any) {
     const errorStatus = error.response?.status;
-    console.error('❌ checkCustomerSession error:', {
-      status: errorStatus,
-      message: error.message,
-      responseData: error.response?.data,
-      config: error.config ? {
-        url: error.config.url,
-        method: error.config.method,
-        headers: Object.keys(error.config.headers || {})
-      } : null
-    });
     
-    // Only clear auth data if we actually had a token (don't clear if token was already missing)
-    if ((errorStatus === 401 || errorStatus === 403) && token) {
-      // Token expired or invalid - only clear if we had a token to begin with
-      console.warn('⚠️ Token expired or invalid, clearing auth data');
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('customerUser');
-      localStorage.removeItem('loginTimestamp');
-      return { success: false, authenticated: false };
-    }
-    
-    // For other errors or if no token existed, just return unauthenticated
+    // 401/403 is expected when token is invalid/expired - handle silently
     if (errorStatus === 401 || errorStatus === 403) {
+      // Clear auth data if we had a token (it's now invalid)
+      if (token) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('customerUser');
+        localStorage.removeItem('loginTimestamp');
+      }
       return { success: false, authenticated: false };
     }
     
-    throw error;
+    // For other errors, log and return unauthenticated
+    console.error('checkCustomerSession error:', error.message);
+    return { success: false, authenticated: false };
   }
 }
 

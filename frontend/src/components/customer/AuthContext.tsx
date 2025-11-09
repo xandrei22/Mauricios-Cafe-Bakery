@@ -480,23 +480,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
+    // Double-check token exists before making request
+    const tokenBeforeCall = localStorage.getItem('authToken');
+    if (!tokenBeforeCall) {
+      setLoading(false);
+      setAuthenticated(false);
+      setUser(null);
+      return;
+    }
+    
     setLoading(true);
     try {
-      // ⭐ CRITICAL: Verify token exists before calling checkCustomerSession
-      const tokenBeforeCall = localStorage.getItem('authToken');
-      console.log('🔑 AuthContext: Checking session with JWT token', {
-        tokenExists: !!tokenBeforeCall,
-        tokenLength: tokenBeforeCall?.length || 0
-      });
-      
-      if (!tokenBeforeCall) {
-        console.error('❌ CRITICAL: No token before checkCustomerSession call!');
-        setLoading(false);
-        setAuthenticated(false);
-        setUser(null);
-        return;
-      }
-      
       const data = await checkCustomerSession();
       
       if (data && data.authenticated && data.user) {
