@@ -53,20 +53,25 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // For desktop, check localStorage if it's a recent login
       if (isMobile || isRecentLogin) {
         let storedUser = null;
+        let storedToken = null;
         let sessionEndpoint = '';
         
         if (requiredRole === 'customer') {
           storedUser = localStorage.getItem('customerUser');
+          storedToken = localStorage.getItem('authToken');
           sessionEndpoint = '/api/customer/check-session';
         } else if (requiredRole === 'admin') {
           storedUser = localStorage.getItem('adminUser');
+          storedToken = localStorage.getItem('authToken');
           sessionEndpoint = '/api/admin/check-session';
         } else if (requiredRole === 'staff') {
           storedUser = localStorage.getItem('staffUser');
+          storedToken = localStorage.getItem('authToken');
           sessionEndpoint = '/api/staff/check-session';
         }
         
-        if (storedUser) {
+        // ⭐ CRITICAL: If we have both user and token, use localStorage and SKIP check-session
+        if (storedUser && storedToken) {
           try {
             const user = JSON.parse(storedUser);
             // Verify the role matches
@@ -74,16 +79,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               setIsAuthenticated(true);
               setUserRole(user.role || requiredRole);
               setIsLoading(false);
-              console.log(`✅ ProtectedRoute: Using localStorage FIRST for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
+              console.log(`✅ ProtectedRoute: Using localStorage ONLY for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'}) - SKIPPING check-session`);
               
-              // Do session check in background using axiosInstance
+              // Do session check in background ONLY after a delay (don't block navigation)
               if (sessionEndpoint) {
                 setTimeout(async () => {
                   try {
+                    const token = localStorage.getItem('authToken');
+                    if (!token) {
+                      console.log(`ProtectedRoute: No token for background check, skipping`);
+                      return;
+                    }
                     // Use axiosInstance which automatically adds Authorization header
                     const res = await axiosInstance.get(sessionEndpoint);
                     if (res.data && res.data.authenticated && res.data.user) {
-                      console.log(`✅ ProtectedRoute: Session verified in background for ${requiredRole}`);
+                      console.log(`✅ ProtectedRoute: Background session verified for ${requiredRole}`);
                       if (loginTimestamp && Date.now() - parseInt(loginTimestamp) > 10000) {
                         localStorage.removeItem('loginTimestamp');
                       }
@@ -91,7 +101,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                   } catch (err) {
                     console.log(`ProtectedRoute: Background session check failed for ${requiredRole}, continuing with localStorage`);
                   }
-                }, 3000);
+                }, 5000); // Wait 5 seconds before background check
               }
               
               return; // EXIT EARLY - don't do session check at all
@@ -111,20 +121,55 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         sessionEndpoint = '/api/customer/check-session';
       }
 
-      // CRITICAL: For recent logins, wait for token to be saved to localStorage
-      // This ensures localStorage has the token before we check session
+      // ⭐ CRITICAL: For recent logins, if we have localStorage data, DON'T call check-session
+      // Only call check-session if localStorage doesn't have the user data
       if (isRecentLogin) {
-        console.log('⏳ ProtectedRoute: Recent login detected - waiting for token to be saved...');
         const timeSinceLogin = Date.now() - parseInt(loginTimestamp || '0');
+        let hasLocalStorageData = false;
         
-        // If login was VERY recent (less than 1 second), wait longer
+        if (requiredRole === 'customer') {
+          hasLocalStorageData = !!(localStorage.getItem('customerUser') && localStorage.getItem('authToken'));
+        } else if (requiredRole === 'admin') {
+          hasLocalStorageData = !!(localStorage.getItem('adminUser') && localStorage.getItem('authToken'));
+        } else if (requiredRole === 'staff') {
+          hasLocalStorageData = !!(localStorage.getItem('staffUser') && localStorage.getItem('authToken'));
+        }
+        
+        // If we have localStorage data for recent login, use it and skip check-session
+        if (hasLocalStorageData) {
+          console.log(`✅ ProtectedRoute: Recent login with localStorage data - using it, skipping check-session`);
+          let storedUser = null;
+          if (requiredRole === 'customer') {
+            storedUser = localStorage.getItem('customerUser');
+          } else if (requiredRole === 'admin') {
+            storedUser = localStorage.getItem('adminUser');
+          } else if (requiredRole === 'staff') {
+            storedUser = localStorage.getItem('staffUser');
+          }
+          
+          if (storedUser) {
+            try {
+              const user = JSON.parse(storedUser);
+              if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
+                setIsAuthenticated(true);
+                setUserRole(user.role || requiredRole);
+                setIsLoading(false);
+                return; // EXIT - don't call check-session
+              }
+            } catch (e) {
+              console.error('Failed to parse stored user:', e);
+            }
+          }
+        }
+        
+        // If no localStorage data, wait for token to be saved
+        console.log('⏳ ProtectedRoute: Recent login detected - waiting for token to be saved...');
         if (timeSinceLogin < 1000) {
-          const waitTime = isMobile ? 500 : 400; // Longer wait for very recent logins
+          const waitTime = isMobile ? 800 : 600; // Longer wait for very recent logins
           console.log(`⏳ ProtectedRoute: Very recent login (${timeSinceLogin}ms ago) - waiting ${waitTime}ms`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         } else {
-          // For less recent but still recent logins, shorter wait
-          const waitTime = isMobile ? 300 : 200;
+          const waitTime = isMobile ? 500 : 300;
           console.log(`⏳ ProtectedRoute: Recent login (${timeSinceLogin}ms ago) - waiting ${waitTime}ms`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         }
@@ -132,9 +177,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         // After waiting, verify token exists before proceeding
         const tokenAfterWait = localStorage.getItem('authToken');
         if (!tokenAfterWait) {
-          console.warn('⚠️ ProtectedRoute: Token still not found after wait, checking localStorage again...');
+          console.warn('⚠️ ProtectedRoute: Token still not found after wait');
           // One more quick check
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 
@@ -222,45 +267,60 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           }
         }
       } else {
-        // On 401/403, try localStorage fallback for all roles (especially for mobile)
-        // Mobile devices (especially iOS) can't use cookies, so always try localStorage
-        if (isMobile || isRecentLogin) {
-          const storedToken = localStorage.getItem('authToken');
-          let storedUser = null;
-          let expectedRole = requiredRole;
-          
-          if (requiredRole === 'customer') {
-            storedUser = localStorage.getItem('customerUser');
-          } else if (requiredRole === 'admin') {
-            storedUser = localStorage.getItem('adminUser');
-          } else if (requiredRole === 'staff') {
-            storedUser = localStorage.getItem('staffUser');
-          }
-          
-          if (storedUser && storedToken) {
-            try {
-              const user = JSON.parse(storedUser);
-              // Verify the role matches
-              if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
+        // On 401/403, ALWAYS try localStorage fallback if token and user exist
+        // This is critical for recent logins where check-session might fail
+        const storedToken = localStorage.getItem('authToken');
+        let storedUser = null;
+        let expectedRole = requiredRole;
+        
+        if (requiredRole === 'customer') {
+          storedUser = localStorage.getItem('customerUser');
+        } else if (requiredRole === 'admin') {
+          storedUser = localStorage.getItem('adminUser');
+        } else if (requiredRole === 'staff') {
+          storedUser = localStorage.getItem('staffUser');
+        }
+        
+        // ⭐ CRITICAL: If we have token and user, use localStorage (especially for recent logins)
+        if (storedUser && storedToken) {
+          try {
+            const user = JSON.parse(storedUser);
+            // Verify the role matches
+            if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
+              const loginTimestampCheck = localStorage.getItem('loginTimestamp');
+              const isRecentLoginCheck = loginTimestampCheck && (Date.now() - parseInt(loginTimestampCheck)) < 15000;
+              
+              // ⭐ ALWAYS use localStorage for recent logins or mobile devices
+              if (isMobile || isRecentLoginCheck) {
                 setIsAuthenticated(true);
                 setUserRole(user.role || expectedRole);
-                console.log(`✅ ProtectedRoute: Using localStorage fallback after 401/403 for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
+                console.log(`✅ ProtectedRoute: Using localStorage fallback after 401/403 for ${requiredRole} (${isMobile ? 'mobile device' : 'recent login'})`);
+                console.log(`⚠️ Note: check-session returned 401/403, but token exists - using localStorage`);
               } else {
+                // For non-recent logins, fail authentication
                 setIsAuthenticated(false);
               }
-            } catch (e) {
+            } else {
               setIsAuthenticated(false);
             }
-          } else {
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
             setIsAuthenticated(false);
           }
         } else {
           setIsAuthenticated(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Authentication check failed:', error);
-      // On error, always try localStorage fallback if we have token and user (especially for iOS)
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText
+      });
+      
+      // ⭐ CRITICAL: On ANY error (including 401), use localStorage if we have token and user
+      // This is especially important for recent logins where check-session might fail
       const storedToken = localStorage.getItem('authToken');
       let storedUser = null;
       let expectedRole = requiredRole;
@@ -273,27 +333,39 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         storedUser = localStorage.getItem('staffUser');
       }
       
+      // ⭐ CRITICAL: If we have both token and user, ALWAYS use localStorage for recent logins
+      // This prevents redirect loops when check-session fails due to missing Authorization header
       if (storedUser && storedToken) {
         try {
           const user = JSON.parse(storedUser);
           // Verify the role matches
           if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
-            // For mobile devices, always use localStorage fallback (cookies don't work)
-            // For desktop, only use it if it's a recent login
             const loginTimestamp = localStorage.getItem('loginTimestamp');
-            const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-            const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000;
-            if (isMobile || isRecentLogin) {
+            const isMobileCheck = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+            const isRecentLoginCheck = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 15000; // 15 seconds
+            
+            // ⭐ ALWAYS use localStorage if it's a recent login OR mobile device
+            if (isMobileCheck || isRecentLoginCheck) {
               setIsAuthenticated(true);
               setUserRole(user.role || expectedRole);
-              console.log(`✅ ProtectedRoute: Using localStorage fallback after error for ${requiredRole} (${isMobile ? 'mobile device - cookies blocked' : 'recent login'})`);
+              console.log(`✅ ProtectedRoute: Using localStorage fallback after error for ${requiredRole} (${isMobileCheck ? 'mobile device' : 'recent login'})`);
+              console.log(`⚠️ Note: check-session failed (${error.response?.status || 'network error'}), but token exists - using localStorage`);
             } else {
-              setIsAuthenticated(false);
+              // For non-recent logins, only fail if it's a 401/403 (not network error)
+              if (error.response?.status === 401 || error.response?.status === 403) {
+                setIsAuthenticated(false);
+              } else {
+                // Network error - use localStorage as fallback
+                setIsAuthenticated(true);
+                setUserRole(user.role || expectedRole);
+                console.log(`✅ ProtectedRoute: Network error, using localStorage fallback for ${requiredRole}`);
+              }
             }
           } else {
             setIsAuthenticated(false);
           }
         } catch (e) {
+          console.error('Failed to parse stored user:', e);
           setIsAuthenticated(false);
         }
       } else {

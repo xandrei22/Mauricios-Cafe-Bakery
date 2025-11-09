@@ -73,14 +73,62 @@ export async function adminLogin(
   usernameOrEmail: string,
   password: string
 ): Promise<LoginResponse> {
-  const response = await axiosInstance.post('/api/admin/login', {
-    username: usernameOrEmail,
-    password,
-  });
+  console.log('🔍 adminLogin called - making request to /api/admin/login');
+  
+  try {
+    const response = await axiosInstance.post('/api/admin/login', {
+      username: usernameOrEmail,
+      password,
+    });
 
-  const data = response.data;
+    console.log('🔍 Admin login response received:', {
+      status: response.status,
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+      success: response.data?.success,
+      hasToken: !!response.data?.token,
+      hasUser: !!response.data?.user,
+      tokenType: typeof response.data?.token,
+      tokenValue: response.data?.token ? `${response.data.token.substring(0, 30)}...` : 'NULL',
+      fullResponse: response.data
+    });
 
-  if (data.success && data.token && data.user) {
+    const data = response.data;
+
+    // ⭐ CRITICAL: Check if response has required fields
+    if (!data) {
+      console.error('❌ CRITICAL: No response data!');
+      throw new Error('No response data from server');
+    }
+
+    if (!data.success) {
+      console.error('❌ Login failed - success is false:', data.message || 'Unknown error');
+      throw new Error(data.message || 'Login failed');
+    }
+
+    if (!data.token) {
+      console.error('❌ CRITICAL: No token in response!', {
+        responseKeys: Object.keys(data),
+        fullResponse: data
+      });
+      throw new Error('No authentication token received from server');
+    }
+
+    if (!data.user) {
+      console.error('❌ CRITICAL: No user data in response!');
+      throw new Error('No user data received from server');
+    }
+
+    // ⭐ CRITICAL: Verify token is a string
+    if (typeof data.token !== 'string' || data.token.trim().length === 0) {
+      console.error('❌ CRITICAL: Token is not a valid string!', {
+        tokenType: typeof data.token,
+        tokenLength: data.token?.length || 0
+      });
+      throw new Error('Invalid token format received from server');
+    }
+
+    if (data.success && data.token && data.user) {
     // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
     console.log('💾 SAVING ADMIN TOKEN TO LOCALSTORAGE - CRITICAL STEP');
     console.log('Token length:', data.token.length);
@@ -143,11 +191,27 @@ export async function adminLogin(
       throw new Error('CRITICAL: Failed to save authentication token. Please check browser settings or try a different browser.');
     }
     
-    console.log('✅ Admin login successful - Token saved and verified');
-    return data;
+      console.log('✅ Admin login successful - Token saved and verified');
+      return data;
+    } else {
+      console.error('❌ CRITICAL: Response validation failed!', {
+        success: data.success,
+        hasToken: !!data.token,
+        hasUser: !!data.user
+      });
+      throw new Error('Invalid response format from server');
+    }
+  } catch (error: any) {
+    console.error('❌ Admin login error:', error);
+    if (error.response) {
+      console.error('Response error:', {
+        status: error.response.status,
+        data: error.response.data
+      });
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
   }
-
-  throw new Error(data.message || 'Login failed');
 }
 
 /**
@@ -209,14 +273,62 @@ export async function staffLogin(
   usernameOrEmail: string,
   password: string
 ): Promise<LoginResponse> {
-  const response = await axiosInstance.post('/api/staff/login', {
-    username: usernameOrEmail,
-    password,
-  });
+  console.log('🔍 staffLogin called - making request to /api/staff/login');
+  
+  try {
+    const response = await axiosInstance.post('/api/staff/login', {
+      username: usernameOrEmail,
+      password,
+    });
 
-  const data = response.data;
+    console.log('🔍 Staff login response received:', {
+      status: response.status,
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+      success: response.data?.success,
+      hasToken: !!response.data?.token,
+      hasUser: !!response.data?.user,
+      tokenType: typeof response.data?.token,
+      tokenValue: response.data?.token ? `${response.data.token.substring(0, 30)}...` : 'NULL',
+      fullResponse: response.data
+    });
 
-  if (data.success && data.token && data.user) {
+    const data = response.data;
+
+    // ⭐ CRITICAL: Check if response has required fields
+    if (!data) {
+      console.error('❌ CRITICAL: No response data!');
+      throw new Error('No response data from server');
+    }
+
+    if (!data.success) {
+      console.error('❌ Login failed - success is false:', data.message || 'Unknown error');
+      throw new Error(data.message || 'Login failed');
+    }
+
+    if (!data.token) {
+      console.error('❌ CRITICAL: No token in response!', {
+        responseKeys: Object.keys(data),
+        fullResponse: data
+      });
+      throw new Error('No authentication token received from server');
+    }
+
+    if (!data.user) {
+      console.error('❌ CRITICAL: No user data in response!');
+      throw new Error('No user data received from server');
+    }
+
+    // ⭐ CRITICAL: Verify token is a string
+    if (typeof data.token !== 'string' || data.token.trim().length === 0) {
+      console.error('❌ CRITICAL: Token is not a valid string!', {
+        tokenType: typeof data.token,
+        tokenLength: data.token?.length || 0
+      });
+      throw new Error('Invalid token format received from server');
+    }
+
+    if (data.success && data.token && data.user) {
     // ⭐ CRITICAL: Store token and user info - GUARANTEED SAVE (same as customerLogin)
     console.log('💾 SAVING STAFF TOKEN TO LOCALSTORAGE - CRITICAL STEP');
     console.log('Token length:', data.token.length);
@@ -279,11 +391,27 @@ export async function staffLogin(
       throw new Error('CRITICAL: Failed to save authentication token. Please check browser settings or try a different browser.');
     }
     
-    console.log('✅ Staff login successful - Token saved and verified');
-    return data;
+      console.log('✅ Staff login successful - Token saved and verified');
+      return data;
+    } else {
+      console.error('❌ CRITICAL: Response validation failed!', {
+        success: data.success,
+        hasToken: !!data.token,
+        hasUser: !!data.user
+      });
+      throw new Error('Invalid response format from server');
+    }
+  } catch (error: any) {
+    console.error('❌ Staff login error:', error);
+    if (error.response) {
+      console.error('Response error:', {
+        status: error.response.status,
+        data: error.response.data
+      });
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
   }
-
-  throw new Error(data.message || 'Login failed');
 }
 
 /**
@@ -349,21 +477,25 @@ export async function customerLogin(
 ): Promise<LoginResponse> {
   console.log('🔍 customerLogin called', { email, hasTable, hasRedirect });
   
-  const response = await axiosInstance.post('/api/customer/login', {
-    email,
-    password,
-    hasTable,
-    hasRedirect,
-  });
+  try {
+    const response = await axiosInstance.post('/api/customer/login', {
+      email,
+      password,
+      hasTable,
+      hasRedirect,
+    });
 
-  const data = response.data;
-  console.log('🔍 Login response received', {
-    success: data.success,
-    hasToken: !!data.token,
-    hasUser: !!data.user,
-    tokenLength: data.token ? data.token.length : 0,
-    tokenType: typeof data.token,
-    tokenValue: data.token ? `${data.token.substring(0, 20)}...` : 'NULL',
+    const data = response.data;
+  console.log('🔍 Customer login response received:', {
+    status: response.status,
+    hasData: !!data,
+    dataKeys: data ? Object.keys(data) : [],
+    success: data?.success,
+    hasToken: !!data?.token,
+    hasUser: !!data?.user,
+    tokenLength: data?.token ? data.token.length : 0,
+    tokenType: typeof data?.token,
+    tokenValue: data?.token ? `${data.token.substring(0, 30)}...` : 'NULL',
     fullResponse: data
   });
   
@@ -411,6 +543,16 @@ export async function customerLogin(
       fullResponse: data
     });
     throw new Error('No authentication token received from server');
+  }
+
+  // ⭐ CRITICAL: Verify token is a string
+  if (typeof data.token !== 'string' || data.token.trim().length === 0) {
+    console.error('❌ CRITICAL: Token is not a valid string!', {
+      tokenType: typeof data.token,
+      tokenLength: data.token?.length || 0,
+      tokenValue: data.token
+    });
+    throw new Error('Invalid token format received from server');
   }
 
   if (!data.user) {
@@ -518,8 +660,29 @@ export async function customerLogin(
     tokenLength: savedToken?.length || 0
   });
   
-  console.log('✅✅✅ LOGIN SUCCESSFUL - Token is in localStorage ✅✅✅');
-  return data;
+    console.log('✅✅✅ LOGIN SUCCESSFUL - Token is in localStorage ✅✅✅');
+    
+    // ⭐ FINAL VERIFICATION: Double-check token is actually in localStorage
+    const finalCheck = localStorage.getItem('authToken');
+    if (!finalCheck || finalCheck !== data.token) {
+      console.error('❌ CRITICAL: Token verification failed after save!');
+      console.error('Expected token length:', data.token.length);
+      console.error('Actual token in localStorage:', finalCheck ? finalCheck.length : 'NULL');
+      throw new Error('Token was not saved correctly to localStorage');
+    }
+    
+    return data;
+  } catch (error: any) {
+    console.error('❌ Customer login error:', error);
+    if (error.response) {
+      console.error('Response error:', {
+        status: error.response.status,
+        data: error.response.data
+      });
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
+  }
 }
 
 /**
