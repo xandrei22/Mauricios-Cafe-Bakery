@@ -34,24 +34,31 @@ app.use((req, res, next) => {
 });
 app.use(cors({
     origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
 
-        const allowed = [
-            'https://mauricios-cafe-bakery.vercel.app',
-            'https://mauricios-cafe-bakery-4eq8kul9f-josh-sayats-projects.vercel.app',
-            'https://mauricios-cafe-bakery.onrender.com',
-            'http://localhost:5173',
-            'http://127.0.0.1:5173'
-        ];
-
-        if (allowed.some(o => origin.includes(o))) {
+        // Allow all Vercel deployments (production + preview)
+        if (origin.includes('vercel.app')) {
             return callback(null, true);
         }
 
-        // Allow all origins for dev fallback
-        if (process.env.NODE_ENV !== 'production') return callback(null, true);
+        // Allow Render backend
+        if (origin.includes('onrender.com')) {
+            return callback(null, true);
+        }
 
-        return callback(new Error('Not allowed by CORS'));
+        // Allow localhost for development
+        if (origin === 'http://localhost:5173' || origin === 'http://127.0.0.1:5173') {
+            return callback(null, true);
+        }
+
+        // Allow all origins in development
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        // In production, allow the request (permissive for now)
+        callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -64,10 +71,10 @@ app.use(cors({
         'Content-Language'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: false, // ✅ TEMP hybrid mode
+    credentials: false, // JWT-only authentication - matches frontend withCredentials: false
     optionsSuccessStatus: 204,
     preflightContinue: false,
-    maxAge: 86400
+    maxAge: 86400 // Cache preflight for 24 hours
 }));
 
 // -------------------
