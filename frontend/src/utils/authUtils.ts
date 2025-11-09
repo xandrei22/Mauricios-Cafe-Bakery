@@ -366,6 +366,28 @@ export async function customerLogin(
     tokenValue: data.token ? `${data.token.substring(0, 20)}...` : 'NULL',
     fullResponse: data
   });
+  
+  // ⭐ CRITICAL: Check localStorage availability BEFORE trying to save
+  if (typeof localStorage === 'undefined') {
+    console.error('❌ CRITICAL: localStorage is not available!');
+    throw new Error('localStorage is not available. Please check browser settings or try a different browser.');
+  }
+  
+  // Test localStorage write capability
+  try {
+    const testKey = '__localStorage_test__';
+    localStorage.setItem(testKey, 'test');
+    const testValue = localStorage.getItem(testKey);
+    localStorage.removeItem(testKey);
+    if (testValue !== 'test') {
+      console.error('❌ CRITICAL: localStorage write test failed!');
+      throw new Error('localStorage is not writable. Please check browser settings.');
+    }
+    console.log('✅ localStorage is available and writable');
+  } catch (testError: any) {
+    console.error('❌ CRITICAL: localStorage test failed:', testError);
+    throw new Error(`localStorage is not accessible: ${testError.message}`);
+  }
 
   // Check if response is valid
   if (!data) {
@@ -404,14 +426,18 @@ export async function customerLogin(
   console.log('💾 SAVING TOKEN TO LOCALSTORAGE - CRITICAL STEP');
   console.log('Token length:', data.token.length);
   console.log('User data:', data.user);
+  console.log('localStorage available:', typeof localStorage !== 'undefined');
+  console.log('Current localStorage keys:', Object.keys(localStorage));
   
   // Clear old data first
   try {
     localStorage.removeItem('authToken');
     localStorage.removeItem('customerUser');
     localStorage.removeItem('loginTimestamp');
+    console.log('✅ Old data cleared from localStorage');
   } catch (e) {
-    console.warn('Could not clear old data:', e);
+    console.error('❌ Could not clear old data:', e);
+    throw new Error(`Failed to clear old localStorage data: ${e}`);
   }
   
   // Save with force - multiple synchronous attempts
@@ -440,6 +466,24 @@ export async function customerLogin(
       }
     } catch (error: any) {
       console.error(`❌ Save attempt ${attempt} failed:`, error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        localStorageAvailable: typeof localStorage !== 'undefined',
+        localStorageKeys: Object.keys(localStorage || {})
+      });
+      
+      // Check for specific localStorage errors
+      if (error.name === 'QuotaExceededError') {
+        console.error('❌ localStorage quota exceeded! Clearing old data...');
+        try {
+          localStorage.clear();
+        } catch (clearError) {
+          console.error('Failed to clear localStorage:', clearError);
+        }
+      }
+      
       if (attempt < 10) {
         await new Promise(resolve => setTimeout(resolve, 20));
       }
