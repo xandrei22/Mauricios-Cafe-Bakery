@@ -64,7 +64,7 @@ app.use(cors({
         'Content-Language'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: true, // ✅ TEMP hybrid mode
+    credentials: false, // ✅ TEMP hybrid mode
     optionsSuccessStatus: 204,
     preflightContinue: false,
     maxAge: 86400
