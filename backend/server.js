@@ -69,7 +69,7 @@ app.use(cors({
         'Referer'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: false, // JWT-only authentication - no cookies needed
+    credentials: true, // JWT-only authentication - no cookies needed
     optionsSuccessStatus: 204,
     preflightContinue: false,
     maxAge: 86400 // Cache preflight for 24 hours
