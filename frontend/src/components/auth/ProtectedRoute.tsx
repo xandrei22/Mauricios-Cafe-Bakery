@@ -37,15 +37,58 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // So we MUST use localStorage + JWT token as PRIMARY authentication method
       const loginTimestamp = localStorage.getItem('loginTimestamp');
       const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const recentLoginWindow = isMobile ? 30000 : 10000; // Longer window for mobile and desktop
+      const recentLoginWindow = isMobile ? 30000 : 20000; // Increased to 20 seconds for desktop (was 10)
       const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
       
-      // ⭐ CRITICAL: If loginTimestamp is VERY recent (less than 200ms), wait a bit for localStorage to sync
+      // ⭐ CRITICAL: If login is VERY recent (< 2 seconds), ALWAYS skip check-session
+      const isVeryRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 2000;
+      
+      // ⭐ CRITICAL: If loginTimestamp is VERY recent (less than 3 seconds), wait longer for localStorage to sync
       if (loginTimestamp) {
         const timeSinceLogin = Date.now() - parseInt(loginTimestamp);
-        if (timeSinceLogin < 200) {
-          console.log(`⏳ ProtectedRoute: Very recent loginTimestamp (${timeSinceLogin}ms) - waiting for localStorage sync...`);
-          await new Promise(resolve => setTimeout(resolve, 150));
+        if (timeSinceLogin < 3000) {
+          const waitTime = timeSinceLogin < 1000 ? 1000 : 500; // Wait 1 second if < 1 second old, else 500ms
+          console.log(`⏳ ProtectedRoute: Very recent loginTimestamp (${timeSinceLogin}ms) - waiting ${waitTime}ms for localStorage sync...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          
+          // After waiting, check again - if still very recent, skip check-session entirely
+          const timeAfterWait = Date.now() - parseInt(loginTimestamp);
+          if (timeAfterWait < 2000) {
+            console.log(`⏳ ProtectedRoute: Still very recent (${timeAfterWait}ms) - will use localStorage only, skip check-session`);
+          }
+        }
+      }
+      
+      // ⭐ CRITICAL: For very recent logins (< 2 seconds), ALWAYS use localStorage and skip check-session
+      // This prevents 401 errors when token is still being saved
+      if (isVeryRecentLogin) {
+        let storedUser = null;
+        let storedToken = null;
+        
+        if (requiredRole === 'customer') {
+          storedUser = localStorage.getItem('customerUser');
+          storedToken = localStorage.getItem('authToken');
+        } else if (requiredRole === 'admin') {
+          storedUser = localStorage.getItem('adminUser');
+          storedToken = localStorage.getItem('authToken');
+        } else if (requiredRole === 'staff') {
+          storedUser = localStorage.getItem('staffUser');
+          storedToken = localStorage.getItem('authToken');
+        }
+        
+        if (storedUser && storedToken) {
+          try {
+            const user = JSON.parse(storedUser);
+            if (user.role === requiredRole || (requiredRole === 'staff' && (user.role === 'staff' || user.role === 'admin'))) {
+              setIsAuthenticated(true);
+              setUserRole(user.role || requiredRole);
+              setIsLoading(false);
+              console.log(`✅ ProtectedRoute: VERY RECENT LOGIN (< 2s) - Using localStorage ONLY, SKIPPING check-session for ${requiredRole}`);
+              return; // EXIT IMMEDIATELY - don't call check-session at all
+            }
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
+          }
         }
       }
       

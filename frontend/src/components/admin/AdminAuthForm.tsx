@@ -77,13 +77,23 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
         console.error('Failed to check low stock alert:', err);
       });
       
-      // Small delay to ensure localStorage is synced (especially on mobile)
+      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and ProtectedRoute can read it
       const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const delay = isMobile ? 400 : 200;
+      const delay = isMobile ? 800 : 600; // Increased delay to ensure token is saved
       
       setTimeout(() => {
-        console.log(`Admin login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
-        navigate("/admin/dashboard", { replace: true });
+        const tokenCheck = localStorage.getItem('authToken');
+        const userCheck = localStorage.getItem('adminUser');
+        console.log(`Admin login redirect - Token saved: ${!!tokenCheck}, User saved: ${!!userCheck}`);
+        
+        if (!tokenCheck || !userCheck) {
+          console.warn('⚠️ Token or user not found, waiting a bit more...');
+          setTimeout(() => {
+            navigate("/admin/dashboard", { replace: true });
+          }, 300);
+        } else {
+          navigate("/admin/dashboard", { replace: true });
+        }
       }, delay);
 
     } catch (err: any) {

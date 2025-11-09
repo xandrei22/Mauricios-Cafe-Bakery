@@ -95,12 +95,16 @@ export function LoginForm({
       // ⭐ CRITICAL: Ensure loginTimestamp is set for AuthContext to recognize recent login
       localStorage.setItem('loginTimestamp', Date.now().toString());
       
-      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and available
-      // This prevents race condition where check-session is called before token is ready
+      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and ProtectedRoute can read it
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 800 : 600; // Increased delay to ensure token is saved
+      
       setTimeout(() => {
         // Final verification that token exists before redirect
         const finalToken = localStorage.getItem("authToken");
         const finalUser = localStorage.getItem("customerUser");
+        
+        console.log(`Customer login redirect - Token saved: ${!!finalToken}, User saved: ${!!finalUser}`);
         
         if (!finalToken || !finalUser) {
           console.error("❌ Token not available after wait - retrying...");
@@ -119,7 +123,7 @@ export function LoginForm({
             : "/customer/dashboard";
           navigate(redirectPath, { replace: true });
         }
-      }, 500); // Increased from 200ms to 500ms
+      }, delay);
     } catch (err: any) {
       console.error("Customer login error:", err);
       
