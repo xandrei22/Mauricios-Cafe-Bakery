@@ -171,8 +171,22 @@ export async function adminLogout(): Promise<void> {
  * Check admin session
  */
 export async function checkAdminSession(): Promise<SessionResponse> {
+  const token = localStorage.getItem('authToken');
+  
+  if (!token) {
+    console.warn('⚠️ checkAdminSession: No token found in localStorage');
+    return { success: false, authenticated: false };
+  }
+  
   try {
-    const response = await axiosInstance.get('/api/admin/check-session');
+    // ⭐ CRITICAL: Explicitly send Authorization header (even though interceptor should handle it)
+    const bearerToken = `Bearer ${token.trim()}`;
+    const response = await axiosInstance.get('/api/admin/check-session', {
+      headers: {
+        'Authorization': bearerToken,
+        'authorization': bearerToken // lowercase fallback
+      }
+    });
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401 || error.response?.status === 403) {
@@ -293,8 +307,22 @@ export async function staffLogout(): Promise<void> {
  * Check staff session
  */
 export async function checkStaffSession(): Promise<SessionResponse> {
+  const token = localStorage.getItem('authToken');
+  
+  if (!token) {
+    console.warn('⚠️ checkStaffSession: No token found in localStorage');
+    return { success: false, authenticated: false };
+  }
+  
   try {
-    const response = await axiosInstance.get('/api/staff/check-session');
+    // ⭐ CRITICAL: Explicitly send Authorization header (even though interceptor should handle it)
+    const bearerToken = `Bearer ${token.trim()}`;
+    const response = await axiosInstance.get('/api/staff/check-session', {
+      headers: {
+        'Authorization': bearerToken,
+        'authorization': bearerToken // lowercase fallback
+      }
+    });
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401 || error.response?.status === 403) {
@@ -501,14 +529,25 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
       hasGetMethod: typeof axiosInstance.get === 'function'
     });
     
-    console.log('📡 checkCustomerSession: Token will be added by axios interceptor');
-    
     if (!tokenCheck) {
       console.error('❌ CRITICAL: No token in localStorage when calling check-session!');
       return { success: false, authenticated: false };
     }
     
-    const response = await axiosInstance.get('/api/customer/check-session');
+    // ⭐ CRITICAL: Explicitly send Authorization header (even though interceptor should handle it)
+    // This ensures the header is sent even if interceptor fails (old build issue)
+    const bearerToken = `Bearer ${tokenCheck.trim()}`;
+    console.log('📡 checkCustomerSession: Explicitly adding Authorization header', {
+      headerValue: bearerToken.substring(0, 30) + '...',
+      tokenLength: tokenCheck.length
+    });
+    
+    const response = await axiosInstance.get('/api/customer/check-session', {
+      headers: {
+        'Authorization': bearerToken,
+        'authorization': bearerToken // lowercase fallback
+      }
+    });
     console.log('✅ checkCustomerSession: Success', response.data);
     return response.data;
   } catch (error: any) {

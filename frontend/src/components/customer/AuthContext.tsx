@@ -529,40 +529,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('loginTimestamp');
         }
       } else {
-        // Fallback to localStorage
+        // ⭐ CRITICAL: Fallback to localStorage if token exists (not just iOS/recent login)
+        // This prevents redirect loop when check-session fails due to missing Authorization header
         const storedUser = localStorage.getItem('customerUser');
         const storedToken = localStorage.getItem('authToken');
-        if (storedUser && storedToken && (isIOS || isRecentLogin)) {
+        if (storedUser && storedToken) {
           try {
             const user = JSON.parse(storedUser);
             setAuthenticated(true);
             setUser(user);
-            console.log('✅ Using localStorage fallback');
+            console.log('✅ Using localStorage fallback (token exists)');
+            console.log('⚠️ Note: check-session returned unauthenticated, but token exists. Using stored token.');
             return;
           } catch (e) {
             console.error('Failed to parse stored user:', e);
+            setAuthenticated(false);
+            setUser(null);
           }
+        } else {
+          // No token - user is truly not authenticated
+          setAuthenticated(false);
+          setUser(null);
         }
-        setAuthenticated(false);
-        setUser(null);
       }
     } catch (e: any) {
       console.error('Session check error:', e);
       
-      // Fallback to localStorage on error
+      // ⭐ CRITICAL: Fallback to localStorage on ANY error if token exists
+      // This prevents redirect loop when Authorization header isn't sent (old build issue)
       const storedUser = localStorage.getItem('customerUser');
       const storedToken = localStorage.getItem('authToken');
-      if (storedUser && storedToken && (isIOS || isRecentLogin)) {
+      
+      if (storedUser && storedToken) {
         try {
           const user = JSON.parse(storedUser);
           setAuthenticated(true);
           setUser(user);
-          console.log('✅ Error fallback to localStorage');
+          console.log('✅ Error fallback to localStorage (token exists, using it)');
+          console.log('⚠️ Note: check-session failed, but using stored token. This may indicate old frontend build.');
         } catch (parseErr) {
+          console.error('Failed to parse stored user:', parseErr);
           setAuthenticated(false);
           setUser(null);
         }
       } else {
+        // No token in localStorage - user is truly not authenticated
+        console.warn('⚠️ No token in localStorage - user not authenticated');
         setAuthenticated(false);
         setUser(null);
       }
