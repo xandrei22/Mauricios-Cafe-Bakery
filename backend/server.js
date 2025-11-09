@@ -19,12 +19,31 @@ const server = http.createServer(app);
 // -------------------
 // CORS - SIMPLE AND WORKING
 // -------------------
-// Simple CORS that just works - allow all origins for now
+// CORS configuration that works with both old and new frontend builds
 app.use(cors({
-    origin: true, // Allow all origins
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+
+        // Allow Vercel frontend and Render backend
+        if (origin.includes('vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.vercel.app') ||
+            origin.includes('onrender.com') ||
+            origin === 'http://localhost:5173' ||
+            origin === 'http://127.0.0.1:5173') {
+            return callback(null, true);
+        }
+
+        // Allow all origins in development
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        callback(null, true); // Allow all for now
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-    credentials: false, // JWT-only, no cookies
+    credentials: true, // Required because old frontend build uses credentials: 'include'
     optionsSuccessStatus: 204
 }));
 
