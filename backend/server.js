@@ -32,12 +32,49 @@ app.use((req, res, next) => {
     }
     next();
 });
+app.use(cors({
+    origin: function(origin, callback) {
+        if (!origin) return callback(null, true);
+
+        const allowed = [
+            'https://mauricios-cafe-bakery.vercel.app',
+            'https://mauricios-cafe-bakery-4eq8kul9f-josh-sayats-projects.vercel.app',
+            'https://mauricios-cafe-bakery.onrender.com',
+            'http://localhost:5173',
+            'http://127.0.0.1:5173'
+        ];
+
+        if (allowed.some(o => origin.includes(o))) {
+            return callback(null, true);
+        }
+
+        // Allow all origins for dev fallback
+        if (process.env.NODE_ENV !== 'production') return callback(null, true);
+
+        return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'authorization',
+        'X-Requested-With',
+        'Accept',
+        'Accept-Language',
+        'Content-Language'
+    ],
+    exposedHeaders: ['Authorization', 'authorization'],
+    credentials: true, // ✅ TEMP hybrid mode
+    optionsSuccessStatus: 204,
+    preflightContinue: false,
+    maxAge: 86400
+}));
 
 // -------------------
 // CORS - SIMPLE AND WORKING
 // -------------------
 // CORS configuration that works with both old and new frontend builds
-app.use(cors({
+/*app.use(cors({
     origin: function(origin, callback) {
         // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
@@ -72,11 +109,11 @@ app.use(cors({
         'Content-Language'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: false, // Required because old frontend build uses credentials: 'include'
+    credentials: false, // JWT-only authentication - no cookies/credentials needed
     optionsSuccessStatus: 204,
     preflightContinue: false,
     maxAge: 86400 // Cache preflight for 24 hours
-}));
+}));*/
 
 // -------------------
 // Body parsing
