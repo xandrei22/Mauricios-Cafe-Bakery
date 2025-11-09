@@ -58,16 +58,21 @@ app.use(cors({
         'Content-Type',
         'Authorization',
         'authorization',
+        'AUTHORIZATION',
+        'X-Authorization',
+        'x-authorization',
         'X-Requested-With',
         'Accept',
         'Accept-Language',
-        'Content-Language'
+        'Content-Language',
+        'Origin',
+        'Referer'
     ],
     exposedHeaders: ['Authorization', 'authorization'],
-    credentials: true, // ✅ TEMP hybrid mode
+    credentials: false, // JWT-only authentication - no cookies needed
     optionsSuccessStatus: 204,
     preflightContinue: false,
-    maxAge: 86400
+    maxAge: 86400 // Cache preflight for 24 hours
 }));
 
 // -------------------
