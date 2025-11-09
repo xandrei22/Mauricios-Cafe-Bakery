@@ -36,10 +36,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       // On mobile devices (especially iOS), cookies DON'T work for cross-origin requests
       // So we MUST use localStorage + JWT token as PRIMARY authentication method
       const loginTimestamp = localStorage.getItem('loginTimestamp');
-      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
       const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const recentLoginWindow = isMobile ? 30000 : 5000; // Longer window for mobile
+      const recentLoginWindow = isMobile ? 30000 : 10000; // Longer window for mobile and desktop
       const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+      
+      // ⭐ CRITICAL: If loginTimestamp is VERY recent (less than 200ms), wait a bit for localStorage to sync
+      if (loginTimestamp) {
+        const timeSinceLogin = Date.now() - parseInt(loginTimestamp);
+        if (timeSinceLogin < 200) {
+          console.log(`⏳ ProtectedRoute: Very recent loginTimestamp (${timeSinceLogin}ms) - waiting for localStorage sync...`);
+          await new Promise(resolve => setTimeout(resolve, 150));
+        }
+      }
       
       // For mobile devices, ALWAYS check localStorage first (cookies don't work)
       // For desktop, check localStorage if it's a recent login

@@ -65,6 +65,10 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       console.log('Token exists:', !!savedToken);
       console.log('User exists:', !!savedUser);
 
+      // ⭐ CRITICAL: Ensure loginTimestamp is set for ProtectedRoute to recognize recent login
+      // (authUtils already sets it, but ensure it's set right before redirect)
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+
       // Check for alerts immediately after successful login
       checkLowStockAlert().catch(err => {
         console.error('Failed to check low stock alert:', err);
@@ -72,11 +76,11 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
       
       // Small delay to ensure localStorage is synced (especially on mobile)
       const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
-      const delay = isMobile ? 300 : 150;
+      const delay = isMobile ? 400 : 200;
       
       setTimeout(() => {
         console.log(`Staff login redirect - Token saved: ${!!localStorage.getItem('authToken')}`);
-        navigate("/staff/dashboard");
+        navigate("/staff/dashboard", { replace: true });
       }, delay);
       
     } catch (err: any) {

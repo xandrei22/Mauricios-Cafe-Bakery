@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "./card";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { customerLogin } from "../../utils/authUtils";
 import { getApiUrl } from "../../utils/apiConfig";
@@ -27,6 +27,7 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Extract table param if present (for café customers)
   const urlParams = new URLSearchParams(window.location.search);
@@ -90,6 +91,10 @@ export function LoginForm({
       }
 
       console.log("✅ Login success. Redirecting...");
+      
+      // ⭐ CRITICAL: Ensure loginTimestamp is set for AuthContext to recognize recent login
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+      
       // ⭐ CRITICAL: Wait longer to ensure token is fully saved and available
       // This prevents race condition where check-session is called before token is ready
       setTimeout(() => {
@@ -101,15 +106,18 @@ export function LoginForm({
           console.error("❌ Token not available after wait - retrying...");
           // Wait one more time
           setTimeout(() => {
-            window.location.href = hasTable
+            console.log("✅ Token verified after retry, redirecting to dashboard");
+            const redirectPath = hasTable
               ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
               : "/customer/dashboard";
+            navigate(redirectPath, { replace: true });
           }, 300);
         } else {
           console.log("✅ Token verified, redirecting to dashboard");
-          window.location.href = hasTable
+          const redirectPath = hasTable
             ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
             : "/customer/dashboard";
+          navigate(redirectPath, { replace: true });
         }
       }, 500); // Increased from 200ms to 500ms
     } catch (err: any) {
