@@ -42,9 +42,11 @@ app.use(cors({
         callback(null, true); // Allow all for now
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Authorization', 'authorization'],
     credentials: true, // Required because old frontend build uses credentials: 'include'
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
+    preflightContinue: false
 }));
 
 // -------------------

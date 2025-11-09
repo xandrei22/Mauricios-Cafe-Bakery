@@ -7,12 +7,24 @@ const jwt = require('jsonwebtoken');
  */
 function authenticateJWT(req, res, next) {
     try {
-        console.log('🔍 JWT Middleware - Headers:', Object.keys(req.headers));
+        // Log all headers for debugging (but not sensitive values)
+        const headerKeys = Object.keys(req.headers);
+        console.log('🔍 JWT Middleware - Request:', {
+            method: req.method,
+            path: req.path,
+            url: req.url,
+            headerKeys: headerKeys,
+            hasAuthorization: !!(req.headers['authorization'] || req.headers['Authorization']),
+            authorizationValue: req.headers['authorization'] || req.headers['Authorization'] ?
+                (req.headers['authorization'] || req.headers['Authorization']).substring(0, 30) + '...' : 'NOT FOUND'
+        });
+
         const authHeader = req.headers['authorization'] || req.headers['Authorization'];
 
         if (!authHeader) {
             console.warn('❌ JWT Middleware: No Authorization header found');
-            console.warn('❌ JWT Middleware: Available headers:', Object.keys(req.headers));
+            console.warn('❌ JWT Middleware: Available headers:', headerKeys);
+            console.warn('❌ JWT Middleware: Full header object keys:', Object.keys(req.headers).map(k => `${k}: ${typeof req.headers[k]}`));
             return res.status(401).json({
                 success: false,
                 message: 'No authorization token provided'
