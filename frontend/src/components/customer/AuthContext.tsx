@@ -395,17 +395,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ⭐ CRITICAL: Get token - wait if recent login
     let token = localStorage.getItem('authToken');
     const loginTimestampCheck = localStorage.getItem('loginTimestamp');
-    const isVeryRecentLogin = loginTimestampCheck && (Date.now() - parseInt(loginTimestampCheck)) < 10000; // 10 seconds
+    const isVeryRecentLogin = loginTimestampCheck && (Date.now() - parseInt(loginTimestampCheck)) < 15000; // 15 seconds (increased from 10)
     
-    // If no token but recent login, wait for it (up to 2 seconds)
+    // If no token but recent login, wait for it (up to 3 seconds)
     if (!token && isVeryRecentLogin) {
-      console.log('⏳ Recent login detected - waiting for token...');
-      for (let i = 0; i < 20; i++) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      console.log('⏳ Recent login detected - waiting for token to be available...');
+      const timeSinceLogin = Date.now() - parseInt(loginTimestampCheck || '0');
+      
+      // If login was VERY recent (less than 1 second), wait longer
+      if (timeSinceLogin < 1000) {
+        console.log(`⏳ Very recent login (${timeSinceLogin}ms ago) - waiting 800ms for token...`);
+        await new Promise(resolve => setTimeout(resolve, 800));
         token = localStorage.getItem('authToken');
-        if (token) {
-          console.log(`✅ Token found after ${(i + 1) * 100}ms`);
-          break;
+      }
+      
+      // If still no token, retry with exponential backoff
+      if (!token) {
+        for (let i = 0; i < 15; i++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          token = localStorage.getItem('authToken');
+          if (token) {
+            console.log(`✅ Token found after ${(i + 1) * 100}ms`);
+            break;
+          }
         }
       }
     }
@@ -425,7 +437,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     // Check localStorage for recent login
     const loginTimestamp = localStorage.getItem('loginTimestamp');
-    const recentLoginWindow = isMobile ? 30000 : 10000;
+    const recentLoginWindow = isMobile ? 30000 : 15000; // Increased from 10000 to 15000
     const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
     
     // For mobile devices or recent logins, check localStorage first
@@ -475,19 +487,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLastSessionCheck(now);
     
-    // Add delay for iOS to process cookies
-    if (isRecentLogin && isIOS) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    // Add delay for iOS to process cookies, and for all devices after recent login
+    if (isRecentLogin) {
+      const timeSinceLogin = Date.now() - parseInt(loginTimestamp || '0');
+      if (timeSinceLogin < 1000) {
+        // Very recent login - wait longer
+        console.log(`⏳ Very recent login (${timeSinceLogin}ms ago) - waiting 1000ms before check-session...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else if (isIOS) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else {
+        // For non-iOS recent logins, still wait a bit
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
 
     // Double-check token exists before making request
     const tokenBeforeCall = localStorage.getItem('authToken');
     if (!tokenBeforeCall) {
+      console.warn('⚠️ Token not found before check-session call');
       setLoading(false);
       setAuthenticated(false);
       setUser(null);
       return;
     }
+    
+    console.log('🔑 About to call checkCustomerSession with token:', {
+      tokenLength: tokenBeforeCall.length,
+      tokenPreview: tokenBeforeCall.substring(0, 20) + '...',
+      timeSinceLogin: isRecentLogin ? (Date.now() - parseInt(loginTimestamp || '0')) : 'N/A'
+    });
     
     setLoading(true);
     try {

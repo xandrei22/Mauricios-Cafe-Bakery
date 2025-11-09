@@ -90,11 +90,28 @@ export function LoginForm({
       }
 
       console.log("✅ Login success. Redirecting...");
+      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and available
+      // This prevents race condition where check-session is called before token is ready
       setTimeout(() => {
-        window.location.href = hasTable
-          ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
-          : "/customer/dashboard";
-      }, 200);
+        // Final verification that token exists before redirect
+        const finalToken = localStorage.getItem("authToken");
+        const finalUser = localStorage.getItem("customerUser");
+        
+        if (!finalToken || !finalUser) {
+          console.error("❌ Token not available after wait - retrying...");
+          // Wait one more time
+          setTimeout(() => {
+            window.location.href = hasTable
+              ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
+              : "/customer/dashboard";
+          }, 300);
+        } else {
+          console.log("✅ Token verified, redirecting to dashboard");
+          window.location.href = hasTable
+            ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
+            : "/customer/dashboard";
+        }
+      }, 500); // Increased from 200ms to 500ms
     } catch (err: any) {
       console.error("Customer login error:", err);
       
