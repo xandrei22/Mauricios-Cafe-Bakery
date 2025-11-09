@@ -25,7 +25,7 @@ const axiosInstance: AxiosInstance = axios.create({
   baseURL: apiUrl,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
-  withCredentials: false, // ❌ No cookies — critical for JWT
+  withCredentials: false // ❌ No cookies — critical for JWT
 });
 
 // ==========================================
