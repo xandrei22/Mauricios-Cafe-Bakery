@@ -474,15 +474,32 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
   // ⭐ CRITICAL: Verify token exists before making request
   const token = localStorage.getItem('authToken');
   
+  console.log('🔍 checkCustomerSession called', {
+    hasToken: !!token,
+    tokenLength: token ? token.length : 0,
+    tokenPreview: token ? token.substring(0, 30) + '...' : 'NO TOKEN',
+    localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login'))
+  });
+  
   // If no token, return immediately without making request (silent - this is normal when not logged in)
   if (!token) {
+    console.warn('⚠️ checkCustomerSession: No token found in localStorage');
     return { success: false, authenticated: false };
   }
   
   try {
+    console.log('📡 checkCustomerSession: Making request with axiosInstance to /api/customer/check-session');
+    console.log('📡 checkCustomerSession: Token will be added by axios interceptor');
     const response = await axiosInstance.get('/api/customer/check-session');
+    console.log('✅ checkCustomerSession: Success', response.data);
     return response.data;
   } catch (error: any) {
+    console.error('❌ checkCustomerSession: Error', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
     const errorStatus = error.response?.status;
     
     // 401/403 is expected when token is invalid/expired - handle silently
