@@ -17,4 +17,14 @@ export default defineConfig({
       '/uploads': 'http://localhost:5001',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Add timestamp to filenames to bust cache
+        entryFileNames: `assets/[name]-[hash].js`,
+        chunkFileNames: `assets/[name]-[hash].js`,
+        assetFileNames: `assets/[name]-[hash].[ext]`
+      }
+    }
+  }
 })
