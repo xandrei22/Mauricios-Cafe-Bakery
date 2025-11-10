@@ -41,6 +41,8 @@ app.use(cors({
             origin.endsWith('.vercel.app') ||
             origin.includes('mauricios-cafe-bakery.vercel.app') ||
             origin.includes('mauricios-cafe-bakery.onrender.com') ||
+            origin === 'https://mauricios-cafe-bakery.shop' ||
+            origin === 'https://www.mauricios-cafe-bakery.shop' ||
             origin.startsWith('http://localhost:5173') ||
             origin.startsWith('http://127.0.0.1:5173')
         ) {
