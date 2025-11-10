@@ -29,7 +29,7 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
     try {
       console.log('Attempting staff login with:', { username: usernameOrEmail });
       
-      const data = await staffLogin(usernameOrEmail, password);
+      await staffLogin(usernameOrEmail, password);
       
       console.log('Staff login successful, checking for alerts');
       
@@ -86,10 +86,25 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
         if (!tokenCheck || !userCheck) {
           console.warn('⚠️ Token or user not found, waiting a bit more...');
           setTimeout(() => {
-            navigate("/staff/dashboard", { replace: true });
+            // ⭐ FORCE REDIRECT using window.location to bypass any routing issues
+            console.log('🔄 FORCING REDIRECT to /staff/dashboard');
+            window.location.href = "/staff/dashboard";
           }, 300);
         } else {
-          navigate("/staff/dashboard", { replace: true });
+          // Try React Router first, but fallback to window.location if needed
+          try {
+            navigate("/staff/dashboard", { replace: true });
+            // Backup: if still on login page after 1 second, force redirect
+            setTimeout(() => {
+              if (window.location.pathname.includes('/login')) {
+                console.log('🔄 React Router redirect failed, forcing with window.location');
+                window.location.href = "/staff/dashboard";
+              }
+            }, 1000);
+          } catch (navError) {
+            console.error('Navigate error, using window.location:', navError);
+            window.location.href = "/staff/dashboard";
+          }
         }
       }, delay);
       

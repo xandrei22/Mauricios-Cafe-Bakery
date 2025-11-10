@@ -114,14 +114,29 @@ export function LoginForm({
             const redirectPath = hasTable
               ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
               : "/customer/dashboard";
-            navigate(redirectPath, { replace: true });
+            // ⭐ FORCE REDIRECT using window.location to bypass any routing issues
+            console.log('🔄 FORCING REDIRECT to', redirectPath);
+            window.location.href = redirectPath;
           }, 300);
         } else {
           console.log("✅ Token verified, redirecting to dashboard");
           const redirectPath = hasTable
             ? `/customer/menu?table=${encodeURIComponent(tableFromUrl!)}`
             : "/customer/dashboard";
-          navigate(redirectPath, { replace: true });
+          // Try React Router first, but fallback to window.location if needed
+          try {
+            navigate(redirectPath, { replace: true });
+            // Backup: if still on login page after 1 second, force redirect
+            setTimeout(() => {
+              if (window.location.pathname.includes('/login')) {
+                console.log('🔄 React Router redirect failed, forcing with window.location');
+                window.location.href = redirectPath;
+              }
+            }, 1000);
+          } catch (navError) {
+            console.error('Navigate error, using window.location:', navError);
+            window.location.href = redirectPath;
+          }
         }
       }, delay);
     } catch (err: any) {
