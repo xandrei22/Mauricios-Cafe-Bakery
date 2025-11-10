@@ -19,7 +19,7 @@
             // IMMEDIATE CHECK: Scan entire HTML document for old build references
             const htmlContent = document.documentElement.outerHTML;
             const hasOldBuild = oldBuilds.some(old => htmlContent.includes(old));
-            
+
             if (hasOldBuild) {
                 console.error('❌ OLD BUILD DETECTED IN HTML - FORCING RELOAD');
                 // Clear all caches
