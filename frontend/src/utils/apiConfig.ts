@@ -15,15 +15,20 @@ export const getApiUrl = (): string => {
     return 'http://localhost:5001';
   }
 
-  // In production, use direct Render backend URL
-  // Cookies will work because we set sameSite: 'none' and secure: true without domain
+  // In production, first respect explicit override if provided
   const envApiUrl = import.meta.env.VITE_API_URL;
   if (envApiUrl && envApiUrl.trim() !== '') {
-    // Remove trailing slash if present
     return envApiUrl.trim().replace(/\/+$/, '');
   }
-  
-  // Fallback to Render URL if VITE_API_URL not set
+
+  // If running on Vercel, use same-origin (empty base) to leverage rewrites
+  const hostname = window.location.hostname || '';
+  if (hostname.endsWith('.vercel.app')) {
+    // All frontend calls should use relative paths like `/api/...`
+    return '';
+  }
+
+  // Default: use direct Render backend URL
   return 'https://mauricios-cafe-bakery.onrender.com';
 };
 

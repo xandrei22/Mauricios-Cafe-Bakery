@@ -4,13 +4,7 @@
  * This ensures iPhone and other mobile devices work without cookies
  */
 
-export function getApiUrl(): string {
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL || 'https://mauricios-cafe-bakery.onrender.com';
-  } else {
-    return 'http://localhost:5001';
-  }
-}
+import { getApiUrl } from './apiConfig';
 
 /**
  * Get authentication headers with Bearer token
