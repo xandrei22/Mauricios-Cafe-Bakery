@@ -34,46 +34,33 @@ app.use((req, res, next) => {
 });
 app.use(cors({
     origin: function(origin, callback) {
-        if (!origin) return callback(null, true);
+        if (!origin) return callback(null, true); // allow Postman, mobile apps, etc.
 
-        const allowed = [
-            'https://mauricios-cafe-bakery.vercel.app',
-            'https://mauricios-cafe-bakery-4eq8kul9f-josh-sayats-projects.vercel.app',
-            'https://mauricios-cafe-bakery.onrender.com',
-            'http://localhost:5173',
-            'http://127.0.0.1:5173'
-        ];
-
-        if (allowed.some(o => origin.includes(o))) {
+        // Allow your main domain and any Vercel preview deployments
+        if (
+            origin.endsWith('.vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.onrender.com') ||
+            origin.startsWith('http://localhost:5173') ||
+            origin.startsWith('http://127.0.0.1:5173')
+        ) {
             return callback(null, true);
         }
 
-        // Allow all origins for dev fallback
+        // Allow all in dev
         if (process.env.NODE_ENV !== 'production') return callback(null, true);
 
+        console.warn('❌ Blocked by CORS:', origin);
         return callback(new Error('Not allowed by CORS'));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'authorization',
-        'AUTHORIZATION',
-        'X-Authorization',
-        'x-authorization',
-        'X-Requested-With',
-        'Accept',
-        'Accept-Language',
-        'Content-Language',
-        'Origin',
-        'Referer'
-    ],
-    exposedHeaders: ['Authorization', 'authorization'],
-    credentials: true, // JWT-only authentication - no cookies needed
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: ['Authorization'],
+    credentials: false, // you’re JWT-only now
     optionsSuccessStatus: 204,
-    preflightContinue: false,
-    maxAge: 86400 // Cache preflight for 24 hours
+    maxAge: 86400
 }));
+
 
 // -------------------
 // CORS - SIMPLE AND WORKING
