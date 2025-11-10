@@ -85,17 +85,30 @@ async function saveAuthData(token: string, userKey: string, user: any) {
 }
 
 // ==================== LOGIN / LOGOUT / SESSION ====================
+function normalizeCredentials(credentials: any) {
+  const identifier = (credentials?.username ?? credentials?.email ?? credentials?.usernameOrEmail ?? '').trim();
+  return {
+    username: identifier || credentials?.username || credentials?.email || undefined,
+    email: identifier || credentials?.email || credentials?.username || undefined,
+    usernameOrEmail: identifier || credentials?.usernameOrEmail || undefined,
+    password: credentials?.password
+  };
+}
+
 export async function login(role: 'admin' | 'staff' | 'customer', credentials: any): Promise<LoginResponse> {
   let endpoint = '';
   let userKey = '';
+  let payload = credentials;
   switch (role) {
     case 'admin':
       endpoint = '/api/admin/login';
       userKey = 'adminUser';
+      payload = normalizeCredentials(credentials);
       break;
     case 'staff':
       endpoint = '/api/staff/login';
       userKey = 'staffUser';
+      payload = normalizeCredentials(credentials);
       break;
     case 'customer':
       endpoint = '/api/customer/login';
@@ -104,7 +117,7 @@ export async function login(role: 'admin' | 'staff' | 'customer', credentials: a
   }
 
   try {
-    const response = await axiosInstance.post(endpoint, credentials);
+    const response = await axiosInstance.post(endpoint, payload);
     const data = response.data as LoginResponse;
 
     if (!data.success || !data.token || !data.user) {
@@ -231,12 +244,17 @@ export async function adminLogin(
   password: string
 ): Promise<LoginResponse> {
   console.log('🔍 adminLogin called', { usernameOrEmail });
+
+  const identifier = usernameOrEmail?.trim();
+  const payload = {
+    username: identifier,
+    email: identifier,
+    usernameOrEmail: identifier,
+    password,
+  };
   
   try {
-    const response = await axiosInstance.post('/api/admin/login', {
-      usernameOrEmail,
-      password,
-    });
+    const response = await axiosInstance.post('/api/admin/login', payload);
 
     const data = response.data;
     console.log('🔍 Admin login response received:', {
@@ -277,12 +295,17 @@ export async function staffLogin(
   password: string
 ): Promise<LoginResponse> {
   console.log('🔍 staffLogin called', { usernameOrEmail });
+
+  const identifier = usernameOrEmail?.trim();
+  const payload = {
+    username: identifier,
+    email: identifier,
+    usernameOrEmail: identifier,
+    password,
+  };
   
   try {
-    const response = await axiosInstance.post('/api/staff/login', {
-      usernameOrEmail,
-      password,
-    });
+    const response = await axiosInstance.post('/api/staff/login', payload);
 
     const data = response.data;
     console.log('🔍 Staff login response received:', {
