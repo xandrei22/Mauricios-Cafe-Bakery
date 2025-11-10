@@ -3,7 +3,7 @@
  * Handles login, logout, and session checking with JWT tokens
  */
 
-import axios from 'axios';
+import axiosInstance from './axiosInstance'
 
 // ==================== AXIOS INSTANCE ====================
 const axiosInstance = axios.create({
