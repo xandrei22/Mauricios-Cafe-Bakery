@@ -31,13 +31,18 @@ const axiosInstance: AxiosInstance = axios.create({
 // ==========================================
 // ✅ Request Interceptor - Automatically adds Authorization header
 // ==========================================
+console.log('🔧 REGISTERING AXIOS REQUEST INTERCEPTOR...');
 axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // 🔍 DIAGNOSTIC: Log the full URL being requested
     const fullUrl = `${config.baseURL}${config.url}`;
-    console.log('🌐 AXIOS REQUEST URL:', fullUrl);
-    console.log('🌐 Base URL:', config.baseURL);
-    console.log('🌐 Request URL:', config.url);
+    console.log('🌐 AXIOS REQUEST INTERCEPTOR FIRED:', {
+      fullUrl,
+      baseURL: config.baseURL,
+      url: config.url,
+      method: config.method,
+      timestamp: new Date().toISOString()
+    });
     
     // 🔑 Get token from localStorage (same key used by all user types)
     const token = localStorage.getItem('authToken');
