@@ -42,9 +42,13 @@ module.exports = (passport, db) => {
                         const customer = rows[0];
                         customer.isNewGoogleUser = false;
 
-                        // Check if email verification is required for existing Google users
-                        if (!customer.email_verified) {
-                            customer.requiresVerification = true;
+                        // Google OAuth users are already verified by Google
+                        // If somehow they're not marked as verified, mark them now
+                        if (!customer.email_verified && customer.password === 'GOOGLE_AUTH') {
+                            // Auto-verify Google users
+                            await db.query('UPDATE customers SET email_verified = TRUE WHERE id = ?', [customer.id]);
+                            customer.email_verified = true;
+                            console.log('✅ Auto-verified existing Google OAuth user:', customer.email);
                         }
 
                         return done(null, customer);
@@ -74,23 +78,25 @@ module.exports = (passport, db) => {
                     const verificationToken = crypto.randomBytes(32).toString('hex');
                     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+                    // Google OAuth users are already verified by Google, so mark as verified immediately
                     const [result] = await db.query(
-                        'INSERT INTO customers (google_id, email, full_name, username, password, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, ?, FALSE, ?, ?, NOW())', [google_id, email, full_name, username, password, verificationToken, verificationExpires]
+                        'INSERT INTO customers (google_id, email, full_name, username, password, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, NOW())', [google_id, email, full_name, username, password, verificationToken, verificationExpires]
                     );
                     console.log('Insert result:', result);
 
-                    // Send verification email instead of welcome email
+                    // Send welcome email since they're already verified
                     try {
-                        const { sendVerificationEmail } = require('../utils/emailService');
-                        const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
-                        await sendVerificationEmail(email, full_name, verificationUrl);
+                        const { sendWelcomeEmail } = require('../utils/emailService');
+                        await sendWelcomeEmail(email, full_name);
+                        console.log('✅ Welcome email sent to Google OAuth user:', email);
                     } catch (emailError) {
-                        console.error('Error sending verification email (Google signup):', emailError);
+                        console.error('❌ Error sending welcome email (Google signup):', emailError);
+                        // Don't fail the signup if email fails, but log it
                     }
 
                     const [customer] = await db.query('SELECT * FROM customers WHERE id = ?', [result.insertId]);
                     customer[0].isNewGoogleUser = true;
-                    customer[0].requiresVerification = true;
+                    customer[0].email_verified = true; // Already verified by Google
                     return done(null, customer[0]);
                 } catch (err) {
                     return done(err);

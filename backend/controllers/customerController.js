@@ -42,14 +42,13 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        // Email verification check disabled temporarily
-        // if (!customer.email_verified) {
-        //     return res.status(403).json({
-        //         message: 'Please verify your email address before logging in. Check your email for the verification link.',
-        //         requiresVerification: true
-        //     });
-        // }
-        console.log('⚠️ Email verification check disabled - allowing login');
+        // Email verification check
+        if (!customer.email_verified) {
+            return res.status(403).json({
+                message: 'Please verify your email address before logging in. Check your email for the verification link.',
+                requiresVerification: true
+            });
+        }
 
         // Optionally compute a post-login redirect when coming from a QR/table link (no sessions used)
         const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -162,18 +161,34 @@ async function signup(req, res) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Insert new customer WITHOUT email verification (disabled temporarily)
+        // Generate verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Insert new customer WITH email verification
         const [result] = await db.query(
-            'INSERT INTO customers (username, password, email, full_name, email_verified, created_at) VALUES (?, ?, ?, ?, TRUE, NOW())', [username, hashedPassword, email, fullName]
+            'INSERT INTO customers (username, password, email, full_name, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, FALSE, ?, ?, NOW())', [username, hashedPassword, email, fullName, verificationToken, verificationExpires]
         );
 
-        console.log('✅ Customer account created (email verification disabled)');
+        console.log('✅ Customer account created with email verification');
+
+        // Send verification email
+        try {
+            const { sendVerificationEmail } = require('../utils/emailService');
+            const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const verificationUrl = `${frontendBase}/customer/verify-email?token=${verificationToken}`;
+            await sendVerificationEmail(email, fullName, verificationUrl);
+            console.log('✅ Verification email sent successfully');
+        } catch (emailError) {
+            console.error('❌ Error sending verification email:', emailError);
+            // Don't fail signup if email fails, but log it
+        }
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully. You can now log in.',
+            message: 'Account created successfully. Please check your email to verify your account before logging in.',
             customerId: result.insertId,
-            requiresVerification: false
+            requiresVerification: true
         });
 
     } catch (error) {
@@ -220,7 +235,8 @@ async function forgotPassword(req, res) {
         // Save token, expiry, and update request count/window
         await db.query('UPDATE customers SET reset_password_token = ?, reset_password_expires = ?, reset_request_count = ?, reset_request_window = ? WHERE id = ?', [token, expires, resetCount + 1, windowStart, customer.id]);
         // Send reset email
-        const resetLink = `http://localhost:5173/reset-password/${token}`;
+        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const resetLink = `${frontendBase}/customer/reset-password?token=${token}`;
         await sendResetPasswordEmail(email, customer.full_name || customer.name || customer.username, resetLink);
         // Specific message for registered accounts
         return res.json({ message: 'A reset link has been sent to your registered email address.' });

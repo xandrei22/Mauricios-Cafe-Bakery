@@ -101,8 +101,9 @@ router.get('/auth/google/callback', async(req, res, next) => {
                 console.error('Google OAuth: No user returned');
                 return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
-            // Check if email verification is required for Google OAuth users
-            if (user.requiresVerification && !user.email_verified) {
+            // Google OAuth users are auto-verified (Google already verified their email)
+            // Regular signups must verify their email before logging in
+            if (user.password !== 'GOOGLE_AUTH' && !user.email_verified) {
                 return res.redirect(`${frontendBase}/login?error=EMAIL_VERIFICATION_REQUIRED&message=Please verify your email address before logging in. Check your email for the verification link.`);
             }
 

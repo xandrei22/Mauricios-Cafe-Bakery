@@ -28,6 +28,16 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
     });
     console.log('✅ Using Brevo (formerly Sendinblue) SMTP');
     console.log('🔧 Connection timeouts: 60 seconds');
+
+    // Verify transporter configuration
+    transporter.verify(function(error, success) {
+        if (error) {
+            console.error('❌ Brevo SMTP configuration error:', error);
+            console.log('⚠️ Email service may not work - check Brevo SMTP credentials');
+        } else {
+            console.log('✅ Brevo SMTP server is ready to send messages');
+        }
+    });
 } else if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
     // Fallback to Gmail if Brevo not configured
     console.log('✅ Using Gmail as fallback...');
@@ -68,8 +78,11 @@ const sendWelcomeEmail = async(email, fullName) => {
 
         console.log('Attempting to send welcome email to:', email);
 
+        // Determine FROM address - use Brevo user if available, otherwise EMAIL_USER
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to: email,
             subject: 'Welcome to Mauricio\'s Cafe and Bakery - Your Journey Begins! 🎉',
             html: `
@@ -161,8 +174,11 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
             return;
         }
 
+        // Determine FROM address
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to: email,
             subject: 'Password Reset Request',
             html: `
@@ -205,8 +221,9 @@ async function sendLowStockAlert(to, items) {
         }
 
         const itemList = items.map(item => `${item.name} (${item.quantity} ${item.unit})`).join('<br>');
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to,
             subject: 'Low Stock Alert',
             html: `<h3>Low Stock Alert</h3><p>The following items are low in stock:</p><p>${itemList}</p>`
@@ -241,8 +258,9 @@ async function sendEventStatusEmail(to, status, event) {
             ${status === 'accepted' ? '<p><b>You will be contacted for further details regarding your event.</b></p>' : ''}
             <p>Thank you for choosing our Coffee Shop!</p>
         `;
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
         await transporter.sendMail({
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to,
             subject,
             html,
@@ -266,8 +284,9 @@ async function sendEmail(options) {
             return;
         }
 
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to: options.to,
             subject: options.subject,
             html: options.html
@@ -291,10 +310,13 @@ const sendVerificationEmail = async(email, fullName, verificationUrl) => {
 
         console.log('Attempting to send verification email to:', email);
 
+        // Determine FROM address
+        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+
         const mailOptions = {
-            from: process.env.EMAIL_USER || 'noreply@coffeeshop.com',
+            from: fromAddress,
             to: email,
-            subject: 'Verify Your Email Address - Coffee Shop Account',
+            subject: 'Verify Your Email Address - Mauricio\'s Cafe and Bakery',
             html: `
                 <div style="font-family: 'Poppins', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
                     <!-- Header -->
@@ -339,7 +361,7 @@ const sendVerificationEmail = async(email, fullName, verificationUrl) => {
                         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                         
                         <p style="color: #666; font-size: 12px; text-align: center;">
-                            This email was sent by Coffee Shop. If you have any questions, please contact us.
+                            This email was sent by Mauricio's Cafe and Bakery. If you have any questions, please contact us.
                         </p>
                     </div>
                 </div>
