@@ -818,12 +818,24 @@ export async function checkCustomerSession(): Promise<SessionResponse> {
       tokenLength: tokenCheck.length
     });
     
-    const response = await axiosInstance.get('/api/customer/check-session', {
-      headers: {
-        'Authorization': bearerToken,
-        'authorization': bearerToken // lowercase fallback
-      }
+    // ⭐ CRITICAL: Create a new axios config to ensure headers are set
+    const config = {
+      headers: {} as Record<string, string>
+    };
+    
+    // Force set Authorization header multiple ways
+    config.headers['Authorization'] = bearerToken;
+    config.headers['authorization'] = bearerToken;
+    config.headers['AUTHORIZATION'] = bearerToken;
+    
+    console.log('📡 checkCustomerSession: Final config before request', {
+      hasHeaders: !!config.headers,
+      headerKeys: Object.keys(config.headers),
+      authorizationValue: config.headers['Authorization']?.substring(0, 30) + '...',
+      fullConfig: config
     });
+    
+    const response = await axiosInstance.get('/api/customer/check-session', config);
     console.log('✅ checkCustomerSession: Success', response.data);
     return response.data;
   } catch (error: any) {
