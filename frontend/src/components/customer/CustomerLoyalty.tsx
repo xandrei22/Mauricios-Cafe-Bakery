@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useAuth } from './AuthContext';
 import { io, Socket } from 'socket.io-client';
 import { getApiUrl } from '../../utils/apiConfig';
+import axiosInstance from '../../utils/axiosInstance';
+import { useNavigate } from 'react-router-dom';
 
 interface LoyaltyReward {
   id: number;
@@ -55,6 +57,7 @@ interface CustomerLoyaltyData {
 }
 
 const CustomerLoyalty: React.FC = () => {
+  const navigate = useNavigate();
   const { user, authenticated, loading: authLoading } = useAuth();
   const [loyaltyData, setLoyaltyData] = useState<CustomerLoyaltyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,22 +227,21 @@ const CustomerLoyalty: React.FC = () => {
 
       // Get customer ID from authenticated user
       const customerId = user.id;
-      const API_URL = getApiUrl();
+      const API_URL = getApiUrl(); // can be '' on Vercel; axiosInstance handles baseURL
 
+      // Use axios instance so Authorization header is attached automatically
       const [pointsRes, rewardsRes, historyRes, pointsHistoryRes] = await Promise.all([
-        fetch(`${API_URL}/api/customers/${customerId}/loyalty`, { credentials: 'omit' }),
-        fetch(`${API_URL}/api/loyalty/available-rewards/${customerId}`, { credentials: 'omit' }),
-        fetch(`${API_URL}/api/loyalty/redemption-history/${customerId}`, { credentials: 'omit' }),
-        fetch(`${API_URL}/api/customers/${customerId}/points-earned-history`, { credentials: 'omit' })
+        axiosInstance.get(`${API_URL}/api/customers/${customerId}/loyalty`),
+        axiosInstance.get(`${API_URL}/api/loyalty/available-rewards/${customerId}`),
+        axiosInstance.get(`${API_URL}/api/loyalty/redemption-history/${customerId}`),
+        axiosInstance.get(`${API_URL}/api/customers/${customerId}/points-earned-history`)
       ]);
 
-      if (pointsRes.ok && rewardsRes.ok && historyRes.ok && pointsHistoryRes.ok) {
-        const [pointsData, rewardsData, historyData, pointsHistoryData] = await Promise.all([
-          pointsRes.json(),
-          rewardsRes.json(),
-          historyRes.json(),
-          pointsHistoryRes.json()
-        ]);
+      if (pointsRes.status === 200 && rewardsRes.status === 200 && historyRes.status === 200 && pointsHistoryRes.status === 200) {
+        const pointsData = pointsRes.data;
+        const rewardsData = rewardsRes.data;
+        const historyData = historyRes.data;
+        const pointsHistoryData = pointsHistoryRes.data;
 
         setLoyaltyData({
           loyalty_points: pointsData.loyalty_points || 0,
@@ -309,21 +311,16 @@ const CustomerLoyalty: React.FC = () => {
       const customerId = user.id;
       const API_URL = getApiUrl();
       
-      const res = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
-        body: JSON.stringify({
-          customerId,
-          rewardId: reward.id,
-          orderId: null,
-          redemptionProof: 'Claimed through customer interface',
-          staffId: null
-        })
+      const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
+        customerId,
+        rewardId: reward.id,
+        orderId: null,
+        redemptionProof: 'Claimed through customer interface',
+        staffId: null
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.status === 200) {
+        const data = res.data;
         setMessage(`Successfully claimed "${reward.name}"! Your claim code is ${data.claimCode}. Show this code to staff to redeem.`);
         
         // Add to claimed rewards with countdown
@@ -353,8 +350,8 @@ const CustomerLoyalty: React.FC = () => {
         
         setTimeout(() => setMessage(null), 5000);
       } else {
-        const errorData = await res.json();
-        setError(errorData.error || 'Failed to claim reward');
+        const errorData = res.data as any;
+        setError((errorData && (errorData.error || errorData.message)) || 'Failed to claim reward');
       }
     } catch (error) {
       setError('Failed to claim reward');
@@ -604,7 +601,7 @@ const CustomerLoyalty: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-semibold text-green-600">+{history.points_earned} points</p>
-                                <p className="text-sm text-gray-600">₱{history.order_total}</p>
+                                <p className="text-sm text-gray-600">₱{history.total_amount}</p>
                               </div>
                             </div>
                           </CardContent>

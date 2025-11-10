@@ -5,6 +5,8 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { io, Socket } from 'socket.io-client';
 import Swal from 'sweetalert2';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface Staff {
   id: number;
@@ -88,7 +90,11 @@ const AdminStaff: React.FC = () => {
 
   useEffect(() => {
     // Initialize Socket.IO connection
-    const newSocket = io();
+    const apiUrl = getApiUrl() || undefined;
+    const newSocket = io(apiUrl, {
+      transports: ['polling', 'websocket'],
+      withCredentials: false
+    });
     setSocket(newSocket);
 
     // Join admin room for real-time updates
@@ -111,25 +117,22 @@ const AdminStaff: React.FC = () => {
 
   const fetchStaff = async () => {
     try {
-      const response = await fetch('/api/admin/staff');
-      if (response.ok) {
-        const data = await response.json();
-        setStaff(data);
-        // Derive active staff count from fetched data to avoid stale/incorrect stats
-        try {
-          const active = Array.isArray(data)
-            ? data.filter((m: any) => (m.status || 'active') === 'active').length
-            : 0;
-          setStaffCount(active);
-        } catch (_) {
-          setStaffCount(0);
-        }
-      } else {
-        setError('Failed to fetch staff');
+      const response = await axiosInstance.get('/api/admin/staff');
+      const data = response.data;
+      setStaff(data);
+      // Derive active staff count from fetched data to avoid stale/incorrect stats
+      try {
+        const active = Array.isArray(data)
+          ? data.filter((m: any) => (m.status || 'active') === 'active').length
+          : 0;
+        setStaffCount(active);
+      } catch (_) {
+        setStaffCount(0);
       }
     } catch (err: any) {
       console.error('Error fetching staff:', err);
-      setError('Error fetching staff');
+      const message = err?.response?.data?.message || err?.message || 'Error fetching staff';
+      setError(message);
     } finally {
       setIsLoadingStaff(false);
     }
@@ -137,11 +140,9 @@ const AdminStaff: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/admin/staff/stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStaffCount(data.totalStaff || 0);
-      }
+      const response = await axiosInstance.get('/api/admin/staff/stats');
+      const data = response.data;
+      setStaffCount(data.totalStaff || 0);
     } catch (err: any) {
       console.error('Error fetching stats:', err);
     }
@@ -176,34 +177,25 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch('/api/admin/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+      await axiosInstance.post('/api/admin/staff', form);
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Staff member created successfully!',
+        confirmButtonColor: '#a87437'
       });
-
-      if (response.ok) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Success!',
-          text: 'Staff member created successfully!',
-          confirmButtonColor: '#a87437'
-        });
-        setForm({ 
-          username: '', email: '', password: '', confirmPassword: '', 
-          first_name: '', last_name: '', age: '', role: 'staff',
-          phone: '', address: '', position: '', work_schedule: 'flexible',
-          date_hired: '', employee_id: '', gender: ''
-        });
-        setShowModal(false);
-        fetchStaff();
-        fetchStats();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to create staff member');
-      }
+      setForm({ 
+        username: '', email: '', password: '', confirmPassword: '', 
+        first_name: '', last_name: '', age: '', role: 'staff',
+        phone: '', address: '', position: '', work_schedule: 'flexible',
+        date_hired: '', employee_id: '', gender: ''
+      });
+      setShowModal(false);
+      fetchStaff();
+      fetchStats();
     } catch (error: any) {
-      setError('Error creating staff member');
+      const message = error?.response?.data?.message || error?.message || 'Error creating staff member';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -226,29 +218,20 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/staff/${editForm?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+      await axiosInstance.put(`/api/admin/staff/${editForm?.id}`, editForm);
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Staff member updated successfully!',
+        confirmButtonColor: '#a87437'
       });
-
-      if (response.ok) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Success!',
-          text: 'Staff member updated successfully!',
-          confirmButtonColor: '#a87437'
-        });
-        setEditModal(false);
-        setEditForm(null);
-        fetchStaff();
-        fetchStats();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to update staff member');
-      }
+      setEditModal(false);
+      setEditForm(null);
+      fetchStaff();
+      fetchStats();
     } catch (error: any) {
-      setError('Error updating staff member');
+      const message = error?.response?.data?.message || error?.message || 'Error updating staff member';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -276,32 +259,20 @@ const AdminStaff: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch(`/api/admin/staff/${id}`, {
-          method: 'DELETE'
+        await axiosInstance.delete(`/api/admin/staff/${id}`);
+        Swal.fire({
+          icon: 'success',
+          title: 'Deleted!',
+          text: 'Staff member deleted successfully!',
+          confirmButtonColor: '#a87437'
         });
-
-        if (response.ok) {
-          Swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Staff member deleted successfully!',
-            confirmButtonColor: '#a87437'
-          });
-          fetchStaff();
-          fetchStats();
-        } else {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Failed to delete staff member',
-            confirmButtonColor: '#a87437'
-          });
-        }
+        fetchStaff();
+        fetchStats();
       } catch (error: any) {
         Swal.fire({
           icon: 'error',
           title: 'Error!',
-          text: 'Error deleting staff member',
+          text: error?.response?.data?.message || error?.message || 'Error deleting staff member',
           confirmButtonColor: '#a87437'
         });
       }

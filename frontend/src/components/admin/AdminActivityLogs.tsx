@@ -5,6 +5,8 @@ import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { io, Socket } from 'socket.io-client';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 import { 
   Activity, 
   Search, 
@@ -84,25 +86,24 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
+      const params: Record<string, string> = {
         page: currentPage.toString(),
         limit: '20',
-        // Only send user_type for admin combined endpoint
-        ...(basePath === '/api/admin' ? { user_type: filters.user_type } : {}),
         action_type: filters.action_type,
-        status: filters.status,
-        ...(filters.start_date && { start_date: filters.start_date }),
-        ...(filters.end_date && { end_date: filters.end_date })
-      });
-
-      const url = `${basePath}/activity-logs?${params}`;
-      const response = await fetch(url, { credentials: 'omit' });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch activity logs');
+        status: filters.status
+      };
+      if (basePath === '/api/admin') {
+        params.user_type = filters.user_type;
+      }
+      if (filters.start_date) {
+        params.start_date = filters.start_date;
+      }
+      if (filters.end_date) {
+        params.end_date = filters.end_date;
       }
 
-      const data = await response.json();
+      const response = await axiosInstance.get(`${basePath}/activity-logs`, { params });
+      const data = response.data;
       
       if (data.success) {
         setActivities(data.activities);
@@ -124,19 +125,14 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
       return;
     }
     try {
-      const params = new URLSearchParams();
-      if (filters.start_date) params.append('start_date', filters.start_date);
-      if (filters.end_date) params.append('end_date', filters.end_date);
+      const params: Record<string, string> = {};
+      if (filters.start_date) params.start_date = filters.start_date;
+      if (filters.end_date) params.end_date = filters.end_date;
 
-      const response = await fetch(`${basePath}/activity-logs/stats?${params}`, {
-        credentials: 'omit'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setStats(data.stats);
-        }
+      const response = await axiosInstance.get(`${basePath}/activity-logs/stats`, { params });
+      const data = response.data;
+      if (data.success) {
+        setStats(data.stats);
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -145,7 +141,11 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
 
   // Stable socket subscription for real-time updates
   useEffect(() => {
-    const newSocket = io();
+    const apiUrl = getApiUrl() || undefined;
+    const newSocket = io(apiUrl, {
+      transports: ['polling', 'websocket'],
+      withCredentials: false
+    });
     setSocket(newSocket);
 
     // Join proper room depending on which logs we are viewing
