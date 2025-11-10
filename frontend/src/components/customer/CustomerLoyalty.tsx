@@ -476,10 +476,10 @@ const CustomerLoyalty: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] py-4 px-2 sm:px-3 lg:px-4">
+    <div className="min-h-screen bg-[#f5f5f5] py-4 px-4 sm:px-6 lg:px-8">
       <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
-        <div className="space-y-4 sm:space-y-6 pl-0 sm:pl-1 lg:pl-2 pr-2 sm:pr-3 lg:pr-4">
+        <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Loyalty Program</h1>
@@ -489,7 +489,7 @@ const CustomerLoyalty: React.FC = () => {
         </div>
 
         {/* Points Overview */}
-        <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300 mx-2 sm:mx-3 lg:mx-4">
+        <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#6B5B5B]">
               <Coins className="h-6 w-6" />

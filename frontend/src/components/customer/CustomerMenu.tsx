@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 pt-4">
+      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -385,47 +385,50 @@ const CustomerMenu: React.FC = () => {
 
       {/* Search and Filters */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Input
-              placeholder="Search menu items..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="pr-12 h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 flex items-center py-3 px-3"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleSearch}
-              aria-label="Search menu items"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 flex items-center justify-center hover:bg-[#a87437]/10 rounded-md transition-colors"
-            >
-              <Search className="h-4 w-4 text-[#a87437]" />
-            </button>
+        {/* Search Input - Full width on mobile, flex-1 on larger screens */}
+        <div className="relative w-full">
+          <Input
+            placeholder="Search menu items..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="pr-12 h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 flex items-center py-3 px-3 w-full"
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            aria-label="Search menu items"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 flex items-center justify-center hover:bg-[#a87437]/10 rounded-md transition-colors"
+          >
+            <Search className="h-4 w-4 text-[#a87437]" />
+          </button>
+        </div>
+
+        {/* Category Filter and View Toggle - Aligned with search bar */}
+        <div className="flex flex-row gap-3 items-center">
+          {/* Category Filter */}
+          <div className="flex-1">
+            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+              <SelectTrigger className="h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 pr-8 flex items-center py-3 px-3 w-full">
+                <SelectValue placeholder="All categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Category Filter */}
-          <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 pr-8 flex items-center py-3 px-3">
-              <SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           {/* View Toggle */}
-          <div className="relative" ref={moreMenuRef}>
+          <div className="relative flex-shrink-0" ref={moreMenuRef}>
             <Button
               variant="outline"
               onClick={() => setShowMoreMenu(!showMoreMenu)}

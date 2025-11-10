@@ -378,7 +378,7 @@ export default function CustomerDasboard() {
       <main className="flex-1 bg-[#f5f5f5] p-0 m-0 w-full min-h-screen overflow-y-auto">
         <div className="w-full h-full flex flex-col m-0 p-0">
           {/* Welcome Header */}
-          <div className="w-full px-4 sm:px-6 pt-6 sm:pt-8 pb-4 bg-[#f5f5f5]">
+          <div className="w-full px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4 bg-[#f5f5f5]">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
               <span className="text-black">Hi {user?.name || 'Customer'}! Welcome to </span>
               <span className="text-[#a87437]">Mauricio's Cafe and Bakery</span>
@@ -389,7 +389,7 @@ export default function CustomerDasboard() {
           </div>
           
           {/* Dashboard Layout: Reference Image Style */}
-          <div className="w-full h-full px-4 sm:px-6 space-y-4 bg-[#f5f5f5] py-4 sm:py-6">
+          <div className="w-full h-full px-4 sm:px-6 lg:px-8 space-y-4 bg-[#f5f5f5] py-4 sm:py-6">
             {/* Top Row: 3 summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
               {/* Points Card */}
