@@ -47,6 +47,21 @@ router.post('/menu-image', upload.single('image'), async(req, res) => {
         const baseName = `menu-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const folder = 'mauricios-cafe/menu';
 
+        // Validate buffer exists
+        if (!req.file.buffer || req.file.buffer.length === 0) {
+            console.log('❌ Empty file buffer');
+            return res.status(400).json({
+                success: false,
+                error: 'File buffer is empty'
+            });
+        }
+
+        console.log('📤 Uploading to Cloudinary:', {
+            bufferSize: req.file.buffer.length,
+            mimetype: req.file.mimetype,
+            originalname: req.file.originalname
+        });
+
         // Upload to Cloudinary with all variants
         const result = await uploadImageWithVariants(req.file.buffer, {
             folder,
@@ -123,13 +138,34 @@ router.delete('/menu-image/:publicId', async(req, res) => {
     }
 });
 
+// Test Cloudinary connection
+router.get('/test-cloudinary', async(req, res) => {
+    try {
+        const { cloudinary } = require('../services/cloudinaryService');
+        const result = await cloudinary.api.ping();
+        res.json({
+            success: true,
+            message: 'Cloudinary connection successful',
+            cloudinary: result
+        });
+    } catch (error) {
+        console.error('Cloudinary test error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Cloudinary connection failed',
+            details: error.message,
+            hint: 'Check CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables'
+        });
+    }
+});
+
 // Error handling middleware for multer
 router.use((error, req, res, next) => {
     if (error instanceof multer.MulterError) {
         if (error.code === 'LIMIT_FILE_SIZE') {
             return res.status(400).json({
                 success: false,
-                error: 'File too large. Maximum size is 5MB.'
+                error: 'File too large. Maximum size is 10MB.'
             });
         }
     }
@@ -142,9 +178,11 @@ router.use((error, req, res, next) => {
     }
 
     console.error('Upload error:', error);
+    console.error('Upload error stack:', error.stack);
     res.status(500).json({
         success: false,
-        error: 'Upload failed'
+        error: 'Upload failed',
+        details: error.message || 'Unknown error'
     });
 });
 

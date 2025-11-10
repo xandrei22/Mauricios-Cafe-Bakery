@@ -2,10 +2,20 @@ const cloudinary = require('cloudinary').v2;
 const { Readable } = require('stream');
 
 // Configure Cloudinary
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'Root';
+const apiKey = process.env.CLOUDINARY_API_KEY || '554495784368752';
+const apiSecret = process.env.CLOUDINARY_API_SECRET || 'W7qNXZvKGwwJ-tx3QoHzUpo8ATg';
+
+console.log('🔧 Cloudinary Config:', {
+    cloud_name: cloudName,
+    api_key: apiKey ? `${apiKey.substring(0, 5)}...` : 'NOT SET',
+    api_secret: apiSecret ? '***SET***' : 'NOT SET'
+});
+
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'Root',
-    api_key: process.env.CLOUDINARY_API_KEY || '554495784368752',
-    api_secret: process.env.CLOUDINARY_API_SECRET || 'W7qNXZvKGwwJ-tx3QoHzUpo8ATg',
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
     secure: true // Use HTTPS
 });
 
@@ -46,12 +56,29 @@ async function uploadImage(image, options = {}) {
                 const uploadStream = cloudinary.uploader.upload_stream(
                     uploadOptions,
                     (error, result) => {
-                        if (error) reject(error);
-                        else resolve(result);
+                        if (error) {
+                            console.error('Cloudinary upload_stream error:', error);
+                            reject(error);
+                        } else {
+                            resolve(result);
+                        }
                     }
                 );
 
+                // Handle stream errors
+                uploadStream.on('error', (error) => {
+                    console.error('Cloudinary stream error:', error);
+                    reject(error);
+                });
+
                 const stream = Readable.from(image);
+
+                // Handle source stream errors
+                stream.on('error', (error) => {
+                    console.error('Source stream error:', error);
+                    reject(error);
+                });
+
                 stream.pipe(uploadStream);
             });
         } else {
