@@ -1392,11 +1392,18 @@ router.get('/orders/pending-verification', async(req, res) => {
 });
 
 // Get staff's own activity logs
-router.get('/activity-logs', async(req, res) => {
+router.get('/activity-logs', authenticateJWT, async(req, res) => {
     try {
         const { page = 1, limit = 50, action_type = 'all', start_date, end_date } = req.query;
         const offset = (page - 1) * limit;
-        const staffId = req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
+
+        if (!staffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized'
+            });
+        }
 
         let query = `
             SELECT 
@@ -1480,10 +1487,17 @@ router.get('/activity-logs', async(req, res) => {
 });
 
 // Get staff activity log statistics
-router.get('/activity-logs/stats', async(req, res) => {
+router.get('/activity-logs/stats', authenticateJWT, async(req, res) => {
     try {
         const { start_date, end_date } = req.query;
-        const staffId = req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
+
+        if (!staffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized'
+            });
+        }
 
         // Build date filter
         let dateFilter = 'WHERE sal.staff_id = ?';
@@ -1539,9 +1553,9 @@ router.get('/activity-logs/stats', async(req, res) => {
 });
 
 // Staff: Get own activity logs only
-router.get('/activity-logs', async(req, res) => {
+router.get('/activity-logs', authenticateJWT, async(req, res) => {
     try {
-        const staffId = req.session.staffUser && req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
         if (!staffId) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
