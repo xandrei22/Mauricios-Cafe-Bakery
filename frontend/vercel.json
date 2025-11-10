@@ -11,7 +11,7 @@
             "source": "/index.html",
             "headers": [{
                     "key": "Cache-Control",
-                    "value": "no-cache, no-store, must-revalidate"
+                    "value": "no-cache, no-store, must-revalidate, proxy-revalidate"
                 },
                 {
                     "key": "Pragma",
@@ -20,6 +20,10 @@
                 {
                     "key": "Expires",
                     "value": "0"
+                },
+                {
+                    "key": "X-Content-Type-Options",
+                    "value": "nosniff"
                 }
             ]
         },
