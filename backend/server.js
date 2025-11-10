@@ -54,11 +54,20 @@ app.use(cors({
         return callback(new Error('Not allowed by CORS'));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'authorization',  // lowercase variant
+        'AUTHORIZATION',  // uppercase variant
+        'X-Requested-With',
+        'Accept',
+        'Origin'
+    ],
     exposedHeaders: ['Authorization'],
-    credentials: true, // you’re JWT-only now
+    credentials: false, // ⭐ JWT-only: No cookies needed, set to false
     optionsSuccessStatus: 204,
-    maxAge: 86400
+    maxAge: 86400,
+    preflightContinue: false
 }));
 
 
