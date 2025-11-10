@@ -14,7 +14,7 @@
         (function() {
             const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1', 'BPmd8k8o'];
             const currentBuild = 'XSgD9sma'; // Current build hash
-            
+
             // Check localStorage for old build version
             const lastBuildVersion = localStorage.getItem('buildVersion');
             if (lastBuildVersion && lastBuildVersion !== currentBuild) {
@@ -29,27 +29,27 @@
                 const staffUser = localStorage.getItem('staffUser');
                 const customerUser = localStorage.getItem('customerUser');
                 const loginTimestamp = localStorage.getItem('loginTimestamp');
-                
+
                 localStorage.clear();
-                
+
                 // Restore auth data
                 if (authToken) localStorage.setItem('authToken', authToken);
                 if (adminUser) localStorage.setItem('adminUser', adminUser);
                 if (staffUser) localStorage.setItem('staffUser', staffUser);
                 if (customerUser) localStorage.setItem('customerUser', customerUser);
                 if (loginTimestamp) localStorage.setItem('loginTimestamp', loginTimestamp);
-                
+
                 // Set new build version
                 localStorage.setItem('buildVersion', currentBuild);
-                
+
                 // Force hard reload with cache bypass
                 window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
                 return; // Stop execution
             }
-            
+
             // Set current build version
             localStorage.setItem('buildVersion', currentBuild);
-            
+
             // Monitor for old build scripts being added
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
@@ -70,7 +70,7 @@
                     });
                 });
             });
-            
+
             // Start observing
             observer.observe(document.documentElement, {
                 childList: true,
