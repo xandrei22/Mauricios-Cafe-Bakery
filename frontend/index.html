@@ -13,7 +13,23 @@
         // ⭐ CRITICAL: Force cache clear for old builds - RUNS BEFORE ANY SCRIPTS
         (function() {
             const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1'];
-            const currentBuildVersion = 'DCjxUxAh-v3';
+            const currentBuildVersion = 'DCjxUxAh-v4';
+            const currentBuildHash = 'DCjxUxAh';
+
+            // IMMEDIATE CHECK: Scan entire HTML document for old build references
+            const htmlContent = document.documentElement.outerHTML;
+            const hasOldBuild = oldBuilds.some(old => htmlContent.includes(old));
+            
+            if (hasOldBuild) {
+                console.error('❌ OLD BUILD DETECTED IN HTML - FORCING RELOAD');
+                // Clear all caches
+                if ('caches' in window) {
+                    caches.keys().then(names => names.forEach(name => caches.delete(name)));
+                }
+                // Force hard reload with cache bypass
+                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
+                return; // Stop execution
+            }
 
             // Check localStorage for old build version
             const lastBuildVersion = localStorage.getItem('buildVersion');
@@ -39,7 +55,7 @@
                 localStorage.setItem('buildVersion', currentBuildVersion);
 
                 // Force hard reload with cache bypass
-                window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1';
+                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
                 return; // Stop execution
             }
 
@@ -57,7 +73,7 @@
                                 // Remove the old script
                                 node.remove();
                                 // Force reload
-                                window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1';
+                                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
                             }
                         }
                     });
