@@ -2,7 +2,7 @@ const cloudinary = require('cloudinary').v2;
 const { Readable } = require('stream');
 
 // Configure Cloudinary
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'Root';
+const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dlxci9ffq';
 const apiKey = process.env.CLOUDINARY_API_KEY || '554495784368752';
 const apiSecret = process.env.CLOUDINARY_API_SECRET || 'W7qNXZvKGwwJ-tx3QoHzUpo8ATg';
 
