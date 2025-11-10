@@ -312,11 +312,11 @@ const CustomerLoyalty: React.FC = () => {
       const API_URL = getApiUrl();
       
       const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
-        customerId,
-        rewardId: reward.id,
-        orderId: null,
-        redemptionProof: 'Claimed through customer interface',
-        staffId: null
+          customerId,
+          rewardId: reward.id,
+          orderId: null,
+          redemptionProof: 'Claimed through customer interface',
+          staffId: null
       });
 
       if (res.status === 200) {

@@ -153,8 +153,13 @@ export function LoginForm({
         err.response?.data?.message ||
         err.message ||
         "Login failed. Please try again.";
-      if (err.response?.data?.requiresVerification) {
-        setError(msg + " Please check your email for the verification link.");
+      
+      // Handle email verification requirement
+      if (err.response?.status === 403 && err.response?.data?.requiresVerification) {
+        setError(
+          `${msg} If you did not receive the verification email, you can request a new one from the login page.`
+        );
+        // Optionally show a link/button to resend verification email
       } else {
         setError(msg);
       }

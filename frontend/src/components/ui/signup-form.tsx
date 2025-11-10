@@ -81,7 +81,7 @@ export function SignupForm({
         setError(data.message || "Signup failed");
       } else {
         if (data.requiresVerification) {
-          setSuccess("Account created successfully! Please check your email to verify your account before logging in.");
+          setSuccess("Account created successfully! Please check your email (including spam folder) to verify your account. You must verify your email before you can log in.");
         } else {
           setSuccess("Account created successfully! You can now log in.");
         }
