@@ -9,72 +9,36 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
     <title>Mauricio's Cafe and Bakery</title>
-    <script>
-        // ⭐ CRITICAL: Force cache clear for old builds - RUNS BEFORE ANY SCRIPTS
-        (function() {
-            const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1'];
-            const currentBuildVersion = 'DCjxUxAh-v3';
-
-            // Check localStorage for old build version
-            const lastBuildVersion = localStorage.getItem('buildVersion');
-            if (lastBuildVersion && lastBuildVersion !== currentBuildVersion) {
-                console.error('❌ OLD BUILD VERSION DETECTED:', lastBuildVersion);
-                // Clear localStorage (except auth data)
-                const authToken = localStorage.getItem('authToken');
-                const adminUser = localStorage.getItem('adminUser');
-                const staffUser = localStorage.getItem('staffUser');
-                const customerUser = localStorage.getItem('customerUser');
-                const loginTimestamp = localStorage.getItem('loginTimestamp');
-
-                localStorage.clear();
-
-                // Restore auth data
-                if (authToken) localStorage.setItem('authToken', authToken);
-                if (adminUser) localStorage.setItem('adminUser', adminUser);
-                if (staffUser) localStorage.setItem('staffUser', staffUser);
-                if (customerUser) localStorage.setItem('customerUser', customerUser);
-                if (loginTimestamp) localStorage.setItem('loginTimestamp', loginTimestamp);
-
-                // Set new build version
-                localStorage.setItem('buildVersion', currentBuildVersion);
-
-                // Force hard reload with cache bypass
-                window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1';
-                return; // Stop execution
-            }
-
-            // Set current build version
-            localStorage.setItem('buildVersion', currentBuildVersion);
-
-            // Also check if HTML itself references old build (intercept script loading)
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.tagName === 'SCRIPT' && node.src) {
-                            const isOldBuild = oldBuilds.some(old => node.src.includes(old));
-                            if (isOldBuild) {
-                                console.error('❌ OLD BUILD SCRIPT DETECTED:', node.src);
-                                // Remove the old script
-                                node.remove();
-                                // Force reload
-                                window.location.href = window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1';
-                            }
-                        }
-                    });
-                });
-            });
-
-            // Start observing
-            observer.observe(document.documentElement, {
-                childList: true,
-                subtree: true
-            });
-        })();
-    </script>
 </head>
 
 <body>
     <div id="root"></div>
+    <script>
+        // ⭐ CRITICAL: Force cache clear for old builds
+        // If old build file is detected, force reload
+        const currentBuild = 'DCjxUxAh'; // Update this when rebuilding
+        const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1'];
+
+        // Check if any old build scripts are loaded
+        const scripts = document.getElementsByTagName('script');
+        for (let script of scripts) {
+            if (script.src) {
+                const isOldBuild = oldBuilds.some(old => script.src.includes(old));
+                if (isOldBuild) {
+                    console.warn('⚠️ OLD BUILD DETECTED! Clearing cache and reloading...');
+                    // Clear all caches
+                    if ('caches' in window) {
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                        });
+                    }
+                    // Force reload
+                    window.location.reload(true);
+                    break;
+                }
+            }
+        }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
 </body>
 
