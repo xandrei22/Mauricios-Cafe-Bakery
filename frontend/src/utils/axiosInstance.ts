@@ -41,6 +41,19 @@ axiosInstance.interceptors.request.use(
     
     // 🔑 Get token from localStorage (same key used by all user types)
     const token = localStorage.getItem('authToken');
+    
+    // 🔍 CRITICAL DEBUG: Log token retrieval for check-session requests
+    if (config.url && config.url.includes('/check-session')) {
+      console.log('🔍 AXIOS INTERCEPTOR - check-session request:', {
+        url: config.url,
+        method: config.method,
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0,
+        tokenPreview: token ? token.substring(0, 30) + '...' : 'NO TOKEN',
+        localStorageKeys: Object.keys(localStorage).filter(k => k.includes('auth') || k.includes('User') || k.includes('login')),
+        allLocalStorageKeys: Object.keys(localStorage)
+      });
+    }
 
     // 🚫 Ensure no cookies or credentials are ever sent
     config.withCredentials = false;
@@ -62,11 +75,24 @@ axiosInstance.interceptors.request.use(
         config.headers = {} as any;
       }
       
+      // ⭐ CRITICAL: Convert headers to plain object if needed (AxiosHeaders can be problematic)
+      // AxiosHeaders sometimes doesn't properly set headers, so we force convert to plain object
+      if (config.headers && typeof (config.headers as any).toJSON === 'function') {
+        // It's an AxiosHeaders object - convert to plain object
+        const plainHeaders = (config.headers as any).toJSON();
+        config.headers = plainHeaders as any;
+      }
+      
+      // Ensure headers is a plain object
+      if (!config.headers || typeof config.headers !== 'object' || Array.isArray(config.headers)) {
+        config.headers = {} as any;
+      }
+      
       // Force set as plain object property (most compatible)
       (config.headers as any)['Authorization'] = bearerToken;
       (config.headers as any)['authorization'] = bearerToken;
       
-      // Method 2: Use AxiosHeaders API if available
+      // Method 2: Use AxiosHeaders API if available (but only if it's still AxiosHeaders)
       if (config.headers && typeof (config.headers as any).set === 'function') {
         (config.headers as any).set('Authorization', bearerToken);
         (config.headers as any).set('authorization', bearerToken);
@@ -76,6 +102,18 @@ axiosInstance.interceptors.request.use(
       if (config.headers && typeof config.headers === 'object') {
         (config.headers as Record<string, string>)['Authorization'] = bearerToken;
         (config.headers as Record<string, string>)['authorization'] = bearerToken;
+      }
+      
+      // Method 4: Force set using Object.defineProperty as last resort
+      try {
+        Object.defineProperty(config.headers, 'Authorization', {
+          value: bearerToken,
+          writable: true,
+          enumerable: true,
+          configurable: true
+        });
+      } catch (e) {
+        // Ignore if it fails
       }
       
       // ⭐ VERIFY header was set
@@ -94,6 +132,12 @@ axiosInstance.interceptors.request.use(
       
       // Always log for check-session requests
       if (config.url && config.url.includes('/check-session')) {
+        // Verify header was actually set
+        const finalHeaderValue = (config.headers as any)?.['Authorization'] || 
+                                (config.headers as any)?.['authorization'] ||
+                                (config.headers as any)?.get?.('Authorization') ||
+                                (config.headers as any)?.get?.('authorization');
+        
         console.log('✅ AXIOS REQUEST - Authorization header attached for check-session', {
           url: config.url,
           method: config.method,
@@ -101,10 +145,26 @@ axiosInstance.interceptors.request.use(
           hasToken: true,
           tokenLength: token.length,
           tokenPreview: token.substring(0, 20) + '...',
-          headerSet: !!(config.headers['Authorization'] || (config.headers as any).get?.('Authorization')),
-          headerValue: config.headers['Authorization'] || (config.headers as any).get?.('Authorization') || 'NOT SET',
-          allHeaders: Object.keys(config.headers || {})
+          headerSet: !!finalHeaderValue,
+          headerValue: finalHeaderValue || 'NOT SET',
+          headerValuePreview: finalHeaderValue ? finalHeaderValue.substring(0, 30) + '...' : 'NOT SET',
+          allHeaders: Object.keys(config.headers || {}),
+          headersType: typeof config.headers,
+          headersObject: config.headers
         });
+        
+        // CRITICAL: If header is still not set, force it one more time
+        if (!finalHeaderValue) {
+          console.error('❌ CRITICAL: Authorization header NOT SET after all attempts - FORCING SET');
+          const bearerToken = `Bearer ${token.trim()}`;
+          // Force set as plain object
+          if (!config.headers) {
+            config.headers = {} as any;
+          }
+          (config.headers as any)['Authorization'] = bearerToken;
+          (config.headers as any)['authorization'] = bearerToken;
+          console.log('🔧 FORCED Authorization header:', (config.headers as any)['Authorization']);
+        }
       } else if (config.url && (
         config.url.includes('/admin/') || 
         config.url.includes('/staff/') || 
