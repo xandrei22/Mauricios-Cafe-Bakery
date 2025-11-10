@@ -33,6 +33,5 @@
     ],
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
-    "cleanUrls": true,
-    "ignoreCommand": false
+    "cleanUrls": true
 }
