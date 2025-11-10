@@ -125,13 +125,36 @@ class AIService {
     async getCustomizationSuggestions(baseDrink, dietaryPreferences, currentMenu = [], availableIngredients = []) {
         try {
             if (!this.model) throw new Error('Model not initialized');
+            
+            // Check if the item is a food item (not a drink)
+            const foodCategories = ['Sandwiches', 'Rice Meals', 'Food', 'Meals', 'Pastries', 'Bread'];
+            const isFoodItem = foodCategories.some(cat => 
+                baseDrink.toLowerCase().includes(cat.toLowerCase()) ||
+                currentMenu.some(item => 
+                    item.name.toLowerCase().includes(baseDrink.toLowerCase()) &&
+                    foodCategories.some(fc => item.category.toLowerCase().includes(fc.toLowerCase()))
+                )
+            );
+            
+            if (isFoodItem) {
+                return {
+                    suggestions: [],
+                    combinations: [],
+                    message: 'Customization is only available for drinks, not food items. Food items like sandwiches and rice meals are served as-is.'
+                };
+            }
+            
             const availableCustomizations = availableIngredients.map(ing => ing.name).join(', ');
             const menuContext = currentMenu.length > 0 
                 ? `Current menu includes: ${currentMenu.map(item => `${item.name} (${item.category})`).join(', ')}`
                 : 'Standard coffee shop menu';
             
             const prompt = `
-            Suggest customizations for a ${baseDrink} based on these dietary preferences: ${JSON.stringify(dietaryPreferences)}
+            Suggest customizations for a ${baseDrink} (DRINK ONLY - this should be a beverage, coffee, tea, or espresso-based drink).
+            
+            IMPORTANT: Only provide customization suggestions for DRINKS. Food items cannot be customized.
+            
+            Based on these dietary preferences: ${JSON.stringify(dietaryPreferences)}
             
             ${menuContext}
             
@@ -207,7 +230,7 @@ class AIService {
             const context = `
             You are a helpful coffee shop AI assistant. You help customers with:
             - Drink recommendations
-            - Customization suggestions
+            - Customization suggestions (ONLY for drinks, NOT for food items)
             - Dietary advice
             - General coffee knowledge
             
@@ -225,11 +248,18 @@ class AIService {
             - Keep responses concise and helpful (2-4 sentences unless more detail is requested).
             - If the user's message is a greeting or small talk (e.g., "hi", "hello", "hey", "good morning", "good afternoon", "good evening"), reply courteously WITHOUT mentioning the menu or recommendations. Only discuss the menu when the user asks about drinks, menu, recommend, suggest, customize, price, or similar intent.
             - If the user asks for price information, DO NOT provide numbers. Say: "Please visit the Menu to view current prices." Keep it brief and helpful.
+            
+            CRITICAL CUSTOMIZATION RULE:
+            - ONLY DRINKS can be customized (coffee, espresso, tea, beverages, etc.)
+            - FOOD ITEMS CANNOT be customized (sandwiches, rice meals, pastries, etc.)
+            - If a user asks to customize a food item (like sandwiches or rice meals), politely explain that customization is only available for drinks, not food items.
+            - Food items are served as-is and cannot be modified.
 
             CURRENT MENU (name, category, price): ${menuSnapshot}
 
-            Be friendly, helpful, and knowledgeable about coffee. Keep responses concise but informative.
+            Be friendly, helpful, and knowledgeable about coffee. Keep responses concise and informative.
             If asked about specific drinks, mention customization options and dietary considerations.
+            If asked about customizing food items, politely explain that only drinks can be customized.
             `;
 
             const result = await this.model.generateContent(context);

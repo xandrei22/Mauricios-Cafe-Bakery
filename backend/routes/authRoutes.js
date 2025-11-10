@@ -37,13 +37,29 @@ router.post('/customer/resend-verification', customerController.resendVerificati
 // send customers back to the right place after logging in from a QR link.
 router.get('/auth/google', (req, res, next) => {
     try {
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
 
         // Check if Google OAuth is configured
         if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-            console.error('Google OAuth not configured - missing credentials');
+            console.error('❌ Google OAuth not configured - missing credentials');
+            console.error('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing');
+            console.error('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ Set' : '✗ Missing');
+            console.error('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '✗ Missing');
             return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
         }
+
+        // Validate callback URL is set
+        if (!process.env.GOOGLE_CALLBACK_URL) {
+            console.error('❌ GOOGLE_CALLBACK_URL is not set!');
+            return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
+        }
+
+        console.log('🔍 Google OAuth initialization:', {
+            hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+            hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+            callbackURL: process.env.GOOGLE_CALLBACK_URL,
+            frontendBase: frontendBase
+        });
 
         const { redirect, table } = req.query;
 
@@ -69,20 +85,27 @@ router.get('/auth/google', (req, res, next) => {
         })(req, res, next);
     } catch (err) {
         console.error('Error initializing Google OAuth:', err);
-        return res.redirect((process.env.FRONTEND_URL || 'http://localhost:5173') + '/login?error=GOOGLE_AUTH_ERROR');
+        return res.redirect((process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop') + '/login?error=GOOGLE_AUTH_ERROR');
     }
 });
 
 // Google OAuth - Callback
 router.get('/auth/google/callback', async(req, res, next) => {
     try {
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
 
         // Check if Google OAuth is configured
         if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-            console.error('Google OAuth not configured - missing credentials');
+            console.error('❌ Google OAuth not configured - missing credentials');
+            console.error('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing');
+            console.error('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ Set' : '✗ Missing');
+            console.error('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '✗ Missing');
             return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
         }
+
+        console.log('🔍 Google OAuth callback received');
+        console.log('🔍 Callback URL:', process.env.GOOGLE_CALLBACK_URL);
+        console.log('🔍 Query params:', req.query);
 
         // Use Passport middleware
         passport.authenticate('google', {
@@ -91,16 +114,27 @@ router.get('/auth/google/callback', async(req, res, next) => {
             if (err) {
                 // If the error is about email already registered, redirect with a message
                 if (err.code === 'EMAIL_REGISTERED_PASSWORD') {
+                    console.log('⚠️ Google OAuth: Email already registered with password');
                     return res.redirect(`${frontendBase}/login?error=EMAIL_REGISTERED_PASSWORD`);
                 }
-                // For other errors, redirect with a generic error
-                console.error('Google OAuth error:', err);
+                // For other errors, log details and redirect with a generic error
+                console.error('❌ Google OAuth error:', err);
+                console.error('❌ Google OAuth error message:', err.message);
+                console.error('❌ Google OAuth error stack:', err.stack);
                 return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
             if (!user) {
-                console.error('Google OAuth: No user returned');
+                console.error('❌ Google OAuth: No user returned from passport');
+                console.error('❌ Google OAuth info:', info);
                 return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
             }
+
+            console.log('✅ Google OAuth: User authenticated successfully:', {
+                id: user.id,
+                email: user.email,
+                isNewGoogleUser: user.isNewGoogleUser,
+                email_verified: user.email_verified
+            });
             // Google OAuth users are auto-verified (Google already verified their email)
             // Regular signups must verify their email before logging in
             if (user.password !== 'GOOGLE_AUTH' && !user.email_verified) {
@@ -109,9 +143,13 @@ router.get('/auth/google/callback', async(req, res, next) => {
 
             req.logIn(user, (loginErr) => {
                 if (loginErr) {
-                    console.error('Google login error:', loginErr);
+                    console.error('❌ Google login error (req.logIn):', loginErr);
+                    console.error('❌ Login error message:', loginErr.message);
+                    console.error('❌ Login error stack:', loginErr.stack);
                     return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
                 }
+
+                console.log('✅ Google OAuth: req.logIn successful');
 
                 // ⭐ CRITICAL: Generate JWT token for Google OAuth (same as regular login)
                 // Sessions are only used during OAuth flow, but we return JWT for frontend
@@ -166,7 +204,7 @@ router.get('/auth/google/callback', async(req, res, next) => {
         })(req, res, next);
     } catch (err) {
         console.error('Error in Google OAuth callback wrapper:', err);
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
         return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
     }
 });

@@ -42,16 +42,20 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        // Email verification check
+        // Email verification check - REQUIRED before login
         if (!customer.email_verified) {
+            console.log('⚠️ Login blocked - email not verified:', customer.email);
             return res.status(403).json({
-                message: 'Please verify your email address before logging in. Check your email for the verification link.',
-                requiresVerification: true
+                message: 'Please verify your email address before logging in. Check your email for the verification link. If you did not receive the email, you can request a new verification email.',
+                requiresVerification: true,
+                email: customer.email // Include email so frontend can offer resend option
             });
         }
 
+        console.log('✅ Email verified - allowing login for:', customer.email);
+
         // Optionally compute a post-login redirect when coming from a QR/table link (no sessions used)
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
         let postLoginRedirect = undefined;
         if (redirect) {
             postLoginRedirect = `${frontendBase}${String(redirect).startsWith('/') ? '' : '/'}${redirect}`;
@@ -170,25 +174,28 @@ async function signup(req, res) {
             'INSERT INTO customers (username, password, email, full_name, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, FALSE, ?, ?, NOW())', [username, hashedPassword, email, fullName, verificationToken, verificationExpires]
         );
 
-        console.log('✅ Customer account created with email verification');
+        console.log('✅ Customer account created with email verification required');
+        console.log('📧 Verification token generated for:', email);
 
         // Send verification email
         try {
             const { sendVerificationEmail } = require('../utils/emailService');
-            const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+            const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
             const verificationUrl = `${frontendBase}/customer/verify-email?token=${verificationToken}`;
             await sendVerificationEmail(email, fullName, verificationUrl);
-            console.log('✅ Verification email sent successfully');
+            console.log('✅ Verification email sent successfully to:', email);
         } catch (emailError) {
             console.error('❌ Error sending verification email:', emailError);
             // Don't fail signup if email fails, but log it
+            // Still return success but warn user to check spam folder
         }
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully. Please check your email to verify your account before logging in.',
+            message: 'Account created successfully! Please check your email (including spam folder) to verify your account. You must verify your email before you can log in.',
             customerId: result.insertId,
-            requiresVerification: true
+            requiresVerification: true,
+            email: email // Include email so frontend can offer resend option
         });
 
     } catch (error) {
@@ -235,11 +242,26 @@ async function forgotPassword(req, res) {
         // Save token, expiry, and update request count/window
         await db.query('UPDATE customers SET reset_password_token = ?, reset_password_expires = ?, reset_request_count = ?, reset_request_window = ? WHERE id = ?', [token, expires, resetCount + 1, windowStart, customer.id]);
         // Send reset email
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const resetLink = `${frontendBase}/customer/reset-password?token=${token}`;
-        await sendResetPasswordEmail(email, customer.full_name || customer.name || customer.username, resetLink);
-        // Specific message for registered accounts
-        return res.json({ message: 'A reset link has been sent to your registered email address.' });
+        try {
+            const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
+            const resetLink = `${frontendBase}/customer/reset-password?token=${token}`;
+            console.log('📧 Sending password reset email to:', email);
+            console.log('📧 Reset link:', resetLink);
+
+            await sendResetPasswordEmail(email, customer.full_name || customer.name || customer.username, resetLink);
+            console.log('✅ Password reset email sent successfully to:', email);
+
+            // Specific message for registered accounts
+            return res.json({ message: 'A reset link has been sent to your registered email address.' });
+        } catch (emailError) {
+            console.error('❌ Error sending password reset email:', emailError);
+            // Still return success message for security (don't reveal if email failed)
+            // But log the error for debugging
+            return res.json({
+                message: 'A reset link has been sent to your registered email address.',
+                warning: 'If you do not receive the email, please check your spam folder or contact support.'
+            });
+        }
     } catch (error) {
         console.error('Forgot password error:', error);
         res.status(500).json({ message: 'Error processing request' });
@@ -473,7 +495,7 @@ async function resendVerification(req, res) {
         // Send verification email
         try {
             const { sendVerificationEmail } = require('../utils/emailService');
-            const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
+            const verificationUrl = `${process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop'}/customer/verify-email?token=${verificationToken}`;
             await sendVerificationEmail(email, customer.full_name, verificationUrl);
         } catch (emailError) {
             console.error('Error sending verification email:', emailError);

@@ -402,11 +402,15 @@ router.post('/customization/ingredient-recommendations', async(req, res) => {
             ORDER BY category, name
         `);
 
-        // Get current menu items for context
+        // Get current menu items for context - ONLY drinks can be customized
+        // Filter out food categories like sandwiches, rice meals, etc.
         const [menuItems] = await db.query(`
             SELECT name, category, description, base_price
             FROM menu_items 
-            WHERE is_available = TRUE AND allow_customization = TRUE
+            WHERE is_available = TRUE 
+            AND allow_customization = TRUE
+            AND category NOT IN ('Sandwiches', 'Rice Meals', 'Food', 'Meals', 'Pastries', 'Bread')
+            AND (category LIKE '%Coffee%' OR category LIKE '%Drink%' OR category LIKE '%Beverage%' OR category LIKE '%Tea%' OR category LIKE '%Espresso%')
             ORDER BY category, name
         `);
 

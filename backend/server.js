@@ -187,7 +187,9 @@ const sessionMiddleware = session({
 const passportConfig = require('./controllers/passport');
 passportConfig(passport, db);
 app.use(passport.initialize());
-app.use('/api/auth/google', sessionMiddleware, passport.session());
+// Apply session middleware to all Google OAuth routes (including callback)
+app.use('/api/auth/google', sessionMiddleware);
+app.use('/api/auth/google', passport.session());
 
 // -------------------
 // Routes

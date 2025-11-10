@@ -196,15 +196,24 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
                   </div>
                   <div style="text-align: center; padding: 20px; color: #666; font-size: 12px; border-top: 1px solid #eee;">
                     <p>This is an automated message, please do not reply to this email.</p>
-                    <p>© 2024 Our Coffee Shop. All rights reserved.</p>
+                    <p>© 2024 Mauricio's Cafe and Bakery. All rights reserved.</p>
                   </div>
                 </div>
             `
         };
-        await transporter.sendMail(mailOptions);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Password reset email sent successfully:', {
+            messageId: info.messageId,
+            response: info.response,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            to: email
+        });
     } catch (error) {
-        console.error('Error sending reset password email:', error.message);
-        // Don't throw error - just log it
+        console.error('❌ Error sending reset password email:', error.message);
+        console.error('❌ Error details:', error);
+        // Re-throw error so caller can handle it
+        throw error;
     }
 };
 

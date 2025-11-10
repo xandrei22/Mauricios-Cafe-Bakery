@@ -29,13 +29,38 @@ module.exports = (passport, db) => {
 
     // Only configure Google OAuth if credentials are provided
     if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+        const callbackURL = process.env.GOOGLE_CALLBACK_URL;
+
+        if (!callbackURL) {
+            console.error('❌ GOOGLE_CALLBACK_URL is not set! Google OAuth will not work properly.');
+            console.error('Please set GOOGLE_CALLBACK_URL in your environment variables.');
+        } else {
+            console.log('✅ Google OAuth configured:', {
+                clientID: process.env.GOOGLE_CLIENT_ID ? `${process.env.GOOGLE_CLIENT_ID.substring(0, 20)}...` : 'Missing',
+                callbackURL: callbackURL
+            });
+        }
+
         passport.use(new GoogleStrategy({
                 clientID: process.env.GOOGLE_CLIENT_ID,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                callbackURL: process.env.GOOGLE_CALLBACK_URL
+                callbackURL: callbackURL
             },
             async(accessToken, refreshToken, profile, done) => {
                 try {
+                    console.log('🔍 Google OAuth profile received:', {
+                        id: profile.id,
+                        email: profile.emails ? .[0] ? .value,
+                        displayName: profile.displayName,
+                        hasEmails: !!profile.emails && profile.emails.length > 0
+                    });
+
+                    if (!profile.emails || profile.emails.length === 0) {
+                        const error = new Error('No email found in Google profile');
+                        console.error('❌ Google OAuth error:', error.message);
+                        return done(error, false);
+                    }
+
                     // Check if a customer exists with this Google ID
                     const [rows] = await db.query('SELECT * FROM customers WHERE google_id = ?', [profile.id]);
                     if (rows.length > 0) {
