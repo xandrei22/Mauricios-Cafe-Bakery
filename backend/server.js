@@ -55,19 +55,20 @@ app.use(cors({
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
-        'Content-Type', 
-        'Authorization', 
-        'authorization',  // lowercase variant
-        'AUTHORIZATION',  // uppercase variant
+        'Content-Type',
+        'Authorization',
+        'authorization', // lowercase variant
+        'AUTHORIZATION', // uppercase variant
         'X-Requested-With',
         'Accept',
-        'Origin'
+        'Accept-Language',
+        'Origin',
+        'X-Auth-Token' // Additional header variant
     ],
     exposedHeaders: ['Authorization'],
-    credentials: false, // ⭐ JWT-only: No cookies needed, set to false
+    credentials: true, // ⭐ Allow credentials (JWT in headers) - frontend uses withCredentials: false so no cookies sent
     optionsSuccessStatus: 204,
-    maxAge: 86400,
-    preflightContinue: false
+    maxAge: 86400
 }));
 
 
