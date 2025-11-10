@@ -59,9 +59,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         }
       }
       
-      // ⭐ CRITICAL: For very recent logins (< 2 seconds), ALWAYS use localStorage and skip check-session
-      // This prevents 401 errors when token is still being saved
-      if (isVeryRecentLogin) {
+      // ⭐ CRITICAL: For very recent logins (< 5 seconds), ALWAYS use localStorage and skip check-session
+      // This prevents 401 errors when token is still being saved or when old build doesn't send headers
+      const isVeryRecentLoginExtended = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < 5000; // Increased to 5 seconds
+      if (isVeryRecentLoginExtended) {
         let storedUser = null;
         let storedToken = null;
         
@@ -83,7 +84,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
               setIsAuthenticated(true);
               setUserRole(user.role || requiredRole);
               setIsLoading(false);
-              console.log(`✅ ProtectedRoute: VERY RECENT LOGIN (< 2s) - Using localStorage ONLY, SKIPPING check-session for ${requiredRole}`);
+              const timeSinceLogin = Date.now() - parseInt(loginTimestamp);
+              console.log(`✅ ProtectedRoute: VERY RECENT LOGIN (${timeSinceLogin}ms ago) - Using localStorage ONLY, SKIPPING check-session for ${requiredRole}`);
               return; // EXIT IMMEDIATELY - don't call check-session at all
             }
           } catch (e) {

@@ -15,13 +15,51 @@
     <script>
         // ⭐ CRITICAL: Force cache clear for old builds - RUNS BEFORE ANY SCRIPTS
         (function() {
-            const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1', 'BPmd8k8o', 'XSgD9sma'];
-            const currentBuild = 'VgPuN0Z0-v1'; // Current build hash - updated to force reload
+            const oldBuilds = ['D9BaVIO', 'DT7pVwbs', 'CbGqRY9Z', 'BGmxDX0Q', 'CzrUdNKD', 'DMITOVW1', 'BPmd8k8o', 'XSgD9sma', 'VgPuN0Z0'];
+            const currentBuild = 'CzKbedfF-v1'; // Current build hash - updated to force reload
+
+            // ⭐ IMMEDIATE CHECK: Check if ANY script tag in the HTML has old build
+            function checkScriptTags() {
+                const scripts = document.querySelectorAll('script[src]');
+                for (let script of scripts) {
+                    const src = script.getAttribute('src') || '';
+                    const isOldBuild = oldBuilds.some(old => src.includes(old));
+                    if (isOldBuild) {
+                        console.error('❌ OLD BUILD SCRIPT DETECTED IN HTML:', src);
+                        // Clear all caches immediately
+                        if ('caches' in window) {
+                            caches.keys().then(names => names.forEach(name => caches.delete(name)));
+                        }
+                        // Clear localStorage (except auth data)
+                        const authToken = localStorage.getItem('authToken');
+                        const adminUser = localStorage.getItem('adminUser');
+                        const staffUser = localStorage.getItem('staffUser');
+                        const customerUser = localStorage.getItem('customerUser');
+                        const loginTimestamp = localStorage.getItem('loginTimestamp');
+                        localStorage.clear();
+                        if (authToken) localStorage.setItem('authToken', authToken);
+                        if (adminUser) localStorage.setItem('adminUser', adminUser);
+                        if (staffUser) localStorage.setItem('staffUser', staffUser);
+                        if (customerUser) localStorage.setItem('customerUser', customerUser);
+                        if (loginTimestamp) localStorage.setItem('loginTimestamp', loginTimestamp);
+                        localStorage.setItem('buildVersion', currentBuild);
+                        // Force hard reload with cache bypass
+                        window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now() + '&_force=' + Date.now());
+                        return true; // Stop execution
+                    }
+                }
+                return false;
+            }
+
+            // Check immediately (before DOM is fully loaded)
+            if (checkScriptTags()) {
+                return; // Stop if old build detected
+            }
 
             // Check localStorage for old build version
             const lastBuildVersion = localStorage.getItem('buildVersion');
             if (lastBuildVersion && lastBuildVersion !== currentBuild) {
-                console.error('❌ OLD BUILD VERSION DETECTED:', lastBuildVersion);
+                console.error('❌ OLD BUILD VERSION DETECTED IN LOCALSTORAGE:', lastBuildVersion);
                 // Clear all caches
                 if ('caches' in window) {
                     caches.keys().then(names => names.forEach(name => caches.delete(name)));
@@ -32,42 +70,43 @@
                 const staffUser = localStorage.getItem('staffUser');
                 const customerUser = localStorage.getItem('customerUser');
                 const loginTimestamp = localStorage.getItem('loginTimestamp');
-
                 localStorage.clear();
-
-                // Restore auth data
                 if (authToken) localStorage.setItem('authToken', authToken);
                 if (adminUser) localStorage.setItem('adminUser', adminUser);
                 if (staffUser) localStorage.setItem('staffUser', staffUser);
                 if (customerUser) localStorage.setItem('customerUser', customerUser);
                 if (loginTimestamp) localStorage.setItem('loginTimestamp', loginTimestamp);
-
-                // Set new build version
                 localStorage.setItem('buildVersion', currentBuild);
-
                 // Force hard reload with cache bypass
-                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
+                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now() + '&_force=' + Date.now());
                 return; // Stop execution
             }
 
             // Set current build version
             localStorage.setItem('buildVersion', currentBuild);
 
-            // Monitor for old build scripts being added
+            // Check again when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (checkScriptTags()) return;
+                });
+            } else {
+                if (checkScriptTags()) return;
+            }
+
+            // Monitor for old build scripts being added dynamically
             const observer = new MutationObserver(function(mutations) {
                 mutations.forEach(function(mutation) {
                     mutation.addedNodes.forEach(function(node) {
                         if (node.tagName === 'SCRIPT' && node.src) {
                             const isOldBuild = oldBuilds.some(old => node.src.includes(old));
                             if (isOldBuild) {
-                                console.error('❌ OLD BUILD SCRIPT DETECTED:', node.src);
-                                // Remove the old script
+                                console.error('❌ OLD BUILD SCRIPT DETECTED DYNAMICALLY:', node.src);
                                 node.remove();
-                                // Clear caches and force reload
                                 if ('caches' in window) {
                                     caches.keys().then(names => names.forEach(name => caches.delete(name)));
                                 }
-                                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now());
+                                window.location.replace(window.location.href.split('?')[0] + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now() + '&_force=' + Date.now());
                             }
                         }
                     });
