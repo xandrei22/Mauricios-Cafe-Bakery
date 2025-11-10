@@ -205,6 +205,22 @@ axiosInstance.interceptors.request.use(
       }
     }
 
+    // ⭐ CRITICAL: Final verification - log what we're actually sending
+    if (config.url && config.url.includes('/check-session')) {
+      const finalCheck = (config.headers as any)?.['Authorization'] || 
+                        (config.headers as any)?.['authorization'] ||
+                        (config.headers as any)?.get?.('Authorization');
+      
+      console.log('🔍 FINAL CHECK - Config being returned:', {
+        url: config.url,
+        hasAuthorization: !!finalCheck,
+        authorizationValue: finalCheck ? finalCheck.substring(0, 30) + '...' : 'NOT SET',
+        headersType: typeof config.headers,
+        headersKeys: Object.keys(config.headers || {}),
+        fullHeaders: config.headers
+      });
+    }
+    
     return config;
   },
   (error: AxiosError) => Promise.reject(error)
