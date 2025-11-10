@@ -76,8 +76,11 @@ export default function CustomerDasboard() {
         const newUrl = window.location.pathname + (location.search.replace(/[?&]token=[^&]*/, '').replace(/[?&]google=[^&]*/, '').replace(/^\?$/, '') || '');
         window.history.replaceState({}, '', newUrl);
         
-        // Refresh page to trigger auth context update
-        window.location.reload();
+        // Trigger auth context update without full page reload
+        // The AuthContext will detect the new token in localStorage
+        if (window.dispatchEvent) {
+          window.dispatchEvent(new Event('storage'));
+        }
       } catch (error) {
         console.error('❌ Error processing Google OAuth token:', error);
         navigate('/customer-login?error=GOOGLE_AUTH_ERROR');
@@ -99,15 +102,36 @@ export default function CustomerDasboard() {
         path: '/socket.io',
         withCredentials: false, // JWT-only: No cookies needed
         timeout: 30000,
-        forceNew: true,
-        autoConnect: true
+        forceNew: false, // Reuse existing connection if available
+        autoConnect: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
       });
       setSocket(newSocket);
 
       // Join customer room for real-time updates
-      const joinRoom = () => newSocket.emit('join-customer-room', { customerEmail: user.email });
-      joinRoom();
+      const joinRoom = () => {
+        if (newSocket.connected) {
+          newSocket.emit('join-customer-room', { customerEmail: user.email });
+        }
+      };
+      
+      if (newSocket.connected) {
+        joinRoom();
+      }
       newSocket.on('connect', joinRoom);
+      
+      // Prevent reconnection loops
+      newSocket.on('reconnect_attempt', () => {
+        console.log('Socket reconnecting...');
+      });
+      
+      newSocket.on('reconnect_failed', () => {
+        console.warn('Socket reconnection failed - will not retry');
+        newSocket.disconnect();
+      });
 
       // Listen for real-time updates
       const refreshAll = () => {
@@ -463,7 +487,7 @@ export default function CustomerDasboard() {
                           <p className="text-sm text-gray-500">₱{item.base_price || item.display_price}</p>
                         </div>
                         <button
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-[2.5rem] ${
                             hasTableAccess 
                               ? "bg-[#a87437] text-white hover:bg-[#8f652f] cursor-pointer" 
                               : "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -503,7 +527,7 @@ export default function CustomerDasboard() {
                           <p className="text-sm text-gray-500">₱{item.price}</p>
                         </div>
                         <button
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-[2.5rem] ${
                             hasTableAccess 
                               ? "bg-[#a87437] text-white hover:bg-[#8f652f] cursor-pointer" 
                               : "bg-gray-300 text-gray-500 cursor-not-allowed"

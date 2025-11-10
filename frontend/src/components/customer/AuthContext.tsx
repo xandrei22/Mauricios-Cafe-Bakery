@@ -692,23 +692,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     // Event listeners for tab visibility and periodic checks
+    // Only check on visibility change if user is not authenticated (to catch login from another tab)
     const onVisibility = () => { 
       const currentPath = window.location.pathname;
       if (currentPath.startsWith('/customer') && 
-          document.visibilityState === 'visible') {
+          document.visibilityState === 'visible' &&
+          !authenticated && !hasLocalStorageFallback) {
+        // Only check if we're not already authenticated to avoid unnecessary calls
         checkSession();
       }
     };
     
     document.addEventListener('visibilitychange', onVisibility);
     
-    // Periodic check every 5 minutes (only on customer routes)
+    // Periodic check every 10 minutes (only on customer routes, and only if authenticated)
+    // Reduced frequency to prevent excessive API calls
     const interval = setInterval(() => {
       const currentPath = window.location.pathname;
-      if (currentPath.startsWith('/customer')) {
+      if (currentPath.startsWith('/customer') && authenticated) {
+        // Only check periodically if already authenticated (to catch token expiration)
         checkSession();
       }
-    }, 300000);
+    }, 600000); // 10 minutes instead of 5
     
     return () => {
       isMounted = false;
