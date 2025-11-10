@@ -3,32 +3,12 @@
  * Handles login, logout, and session checking with JWT tokens
  */
 
-import axiosInstance from './axiosInstance'
+import axiosInstance from './axiosInstance';
 
 // ==================== AXIOS INSTANCE ====================
-const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://mauricios-cafe-bakery.onrender.com',
-  headers: { 'Content-Type': 'application/json' },
-});
-
-// Automatically attach JWT token to all requests
-axiosInstance.interceptors.request.use(config => {
-  const token = localStorage.getItem('authToken');
-  if (token && config.headers) {
-    config.headers['Authorization'] = `Bearer ${token}`;
-  }
-  return config;
-});
-
-axiosInstance.interceptors.response.use(
-  response => response,
-  error => {
-    console.error('Axios response error:', error);
-    return Promise.reject(error);
-  }
-);
-
-export default axiosInstance;
+// The axios instance is imported from './axiosInstance'.
+// The interceptor is already configured in axiosInstance.ts - no need to duplicate it here.
+// This prevents conflicts and ensures the comprehensive interceptor is used.
 
 // ==================== TYPES ====================
 export interface LoginResponse {
@@ -180,4 +160,265 @@ export async function checkSession(role: 'admin' | 'staff' | 'customer'): Promis
     }
     throw error;
   }
+}
+
+// ==================== SPECIFIC LOGIN FUNCTIONS ====================
+// These are used by the login forms for better type safety and convenience
+
+/**
+ * Customer login with retry logic for token saving
+ */
+export async function customerLogin(
+  email: string,
+  password: string,
+  hasTable?: boolean,
+  hasRedirect?: boolean
+): Promise<LoginResponse> {
+  console.log('🔍 customerLogin called', { email, hasTable, hasRedirect });
+  
+  try {
+    const response = await axiosInstance.post('/api/customer/login', {
+      email,
+      password,
+      hasTable,
+      hasRedirect,
+    });
+
+    const data = response.data;
+    console.log('🔍 Customer login response received:', {
+      status: response.status,
+      hasData: !!data,
+      success: data?.success,
+      hasToken: !!data?.token,
+      hasUser: !!data?.user,
+      tokenLength: data?.token ? data.token.length : 0,
+    });
+  
+    // ⭐ CRITICAL: Check localStorage availability
+    if (typeof localStorage === 'undefined') {
+      console.error('❌ CRITICAL: localStorage is not available!');
+      throw new Error('localStorage is not available. Please check browser settings.');
+    }
+  
+    // Check if response is valid
+    if (!data || !data.success || !data.token || !data.user) {
+      console.error('❌ CRITICAL: Invalid response from server!', data);
+      throw new Error(data?.message || 'Invalid response from server');
+    }
+
+    // ⭐ CRITICAL: Clear old data FIRST
+    clearAuthData();
+
+    // ⭐ CRITICAL: Save token with retry logic
+    await saveAuthData(data.token, 'customerUser', data.user);
+
+    console.log('✅ Customer login successful - Token saved and verified');
+    return data;
+  } catch (error: any) {
+    console.error('❌ Customer login error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Admin login with retry logic for token saving
+ */
+export async function adminLogin(
+  usernameOrEmail: string,
+  password: string
+): Promise<LoginResponse> {
+  console.log('🔍 adminLogin called', { usernameOrEmail });
+  
+  try {
+    const response = await axiosInstance.post('/api/admin/login', {
+      usernameOrEmail,
+      password,
+    });
+
+    const data = response.data;
+    console.log('🔍 Admin login response received:', {
+      status: response.status,
+      hasData: !!data,
+      success: data?.success,
+      hasToken: !!data?.token,
+      hasUser: !!data?.user,
+    });
+  
+    if (!data || !data.success || !data.token || !data.user) {
+      console.error('❌ CRITICAL: Invalid response from server!', data);
+      throw new Error(data?.message || 'Invalid response from server');
+    }
+
+    // ⭐ CRITICAL: Clear old data FIRST
+    clearAuthData();
+
+    // ⭐ CRITICAL: Save token with retry logic
+    await saveAuthData(data.token, 'adminUser', data.user);
+
+    console.log('✅ Admin login successful - Token saved and verified');
+    return data;
+  } catch (error: any) {
+    console.error('❌ Admin login error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Staff login with retry logic for token saving
+ */
+export async function staffLogin(
+  usernameOrEmail: string,
+  password: string
+): Promise<LoginResponse> {
+  console.log('🔍 staffLogin called', { usernameOrEmail });
+  
+  try {
+    const response = await axiosInstance.post('/api/staff/login', {
+      usernameOrEmail,
+      password,
+    });
+
+    const data = response.data;
+    console.log('🔍 Staff login response received:', {
+      status: response.status,
+      hasData: !!data,
+      success: data?.success,
+      hasToken: !!data?.token,
+      hasUser: !!data?.user,
+    });
+  
+    if (!data || !data.success || !data.token || !data.user) {
+      console.error('❌ CRITICAL: Invalid response from server!', data);
+      throw new Error(data?.message || 'Invalid response from server');
+    }
+
+    // ⭐ CRITICAL: Clear old data FIRST
+    clearAuthData();
+
+    // ⭐ CRITICAL: Save token with retry logic
+    await saveAuthData(data.token, 'staffUser', data.user);
+
+    console.log('✅ Staff login successful - Token saved and verified');
+    return data;
+  } catch (error: any) {
+    console.error('❌ Staff login error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || error.message || 'Login failed');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Check customer session
+ */
+export async function checkCustomerSession(): Promise<SessionResponse> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    console.warn('⚠️ checkCustomerSession: No token found in localStorage');
+    return { success: false, authenticated: false };
+  }
+  
+  try {
+    const response = await axiosInstance.get('/api/customer/check-session', {
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`,
+        'authorization': `Bearer ${token.trim()}`,
+        'AUTHORIZATION': `Bearer ${token.trim()}`
+      },
+      transformRequest: [(data, headers) => {
+        if (headers) {
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+          headers['authorization'] = `Bearer ${token.trim()}`;
+        }
+        return data;
+      }]
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ checkCustomerSession: Error', error);
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return { success: false, authenticated: false };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Check admin session
+ */
+export async function checkAdminSession(): Promise<SessionResponse> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    console.warn('⚠️ checkAdminSession: No token found in localStorage');
+    return { success: false, authenticated: false };
+  }
+  
+  try {
+    const response = await axiosInstance.get('/api/admin/check-session', {
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`,
+        'authorization': `Bearer ${token.trim()}`
+      }
+    });
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return { success: false, authenticated: false };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Check staff session
+ */
+export async function checkStaffSession(): Promise<SessionResponse> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    console.warn('⚠️ checkStaffSession: No token found in localStorage');
+    return { success: false, authenticated: false };
+  }
+  
+  try {
+    const response = await axiosInstance.get('/api/staff/check-session', {
+      headers: {
+        'Authorization': `Bearer ${token.trim()}`,
+        'authorization': `Bearer ${token.trim()}`
+      }
+    });
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      return { success: false, authenticated: false };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Customer logout
+ */
+export async function customerLogout(): Promise<void> {
+  await logout('customer');
+}
+
+/**
+ * Admin logout
+ */
+export async function adminLogout(): Promise<void> {
+  await logout('admin');
+}
+
+/**
+ * Staff logout
+ */
+export async function staffLogout(): Promise<void> {
+  await logout('staff');
 }
