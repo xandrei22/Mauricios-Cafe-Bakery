@@ -20,12 +20,14 @@
         {
             "source": "/(.*)",
             "headers": [
-                { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+                { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+                { "key": "Service-Worker-Allowed", "value": "/" }
             ]
         }
     ],
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "framework": "vite",
-    "cleanUrls": true
+    "cleanUrls": true,
+    "ignoreCommand": false
 }
