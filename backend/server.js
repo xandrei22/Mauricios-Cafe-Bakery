@@ -56,7 +56,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     exposedHeaders: ['Authorization'],
-    credentials: false, // you’re JWT-only now
+    credentials: true, // you’re JWT-only now
     optionsSuccessStatus: 204,
     maxAge: 86400
 }));
