@@ -1,0 +1,3 @@
+# Don't ignore dist - we need it for deployment
+!.gitignore
+
