@@ -1,11 +1,13 @@
 {
     "rewrites": [{
-        "source": "/api/(.*)",
-        "destination": "https://mauricios-cafe-bakery.onrender.com/api/$1"
-    }, {
-        "source": "/(.*)",
-        "destination": "/index.html"
-    }],
+            "source": "/api/:path*",
+            "destination": "https://mauricios-cafe-bakery.onrender.com/api/:path*"
+        },
+        {
+            "source": "/:path*",
+            "destination": "/index.html"
+        }
+    ],
     "headers": [{
             "source": "/index.html",
             "headers": [
