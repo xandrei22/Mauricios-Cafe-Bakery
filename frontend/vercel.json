@@ -1,8 +1,4 @@
 {
-    "buildCommand": "npm run build",
-    "outputDirectory": "dist",
-    "framework": "vite",
-    "cleanUrls": true,
     "rewrites": [{
             "source": "/api/:path*",
             "destination": "https://mauricios-cafe-bakery.onrender.com/api/:path*"
@@ -13,7 +9,7 @@
         }
     ],
     "headers": [{
-            "source": "/(.*)",
+            "source": "/index.html",
             "headers": [
                 { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
                 { "key": "Pragma", "value": "no-cache" },
@@ -27,6 +23,16 @@
             "headers": [
                 { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
             ]
+        },
+        {
+            "source": "/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+            ]
         }
-    ]
+    ],
+    "buildCommand": "npm run build",
+    "outputDirectory": "dist",
+    "cleanUrls": true,
+    "ignoreCommand": false
 }
