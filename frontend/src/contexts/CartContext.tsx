@@ -208,7 +208,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Record clear timestamp to prevent race conditions
     clearTimestampRef.current = Date.now();
     
-    // Step 1: Clear ALL cart-related localStorage keys FIRST
+    // CRITICAL: Set state to empty FIRST (synchronous, immediate update)
+    // This ensures React re-renders immediately
+    setItems([]);
+    
+    // Step 1: Clear ALL cart-related localStorage keys
     const cartKeys = ['cart', 'guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
     cartKeys.forEach(key => {
       localStorage.removeItem(key);
@@ -226,14 +230,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Step 3: Explicitly set localStorage to empty array to prevent any race conditions
     localStorage.setItem('cart', '[]');
     
-    // Step 4: Set state to empty array using functional update to ensure we're working with current state
-    setItems(prevItems => {
-      console.log('Setting cart state to empty. Previous items count:', prevItems.length);
-      return [];
-    });
-    
-    // Step 5: Force a re-render by dispatching the cart update event
+    // Step 4: Force a re-render by dispatching the cart update event immediately
     window.dispatchEvent(new CustomEvent('cartUpdated'));
+    
+    // Step 5: Close the cart modal if it's open
+    setIsCartModalOpen(false);
     
     // Step 6: Double-check and force clear after a brief delay to catch any race conditions
     setTimeout(() => {
@@ -255,6 +256,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         console.error('❌ Cart still not empty after all clear attempts:', finalCheck);
         localStorage.setItem('cart', '[]');
         setItems([]);
+        window.dispatchEvent(new CustomEvent('cartUpdated'));
       }
     }, 200);
   };

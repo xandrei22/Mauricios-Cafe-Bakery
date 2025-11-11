@@ -402,7 +402,18 @@ export default function CustomerCartModal({
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                    <Button onClick={onClear} variant="outline" className="flex-1 h-12 sm:h-12 min-h-[44px] border-[#a87437] text-[#a87437] hover:bg-[#a87437]/10 text-sm sm:text-base">
+                    <Button 
+                      onClick={() => {
+                        console.log('🧹 Clear Cart button clicked in modal');
+                        onClear();
+                        // Close modal after clearing to force re-render
+                        setTimeout(() => {
+                          onClose();
+                        }, 100);
+                      }} 
+                      variant="outline" 
+                      className="flex-1 h-12 sm:h-12 min-h-[44px] border-[#a87437] text-[#a87437] hover:bg-[#a87437]/10 text-sm sm:text-base"
+                    >
                       <Trash2 className="w-4 h-4 mr-2" />
                       Clear Cart
                     </Button>

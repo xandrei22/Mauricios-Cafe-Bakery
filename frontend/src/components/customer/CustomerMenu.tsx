@@ -734,7 +734,7 @@ const CustomerMenu: React.FC = () => {
               if (result.success) {
                 // Clear cart and close modal first
                 clearCart();
-                closeCartModal();
+                closeCartModal(); // Ensure modal is closed
                 // Show explicit prompt with a button (user gesture) to open the app
                 setWalletPrompt({
                   isOpen: true,
