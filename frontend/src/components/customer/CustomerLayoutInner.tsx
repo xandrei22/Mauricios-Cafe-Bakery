@@ -119,6 +119,18 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     console.log('✅ CustomerLayoutInner: Allowing access via localStorage fallback (should have been set by AuthContext)');
   }
 
+  const displayName =
+    (typeof (user as any)?.username === 'string' && (user as any).username.trim().length > 0
+      ? (user as any).username.trim()
+      : typeof user?.name === 'string' && user.name.trim().length > 0
+        ? user.name.trim()
+        : user?.email
+          ? user.email.split('@')[0]
+          : 'Customer');
+  const displayEmail = (typeof user?.email === 'string' && user.email.length > 0)
+    ? user.email
+    : 'customer@example.com';
+
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await mobileFriendlySwal.confirm(
@@ -240,8 +252,8 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
                 <User className="w-6 h-6 text-white" />
               </div>
               <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                <span className="font-semibold text-[#6B5B5B]">{user?.name || "Customer"}</span>
-                <span className="text-xs text-[#6B5B5B]/70">{user?.email || "customer@example.com"}</span>
+                <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
+                <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
               </div>
             </div>
           </div>

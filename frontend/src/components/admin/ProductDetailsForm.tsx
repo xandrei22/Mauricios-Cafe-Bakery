@@ -81,7 +81,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     // load ingredients for recipe builder
     const load = async () => {
       try {
-        const res = await axiosInstance.get(`${API_URL}/api/inventory`);
+        const res = await axiosInstance.get('/api/inventory');
         const data = res.data;
         if (data && data.ingredients) {
           setIngredientOptions(
@@ -90,6 +90,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
         }
       } catch (e) {
         console.error('Load ingredients failed', e);
+        setIngredientOptions([]);
       }
     };
     load();
@@ -112,7 +113,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     // Load categories from backend so they are shared globally
     const loadCategories = async () => {
       try {
-        const res = await axiosInstance.get(`${API_URL}/api/menu/categories`);
+        const res = await axiosInstance.get('/api/menu/categories');
         const data = res.data;
         if (data && data.success) setCategories(data.categories || []);
       } catch (_) {}
@@ -124,7 +125,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     const name = newCategoryName.trim();
     if (!name) return;
     try {
-      const res = await axiosInstance.post(`${API_URL}/api/menu/categories`, { name });
+      const res = await axiosInstance.post('/api/menu/categories', { name });
       const data = res.data;
       if (data && data.success) {
         setCategories(prev => (prev.includes(name) ? prev : [...prev, name]));
@@ -137,7 +138,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
 
   const deleteCategory = async (name: string) => {
     try {
-      const res = await axiosInstance.delete(`${API_URL}/api/menu/categories/${encodeURIComponent(name)}`);
+      const res = await axiosInstance.delete(`/api/menu/categories/${encodeURIComponent(name)}`);
       const data = res.data;
       if (data && data.success) {
         setCategories(prev => prev.filter(c => c !== name));
@@ -552,7 +553,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                   
                   {formData.variants.length > 0 && (
                     <div className="space-y-2">
-                    {formData.variants.map((variant: Variant, index: number) => (
+                    {formData.variants.map((variant: Variant) => (
                         <div key={variant.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                           <span className="flex-1 text-sm">{variant.name}</span>
                           <span className="text-sm font-medium">₱{variant.price}</span>
@@ -587,7 +588,8 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                   <Button 
                     type="button" 
                     onClick={addRecipeRow} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={ingredientOptions.length === 0}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Ingredient
@@ -596,6 +598,12 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                     {recipe.length} ingredient{recipe.length !== 1 ? 's' : ''} added
                   </span>
                 </div>
+
+                {ingredientOptions.length === 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm px-4 py-3">
+                    No ingredients found. Add inventory items under <strong>Manage Inventory</strong> first so they can be selected in the recipe.
+                  </div>
+                )}
                   
                   {recipe.length > 0 && (
                   <div className="space-y-0">
@@ -625,7 +633,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                                 }
                               }}
                             >
-                              <SelectTrigger className="h-10 w-full">
+                              <SelectTrigger className="h-10 w-full" disabled={ingredientOptions.length === 0}>
                                 <SelectValue placeholder="Select ingredient" />
                             </SelectTrigger>
                             <SelectContent>

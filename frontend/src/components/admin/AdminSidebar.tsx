@@ -36,6 +36,28 @@ const AdminSidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const storedAdmin = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('adminUser') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const displayName =
+    (typeof storedAdmin?.username === 'string' && storedAdmin.username.trim().length > 0
+      ? storedAdmin.username.trim()
+      : typeof storedAdmin?.name === 'string' && storedAdmin.name.trim().length > 0
+        ? storedAdmin.name.trim()
+        : typeof storedAdmin?.email === 'string' && storedAdmin.email.length > 0
+          ? storedAdmin.email.split('@')[0]
+          : 'Admin');
+
+  const displayEmail =
+    (typeof storedAdmin?.email === 'string' && storedAdmin.email.length > 0)
+      ? storedAdmin.email
+      : 'admin@example.com';
+
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await mobileFriendlySwal.confirm(
@@ -141,8 +163,8 @@ const AdminSidebar: React.FC = () => {
               </svg>
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-              <span className="font-semibold text-[#6B5B5B]">Admin</span>
-              <span className="text-xs text-[#6B5B5B]/70">{(JSON.parse(localStorage.getItem('adminUser') || '{}')?.email) || 'admin@example.com'}</span>
+              <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
+              <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
             </div>
           </div>
         </div>

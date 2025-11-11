@@ -70,7 +70,9 @@ interface SalesData {
 
 interface Transaction {
   id: string;
-  order_id: string;
+  order_id?: string;
+  orderId?: string;
+  orderID?: string;
   customer_name: string;
   total_amount: number;
   payment_method: string;
@@ -244,7 +246,19 @@ const AdminSales: React.FC = () => {
         const data = await response.json();
         console.log('Transactions data:', data);
         if (data.success) {
-          setTransactions(data.transactions || []);
+          const normalized = (data.transactions || []).map((tx: any) => {
+            const fallbackOrderId =
+              tx.order_id ||
+              tx.orderId ||
+              tx.orderID ||
+              (tx.order && (tx.order.order_id || tx.order.orderId)) ||
+              tx.id;
+            return {
+              ...tx,
+              order_id: fallbackOrderId,
+            };
+          });
+          setTransactions(normalized);
           setTotalPages(data.totalPages || 1);
           setTotalTransactions(data.total || 0);
           setCurrentPage(page);
@@ -732,7 +746,7 @@ const AdminSales: React.FC = () => {
                       <tbody>
                         {transactions.map((transaction) => (
                           <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4 font-medium">#{transaction.order_id}</td>
+                            <td className="py-3 px-4 font-medium">#{transaction.order_id || transaction.orderId || transaction.orderID || transaction.id}</td>
                             <td className="py-3 px-4">
                               <div className="text-sm">{formatDate(transaction.created_at)}</div>
                               <div className="text-xs text-gray-500">{formatTime(transaction.created_at)}</div>

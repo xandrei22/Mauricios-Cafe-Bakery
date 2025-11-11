@@ -19,6 +19,8 @@ import {
   Eye
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface Order {
   orderId: string;
@@ -91,7 +93,7 @@ const AdminOrders: React.FC = () => {
     };
   }, []);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     fetchOrders();
