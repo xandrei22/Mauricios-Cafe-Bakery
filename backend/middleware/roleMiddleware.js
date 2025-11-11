@@ -1,11 +1,14 @@
 function authorizeRoles(...roles) {
     return (req, res, next) => {
-        console.log('authorizeRoles: req.session.user:', req.session.user);
-        if (!req.session.user) {
+        // Safely check session to avoid errors when session is undefined
+        const sessionUser = req.session && req.session.user;
+        console.log('authorizeRoles: req.session.user:', sessionUser);
+        
+        if (!sessionUser) {
             return res.status(401).json({ message: 'Unauthorized: No session user' });
         }
 
-        if (!roles.includes(req.session.user.role)) {
+        if (!roles.includes(sessionUser.role)) {
             return res.status(403).json({ message: 'Forbidden: Insufficient role' });
         }
 

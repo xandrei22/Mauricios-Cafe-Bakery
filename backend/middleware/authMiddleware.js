@@ -23,8 +23,9 @@ function ensureAuthenticated(req, res, next) {
 
         // Fallback: Accept passport or our manual session users (for Google OAuth only)
         // This is kept for backward compatibility with Google OAuth which uses sessions
+        // Safely check session to avoid errors when session is undefined
         if ((req.isAuthenticated && req.isAuthenticated()) ||
-            req.session.adminUser || req.session.staffUser || req.session.customerUser) {
+            (req.session && (req.session.adminUser || req.session.staffUser || req.session.customerUser))) {
             return next();
         }
     } catch (e) {
