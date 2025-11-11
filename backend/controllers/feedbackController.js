@@ -1,14 +1,22 @@
 const pool = require('../config/db');
-// Profanity filtering using naughty-words (en)
+// Profanity filtering using naughty-words (en + es) and a small custom list
 let BAD_WORDS = [];
 try {
     const naughty = require('naughty-words');
-    BAD_WORDS = (naughty && (naughty.en || naughty.english)) || [];
-    if (!Array.isArray(BAD_WORDS) || BAD_WORDS.length === 0) {
-        BAD_WORDS = require('naughty-words/en.json');
-    }
+    const en = (naughty && (naughty.en || naughty.english)) || [];
+    const es = (naughty && (naughty.es || naughty.spanish)) || [];
+    // Fallback to direct JSONs if needed
+    const fallbackEn = (() => { try { return require('naughty-words/en.json'); } catch { return []; } })();
+    const fallbackEs = (() => { try { return require('naughty-words/es.json'); } catch { return []; } })();
+    // Custom local words to cover Tagalog/common colloquialisms
+    const custom = ['puta', 'putangina', 'gago', 'ulol', 'punyeta'];
+    BAD_WORDS = [...new Set([...(en || []), ...(es || []), ...fallbackEn, ...fallbackEs, ...custom])]
+        .filter(Boolean)
+        .map((w) => String(w).trim())
+        .filter((w) => w.length > 0);
 } catch (e) {
-    BAD_WORDS = [];
+    // As a last resort, at least include our custom list
+    BAD_WORDS = ['puta', 'putangina', 'gago', 'ulol', 'punyeta'];
 }
 
 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
