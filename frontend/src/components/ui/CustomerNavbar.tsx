@@ -1,10 +1,19 @@
 import { Link } from "react-router-dom";
 import { Home, Info, Star, MapPin, Heart, User, QrCode } from "lucide-react";
 import { useState, useEffect } from "react";
+import { getApiUrl } from "../../utils/apiConfig";
+
+interface TableMapping {
+  tableNumber: number;
+  obfuscatedId: string;
+  url: string;
+}
 
 export function CustomerNavbar() {
   const [open, setOpen] = useState(false);
   const [qrCodesOpen, setQrCodesOpen] = useState(false);
+  const [tableMappings, setTableMappings] = useState<TableMapping[]>([]);
+  const [loadingMappings, setLoadingMappings] = useState(true);
   // Capture table param if present so Login/Signup links preserve it
   const tableParam = (() => {
     try {
@@ -20,6 +29,25 @@ export function CustomerNavbar() {
     document.body.style.overflow = open ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [open]);
+
+  // Fetch table mappings on component mount
+  useEffect(() => {
+    const fetchTableMappings = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/api/table/table-mappings`);
+        const data = await response.json();
+        if (data.success && data.mappings) {
+          setTableMappings(data.mappings);
+        }
+      } catch (error) {
+        console.error('Error fetching table mappings:', error);
+      } finally {
+        setLoadingMappings(false);
+      }
+    };
+    fetchTableMappings();
+  }, []);
 
   // Close QR codes dropdown when clicking outside
   useEffect(() => {
@@ -41,12 +69,18 @@ export function CustomerNavbar() {
     { href: "#location", label: "Location", icon: MapPin },
   ];
 
-  // Generate QR code URLs for tables 1-6
+  // Generate QR code URLs using obfuscated table IDs
   const baseUrl = 'https://mauricios-cafe-bakery.shop';
-  const tables = [1, 2, 3, 4, 5, 6];
-  const generateQRCodeUrl = (tableNumber: number) => {
-    const url = `${baseUrl}?table=${tableNumber}`;
+  const generateQRCodeUrl = (url: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+  };
+  const handleCopyLink = (url: string, tableNumber: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(url).then(() => {
+      alert(`Link for Table ${tableNumber} copied to clipboard!`);
+    }).catch(() => {
+      alert(`Failed to copy link. URL: ${url}`);
+    });
   };
 
   return (
@@ -101,18 +135,47 @@ export function CustomerNavbar() {
                         </svg>
                       </button>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 max-h-96 overflow-y-auto">
-                      {tables.map((tableNum) => (
-                        <div key={tableNum} className="flex flex-col items-center p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                          <img
-                            src={generateQRCodeUrl(tableNum)}
-                            alt={`QR Code for Table ${tableNum}`}
-                            className="w-full h-auto rounded border border-gray-200"
-                          />
-                          <span className="text-xs font-medium text-gray-700 mt-1">Table {tableNum}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {loadingMappings ? (
+                      <div className="text-center py-8 text-gray-500">Loading QR codes...</div>
+                    ) : tableMappings.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">No table mappings available</div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+                        {tableMappings.map((mapping) => (
+                          <a
+                            key={mapping.tableNumber}
+                            href={mapping.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center p-3 bg-gray-50 rounded-lg hover:bg-[#a87437]/10 hover:border-[#a87437] border-2 border-transparent transition-all cursor-pointer group"
+                            onClick={(e) => {
+                              // Allow copy button to work without navigating
+                              if ((e.target as HTMLElement).closest('.copy-btn')) {
+                                e.preventDefault();
+                              }
+                            }}
+                          >
+                            <div className="w-full aspect-square mb-2 relative">
+                              <img
+                                src={generateQRCodeUrl(mapping.url)}
+                                alt={`QR Code for Table ${mapping.tableNumber}`}
+                                className="w-full h-full object-contain rounded border-2 border-gray-300 group-hover:border-[#a87437] transition-colors"
+                              />
+                            </div>
+                            <div className="w-full text-center">
+                              <div className="text-base font-bold text-[#a87437] mb-1">Table {mapping.tableNumber}</div>
+                              <button
+                                onClick={(e) => handleCopyLink(mapping.url, mapping.tableNumber, e)}
+                                className="copy-btn text-xs text-gray-600 hover:text-[#a87437] underline"
+                                title="Copy link"
+                              >
+                                Copy Link
+                              </button>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-xs text-gray-500 mt-3 text-center">
                       Scan to access menu for specific table
                     </p>
@@ -170,18 +233,46 @@ export function CustomerNavbar() {
               </button>
               {qrCodesOpen && (
                 <div className="px-1 py-3 bg-white/10 rounded-lg mt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                      {tables.map((tableNum) => (
-                      <div key={tableNum} className="flex flex-col items-center p-2 bg-white rounded-lg">
-                        <img
-                          src={generateQRCodeUrl(tableNum)}
-                          alt={`QR Code for Table ${tableNum}`}
-                          className="w-full h-auto rounded border border-gray-200"
-                        />
-                        <span className="text-xs font-medium text-[#a87437] mt-1">Table {tableNum}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {loadingMappings ? (
+                    <div className="text-center py-4 text-white/80">Loading QR codes...</div>
+                  ) : tableMappings.length === 0 ? (
+                    <div className="text-center py-4 text-white/80">No table mappings available</div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {tableMappings.map((mapping) => (
+                        <a
+                          key={mapping.tableNumber}
+                          href={mapping.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center p-2 bg-white rounded-lg border-2 border-transparent hover:border-[#a87437] transition-all"
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('.copy-btn')) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          <div className="w-full aspect-square mb-2">
+                            <img
+                              src={generateQRCodeUrl(mapping.url)}
+                              alt={`QR Code for Table ${mapping.tableNumber}`}
+                              className="w-full h-full object-contain rounded border border-gray-200"
+                            />
+                          </div>
+                          <div className="w-full text-center">
+                            <div className="text-sm font-bold text-[#a87437] mb-1">Table {mapping.tableNumber}</div>
+                            <button
+                              onClick={(e) => handleCopyLink(mapping.url, mapping.tableNumber, e)}
+                              className="copy-btn text-xs text-white/80 hover:text-white underline"
+                              title="Copy link"
+                            >
+                              Copy Link
+                            </button>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs text-white/80 mt-2 text-center">
                     Scan to access menu for specific table
                   </p>
