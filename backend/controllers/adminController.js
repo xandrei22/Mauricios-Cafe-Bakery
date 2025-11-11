@@ -543,6 +543,16 @@ async function editStaff(req, res) {
             return res.status(400).json({ message: 'No fields to update' });
         }
 
+        // Check if staff member exists before updating
+        const [existingStaff] = await db.query('SELECT id, role FROM users WHERE id = ?', [id]);
+        if (existingStaff.length === 0) {
+            return res.status(404).json({ message: 'Staff account not found' });
+        }
+
+        if (existingStaff[0].role !== 'staff') {
+            return res.status(400).json({ message: 'User is not a staff member' });
+        }
+
         const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
         queryParams.push(id);
         console.log('editStaff: SQL Query:', query);
@@ -555,10 +565,20 @@ async function editStaff(req, res) {
             return res.status(404).json({ message: 'Staff account not found or no changes made' });
         }
 
-        res.json({ message: 'Staff account updated successfully' });
+        res.json({ success: true, message: 'Staff account updated successfully' });
     } catch (error) {
         console.error('Error updating staff account:', error);
-        res.status(500).json({ message: 'Error updating staff account' });
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            sqlMessage: error.sqlMessage,
+            stack: error.stack
+        });
+        res.status(500).json({ 
+            success: false,
+            message: 'Error updating staff account',
+            error: error.message || 'Unknown error occurred'
+        });
     }
 }
 

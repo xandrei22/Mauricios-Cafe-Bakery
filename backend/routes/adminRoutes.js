@@ -5271,8 +5271,20 @@ router.get('/sales/download', async(req, res) => {
         
         const { format = 'excel', period = 'month', startDate, endDate, status, payment_method, customer } = req.query;
 
-        // Simple test first - just get basic data
-        const [salesData] = await db.query(`
+        // Check if XLSX is available
+        let XLSX;
+        try {
+            XLSX = require('xlsx');
+        } catch (xlsxError) {
+            console.error('XLSX library not found:', xlsxError);
+            return res.status(500).json({
+                success: false,
+                error: 'Excel library not installed. Please install xlsx package: npm install xlsx'
+            });
+        }
+
+        // Build query with filters
+        let query = `
             SELECT 
                 order_id,
                 customer_name,
@@ -5283,41 +5295,99 @@ router.get('/sales/download', async(req, res) => {
                 items
             FROM orders 
             WHERE payment_status = 'paid'
-            ORDER BY order_time DESC
-            LIMIT 100
-        `);
+        `;
+        const queryParams = [];
+
+        // Add date filters if provided
+        if (startDate) {
+            query += ' AND DATE(order_time) >= ?';
+            queryParams.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(order_time) <= ?';
+            queryParams.push(endDate);
+        }
+        if (status) {
+            query += ' AND status = ?';
+            queryParams.push(status);
+        }
+        if (payment_method) {
+            query += ' AND payment_method = ?';
+            queryParams.push(payment_method);
+        }
+        if (customer) {
+            query += ' AND customer_name LIKE ?';
+            queryParams.push(`%${customer}%`);
+        }
+
+        query += ' ORDER BY order_time DESC LIMIT 1000';
+
+        const [salesData] = await db.query(query, queryParams);
 
         console.log(`Found ${salesData.length} orders for admin export`);
 
-        // Generate Excel file
-        const XLSX = require('xlsx');
-        
+        if (salesData.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No sales data found for the selected period'
+            });
+        }
+
         // Create workbook
         const workbook = XLSX.utils.book_new();
 
         // Summary sheet
+        const totalRevenue = salesData.reduce((sum, order) => {
+            const price = parseFloat(order.total_price) || 0;
+            return sum + price;
+        }, 0);
+
         const summaryData = {
-            'Report Period': period,
+            'Report Period': period || 'All Time',
             'Start Date': startDate || 'N/A',
             'End Date': endDate || 'N/A',
             'Total Orders': salesData.length,
-            'Total Revenue': `₱${salesData.reduce((sum, order) => sum + parseFloat(order.total_price), 0).toFixed(2)}`,
+            'Total Revenue': `₱${totalRevenue.toFixed(2)}`,
             'Generated On': new Date().toLocaleString()
         };
 
         const summarySheet = XLSX.utils.json_to_sheet([summaryData]);
 
-        // Transactions sheet
-        const transactionsData = salesData.map(transaction => ({
-            'Order ID': transaction.order_id,
-            'Customer Name': transaction.customer_name,
-            'Amount': `₱${parseFloat(transaction.total_price).toFixed(2)}`,
-            'Status': transaction.status,
-            'Payment Method': transaction.payment_method,
-            'Order Date': new Date(transaction.order_time).toLocaleDateString(),
-            'Order Time': new Date(transaction.order_time).toLocaleTimeString(),
-            'Items Count': JSON.parse(transaction.items || '[]').length
-        }));
+        // Transactions sheet - handle potential null/undefined values
+        const transactionsData = salesData.map(transaction => {
+            let itemsCount = 0;
+            try {
+                const items = JSON.parse(transaction.items || '[]');
+                itemsCount = Array.isArray(items) ? items.length : 0;
+            } catch (e) {
+                console.warn('Error parsing items for order:', transaction.order_id, e);
+            }
+
+            let orderDate = 'N/A';
+            let orderTime = 'N/A';
+            try {
+                if (transaction.order_time) {
+                    const date = new Date(transaction.order_time);
+                    if (!isNaN(date.getTime())) {
+                        orderDate = date.toLocaleDateString();
+                        orderTime = date.toLocaleTimeString();
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing date for order:', transaction.order_id, e);
+            }
+
+            return {
+                'Order ID': transaction.order_id || 'N/A',
+                'Customer Name': transaction.customer_name || 'N/A',
+                'Amount': `₱${(parseFloat(transaction.total_price) || 0).toFixed(2)}`,
+                'Status': transaction.status || 'N/A',
+                'Payment Method': transaction.payment_method || 'N/A',
+                'Order Date': orderDate,
+                'Order Time': orderTime,
+                'Items Count': itemsCount
+            };
+        });
 
         const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
 
@@ -5327,6 +5397,10 @@ router.get('/sales/download', async(req, res) => {
 
         // Generate buffer
         const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        if (!buffer || buffer.length === 0) {
+            throw new Error('Failed to generate Excel buffer');
+        }
 
         console.log(`Generated admin Excel file with ${buffer.length} bytes`);
 
@@ -5344,7 +5418,7 @@ router.get('/sales/download', async(req, res) => {
         console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: 'Failed to generate sales report: ' + error.message
+            error: 'Failed to generate sales report: ' + (error.message || 'Unknown error')
         });
     }
 });

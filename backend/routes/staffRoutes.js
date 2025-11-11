@@ -763,9 +763,14 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 estimated_ready_time,
                 payment_status,
                 payment_method,
-                receipt_path
+                receipt_path,
+                staff_id,
+                cancelled_by,
+                cancellation_reason,
+                cancelled_at
             FROM orders 
             WHERE status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
+               OR payment_status IN ('pending', 'pending_verification')
             ORDER BY queue_position ASC, order_time ASC
         `);
 
@@ -827,7 +832,11 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 notes: order.notes,
                 paymentStatus: order.payment_status,
                 paymentMethod: order.payment_method,
-                receiptPath: order.receipt_path
+                receiptPath: order.receipt_path,
+                placedBy: order.staff_id ? 'staff' : 'customer',
+                cancelledBy: order.cancelled_by,
+                cancellationReason: order.cancellation_reason,
+                cancelledAt: order.cancelled_at
             };
         }));
 
@@ -2819,9 +2828,10 @@ router.get('/orders', authenticateJWT, async(req, res) => {
         const params = [];
 
         // For POS dashboard, only show relevant orders by default
+        // Include orders with pending payment status even if order status is different
         if (!status) {
-            sql += ' AND status IN (?, ?, ?, ?, ?, ?, ?)';
-            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled');
+            sql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
+            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
         } else if (status) {
             sql += ' AND status = ?';
             params.push(status);
@@ -2881,7 +2891,10 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 notes: order.notes,
                 placedBy: order.staff_id ? 'staff' : 'customer',
                 receiptPath: order.receipt_path,
-                orderType: order.order_type
+                orderType: order.order_type,
+                cancelledBy: order.cancelled_by,
+                cancellationReason: order.cancellation_reason,
+                cancelledAt: order.cancelled_at
             };
         }));
 
