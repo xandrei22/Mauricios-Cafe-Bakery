@@ -150,7 +150,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 		setCart([]);
 	};
 
-	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+	// Remove duplicate API_URL declaration (already declared elsewhere or unnecessary)
 
 	const processOrder = async () => {
 		if (cart.length === 0 || !customerInfo.name.trim()) {
