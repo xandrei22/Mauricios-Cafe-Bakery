@@ -4,11 +4,12 @@ import { encodeId } from './idObfuscator';
 /**
  * Generates an obfuscated URL for a table
  * @param tableId - The table ID to obfuscate
- * @param baseUrl - The base URL (defaults to current origin)
+ * @param baseUrl - The base URL (defaults to .shop domain)
  * @returns Obfuscated URL with encoded table parameter
  */
 export function generateTableUrl(tableId: string, baseUrl?: string): string {
-  const base = baseUrl || window.location.origin;
+  // Use .shop domain as default for consistency with backend
+  const base = baseUrl || 'https://mauricios-cafe-bakery.shop';
   const obfuscatedTableId = encodeId(tableId);
   return `${base}/?table=${obfuscatedTableId}`;
 }
