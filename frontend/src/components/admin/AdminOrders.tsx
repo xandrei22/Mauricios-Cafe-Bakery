@@ -24,6 +24,7 @@ import { getApiUrl } from '../../utils/apiConfig';
 
 interface Order {
   orderId: string;
+  displayOrderId?: string;
   customerName: string;
   tableNumber?: number;
   items: any[];
@@ -37,6 +38,55 @@ interface Order {
   paymentMethod: string;
   notes?: string;
 }
+
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  const segments = raw.split('-');
+  if (segments.length >= 3) {
+    return `${segments[0]}-${segments[1]}`;
+  }
+  return raw;
+};
+
+const transformOrderRecord = (order: any): Order => {
+  const rawStatus = (order.status || '').toLowerCase();
+  const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
+  const itemsArray = Array.isArray(order.items)
+    ? order.items
+    : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
+  const orderId = order.orderId || order.order_id || order.id;
+
+  if (!orderId || orderId === '0' || orderId === 0) {
+    console.warn('Invalid order ID detected:', {
+      order,
+      orderId,
+      orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
+    });
+  }
+
+  return {
+    orderId: String(orderId),
+    displayOrderId: formatOrderId(orderId),
+    customerName: order.customerName || order.customer_name,
+    tableNumber: order.tableNumber || order.table_number,
+    items: itemsArray,
+    totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
+    status: normalizedStatus as Order['status'],
+    paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as Order['paymentStatus'],
+    orderType: (order.orderType || order.order_type || 'dine_in') as Order['orderType'],
+    queuePosition: order.queuePosition || 0,
+    estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
+    orderTime: order.orderTime || order.order_time,
+    paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
+    notes: order.notes
+  };
+};
+
+const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
+  return ordersData.map(transformOrderRecord);
+};
 
 const AdminOrders: React.FC = () => {
   const navigate = useNavigate();
@@ -125,40 +175,7 @@ const AdminOrders: React.FC = () => {
         const silentRefetch = async () => {
           if (!isMounted) return;
           try {
-            // Use admin-specific endpoint
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-            const response = await fetch(`${API_URL}/api/admin/orders`, { credentials: 'omit' });
-            if (response.ok) {
-              const data = await response.json();
-              if (data.success && isMounted) {
-                const transformed = (data.orders || []).map((order: any) => {
-                  const itemsArray = Array.isArray(order.items)
-                    ? order.items
-                    : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-                  const rawStatus = (order.status || '').toLowerCase();
-                  const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-                  
-                  const orderId = order.orderId || order.order_id || order.id;
-                  
-                  return {
-                    orderId: String(orderId),
-                    customerName: order.customer_name,
-                    tableNumber: order.table_number,
-                    items: itemsArray,
-                    totalPrice: Number(order.total_price || 0),
-                    status: normalizedStatus as any,
-                    paymentStatus: (order.payment_status || 'pending') as any,
-                    orderType: (order.order_type || 'dine_in') as any,
-                    queuePosition: 0,
-                    estimatedReadyTime: order.estimated_ready_time,
-                    orderTime: order.order_time,
-                    paymentMethod: (order.payment_method || '').toLowerCase(),
-                    notes: order.notes
-                  };
-                });
-                setOrders(transformed);
-              }
-            }
+            await fetchOrders({ silent: true });
           } catch (error) {
             console.warn('Silent refetch error:', error);
           }
@@ -209,61 +226,21 @@ const AdminOrders: React.FC = () => {
     const { silent = false } = options;
     try {
       if (!silent) setLoading(true);
-      // Use staff orders endpoint to ensure pending_verification orders and camelCase fields
-      const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'omit' });
-      const data = response.ok ? await response.json() : null;
+      const response = await axiosInstance.get('/api/staff/orders');
+      const data = response.data;
 
-      if (data && data.success) {
-        const transformedOrders: Order[] = (data.orders || []).map((order: any) => {
-          const rawStatus = (order.status || '').toLowerCase();
-          // Keep all statuses as-is for proper filtering
-          const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-
-          const itemsArray = Array.isArray(order.items)
-            ? order.items
-            : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-
-          const orderId = order.orderId || order.order_id || order.id;
-          
-          // Debug logging for order ID and status
-          if (!orderId || orderId === '0' || orderId === 0) {
-            console.warn('Invalid order ID detected:', {
-              order: order,
-              orderId: orderId,
-              orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
-            });
-          }
-          
-          // Debug logging for order status
-          console.log('Order status debug:', {
-            orderId: orderId,
-            originalStatus: order.status,
-            normalizedStatus: normalizedStatus,
-            paymentMethod: order.payment_method || order.paymentMethod,
-            customerName: order.customer_name || order.customerName,
-            fullOrder: order
-          });
-
-          return {
-            orderId: String(orderId),
-            customerName: order.customerName || order.customer_name,
-            tableNumber: order.tableNumber || order.table_number,
-            items: itemsArray,
-            totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
-            status: normalizedStatus as any,
-            paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as any,
-            orderType: (order.orderType || order.order_type || 'dine_in') as any,
-            queuePosition: order.queuePosition || 0,
-            estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
-            orderTime: order.orderTime || order.order_time,
-            paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
-            notes: order.notes
-          };
-        });
-        setOrders(transformedOrders);
+      if (data && data.success && Array.isArray(data.orders)) {
+        setOrders(transformOrdersResponse(data.orders));
+      } else if (data && Array.isArray(data.orders)) {
+        setOrders(transformOrdersResponse(data.orders));
+      } else {
+        setOrders([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching orders:', error);
+      if (error?.response?.status === 401) {
+        setOrders([]);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -271,63 +248,34 @@ const AdminOrders: React.FC = () => {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
-      // Use full API URL for consistency
-      const response = await fetch(`${API_URL}/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit',
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        // Always refresh orders to get the latest status
-        // This ensures orders move between tabs correctly
+      await axiosInstance.put(`/api/orders/${orderId}/status`, { status });
         await fetchOrders({ silent: true });
-        
-        // Show success message
-        toast.success(`Order ${orderId} status updated to ${status}`);
-      } else {
-        const errorData = await response.json();
-        toast.error(`Failed to update order: ${errorData.error || 'Unknown error'}`);
-      }
-    } catch (error) {
+      toast.success(`Order ${formatOrderId(orderId)} status updated to ${status}`);
+    } catch (error: any) {
       console.error('Error updating order status:', error);
-      toast.error('Failed to update order status');
+      const message = error?.response?.data?.error || error?.message || 'Failed to update order status';
+      toast.error(message);
     }
   };
 
   const verifyPayment = async (orderId: string, paymentMethod: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/orders/${orderId}/verify-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit',
-        body: JSON.stringify({ 
+      await axiosInstance.post(`/api/orders/${orderId}/verify-payment`, {
           verifiedBy: 'admin', 
-          paymentMethod 
-        }),
+        paymentMethod,
       });
 
-      if (response.ok) {
         console.log('Payment verification successful');
-        // Close payment modal first
         setShowPaymentModal(false);
         
-        // Get order details for success modal
         const order = orders.find(o => o.orderId === orderId);
-        console.log('Found order for success modal:', order);
         if (order) {
           setPaymentSuccessData({
             orderId: order.orderId,
             amount: order.totalPrice,
-            change: 0 // For admin verification, no change needed
+          change: 0,
           });
           
-          // Show success modal after a short delay to ensure smooth transition
           setTimeout(() => {
             console.log('Showing success modal');
             setShowSuccessModal(true);
@@ -336,66 +284,26 @@ const AdminOrders: React.FC = () => {
           console.warn('Order not found for success modal');
         }
         
-        // Temporarily disable Socket.IO updates to prevent race condition
         if (socketRef.current) {
           socketRef.current.off('order-updated');
           socketRef.current.off('payment-updated');
         }
         
-        // Refresh orders after a longer delay to ensure backend has processed and user sees success modal
         setTimeout(() => {
           fetchOrders({ silent: true });
           
-          // Re-enable Socket.IO updates after refresh
           if (socketRef.current) {
-            const silentRefetch = async () => {
-              try {
-                const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'omit' });
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data.success) {
-                    const transformed = (data.orders || []).map((order: any) => {
-                      const itemsArray = Array.isArray(order.items)
-                        ? order.items
-                        : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-                      const rawStatus = (order.status || '').toLowerCase();
-                      // Keep all statuses as-is for proper filtering
-                      const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-                      
-                      const orderId = order.orderId || order.order_id || order.id;
-                      
-                      return {
-                        orderId: String(orderId),
-                        customerName: order.customerName || order.customer_name,
-                        tableNumber: order.tableNumber || order.table_number,
-                        items: itemsArray,
-                        totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
-                        status: normalizedStatus as any,
-                        paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as any,
-                        orderType: (order.orderType || order.order_type || 'dine_in') as any,
-                        queuePosition: order.queuePosition || 0,
-                        estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
-                        orderTime: order.orderTime || order.order_time,
-                        paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
-                        notes: order.notes
-                      };
-                    });
-                    setOrders(transformed);
-                  }
-                }
-              } catch {}
-            };
-            socketRef.current.on('order-updated', silentRefetch);
-            socketRef.current.on('payment-updated', silentRefetch);
+          const refetchHandler = () => {
+            fetchOrders({ silent: true });
+          };
+          socketRef.current.on('order-updated', refetchHandler);
+          socketRef.current.on('payment-updated', refetchHandler);
           }
         }, 5000);
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to verify payment');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying payment:', error);
-      toast.error('Failed to verify payment');
+      const message = error?.response?.data?.error || error?.message || 'Failed to verify payment';
+      toast.error(message);
     }
   };
 
@@ -723,7 +631,7 @@ const AdminOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-blue-800">Order #{order.orderId}</span>
+                              <span className="text-blue-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-blue-100 text-blue-800 border-blue-200">
               Preparing
               </Badge>
@@ -789,7 +697,7 @@ const AdminOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-green-800">Order #{order.orderId}</span>
+                              <span className="text-green-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-green-100 text-green-800 border-green-200">
               Ready
                               </Badge>
@@ -884,7 +792,7 @@ const AdminOrders: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                             <span>•</span>
                             <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                             <span>•</span>

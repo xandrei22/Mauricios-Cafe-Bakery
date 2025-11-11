@@ -575,8 +575,8 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
   return (
     <div className="fixed inset-0 backdrop-blur-sm bg-white/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b p-4 rounded-t-lg">
+      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b p-4 rounded-t-lg z-10 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Coffee className="w-6 h-6 text-orange-600" />
@@ -596,7 +596,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1 min-h-0">
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Column - Customization Options */}
@@ -756,7 +756,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                     <h3 className="text-xl font-bold text-gray-900 mb-2">Your Drink Layers</h3>
                     <p className="text-sm text-gray-600">See how your customizations build up</p>
                   </div>
-                  <div className="flex justify-center">
+                  <div className="flex justify-center overflow-hidden">
                     <LayeredCupVisualization
                       customizations={{
                         base: item.name,
@@ -970,18 +970,19 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-end pt-6 border-t">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleAdd} className="bg-[#a87437] hover:bg-[#8f652f]">
-              Add to Cart - ₱{(() => {
-                const total = calculateTotalPrice();
-                return isNaN(total) ? '0.00' : total.toFixed(2);
-              })()}
-            </Button>
-          </div>
+        </div>
+
+        {/* Action Buttons - Sticky at bottom */}
+        <div className="sticky bottom-0 bg-white border-t p-4 flex gap-3 justify-end flex-shrink-0">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleAdd} className="bg-[#a87437] hover:bg-[#8f652f]">
+            Add to Cart - ₱{(() => {
+              const total = calculateTotalPrice();
+              return isNaN(total) ? '0.00' : total.toFixed(2);
+            })()}
+          </Button>
         </div>
       </div>
     </div>

@@ -99,6 +99,17 @@ interface Transaction {
   receipt_path?: string;
 }
 
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  const segments = raw.split('-');
+  if (segments.length >= 3) {
+    return `${segments[0]}-${segments[1]}`;
+  }
+  return raw;
+};
+
 const StaffSales: React.FC = () => {
   const [salesData, setSalesData] = useState<SalesData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -179,15 +190,20 @@ const StaffSales: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          const normalized = (data.transactions || []).map((tx: any) => ({
-            ...tx,
-            order_id:
+          const normalized = (data.transactions || []).map((tx: any) => {
+            const fallbackOrderId =
               tx.order_id ||
               tx.orderId ||
               tx.orderID ||
               (tx.order && (tx.order.order_id || tx.order.orderId)) ||
-              tx.id,
-          }));
+              tx.id;
+            const rawOrderId = fallbackOrderId ? String(fallbackOrderId) : '';
+            return {
+              ...tx,
+              order_id: rawOrderId,
+              display_order_id: formatOrderId(rawOrderId),
+            };
+          });
           setTransactions(normalized);
           setTotalPages(data.totalPages || 1);
           setTotalTransactions(data.total || 0);
@@ -542,7 +558,7 @@ const StaffSales: React.FC = () => {
                       <tbody>
                         {transactions.map((transaction) => (
                           <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4 font-medium">#{transaction.order_id || transaction.orderId || transaction.orderID || transaction.id}</td>
+                            <td className="py-3 px-4 font-medium">#{transaction.display_order_id || formatOrderId(transaction.order_id || transaction.orderId || transaction.orderID || transaction.id)}</td>
                             <td className="py-3 px-4">
                               <div className="text-sm">{formatDate(transaction.created_at)}</div>
                               <div className="text-xs text-gray-500">{formatTime(transaction.created_at)}</div>
