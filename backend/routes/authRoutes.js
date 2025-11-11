@@ -78,11 +78,18 @@ router.get('/auth/google', (req, res, next) => {
         }
 
         // Kick off Google auth and pass table in OAuth state for redundancy
-        return passport.authenticate('google', {
-            scope: ['profile', 'email'],
-            state: table ? String(table) : undefined,
-            failWithError: true // This makes passport return errors instead of redirecting
-        })(req, res, next);
+        console.log('🔍 Initiating passport.authenticate for Google OAuth...');
+        try {
+            return passport.authenticate('google', {
+                scope: ['profile', 'email'],
+                state: table ? String(table) : undefined,
+                failWithError: true // This makes passport return errors instead of redirecting
+            })(req, res, next);
+        } catch (authErr) {
+            console.error('❌ Error in passport.authenticate:', authErr);
+            console.error('❌ Auth error stack:', authErr.stack);
+            return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_ERROR`);
+        }
     } catch (err) {
         console.error('Error initializing Google OAuth:', err);
         return res.redirect((process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop') + '/login?error=GOOGLE_AUTH_ERROR');
@@ -107,10 +114,18 @@ router.get('/auth/google/callback', async(req, res, next) => {
         console.log('🔍 Callback URL:', process.env.GOOGLE_CALLBACK_URL);
         console.log('🔍 Query params:', req.query);
 
+        console.log('🔍 Starting Google OAuth authentication...');
+        console.log('🔍 Session ID:', req.sessionID);
+        console.log('🔍 Session data:', req.session);
+
         // Use Passport middleware
         passport.authenticate('google', {
             session: true
         }, (err, user, info) => {
+            console.log('🔍 Passport authenticate callback triggered');
+            console.log('🔍 Error:', err ? err.message : 'None');
+            console.log('🔍 User:', user ? { id: user.id, email: user.email } : 'None');
+            console.log('🔍 Info:', info);
             if (err) {
                 // If the error is about email already registered, redirect with a message
                 if (err.code === 'EMAIL_REGISTERED_PASSWORD') {

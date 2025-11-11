@@ -212,6 +212,7 @@ const guestOrderRoutes = require('./routes/guestOrderRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const tableRoutes = require('./routes/tableRoutes');
 const userSettingsRoutes = require('./routes/userSettingsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const lowStockRoutes = require('./routes/lowStockRoutes');
@@ -237,6 +238,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/low-stock', lowStockRoutes);
 app.use('/api/cleanup', cleanupRoutes);
 app.use('/api/daily-reset', dailyResetRoutes);
+app.use('/api/table', tableRoutes);
 
 // -------------------
 // Health check endpoint

@@ -182,10 +182,18 @@ async function signup(req, res) {
             const { sendVerificationEmail } = require('../utils/emailService');
             const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
             const verificationUrl = `${frontendBase}/customer/verify-email?token=${verificationToken}`;
+            console.log('📧 Attempting to send verification email to:', email);
+            console.log('📧 Verification URL:', verificationUrl);
             await sendVerificationEmail(email, fullName, verificationUrl);
             console.log('✅ Verification email sent successfully to:', email);
         } catch (emailError) {
             console.error('❌ Error sending verification email:', emailError);
+            console.error('❌ Error details:', {
+                message: emailError.message,
+                stack: emailError.stack,
+                code: emailError.code,
+                response: emailError.response
+            });
             // Don't fail signup if email fails, but log it
             // Still return success but warn user to check spam folder
         }

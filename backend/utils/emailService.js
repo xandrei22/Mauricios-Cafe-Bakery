@@ -377,10 +377,23 @@ const sendVerificationEmail = async(email, fullName, verificationUrl) => {
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log('Verification email sent successfully to:', email);
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Verification email sent successfully:', {
+            messageId: info.messageId,
+            response: info.response,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            to: email
+        });
     } catch (error) {
-        console.error('Error sending verification email:', error);
+        console.error('❌ Error sending verification email:', error.message);
+        console.error('❌ Error details:', {
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode,
+            stack: error.stack
+        });
         throw error;
     }
 };
