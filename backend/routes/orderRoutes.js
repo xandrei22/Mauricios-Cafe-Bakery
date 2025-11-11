@@ -4,6 +4,11 @@ const db = require('../config/db');
 const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const { v4: uuidv4 } = require('uuid');
+const { optionalJWT } = require('../middleware/jwtAuth');
+
+// Apply optional JWT middleware to all order routes
+// This sets req.user if a JWT token is present, but doesn't fail if it's missing
+router.use(optionalJWT);
 
 // Generate random 5-character order code (letters and numbers)
 function generateShortOrderCode() {
@@ -58,11 +63,33 @@ router.post('/', async(req, res) => {
         const paymentMethod = payment_method;
 
         // Get staff ID from session (for admin/staff orders)
-        // Safely access session to avoid errors when session is undefined
-        const staffId = (req.session && req.session.adminUser && req.session.adminUser.id) ||
-            (req.session && req.session.staffUser && req.session.staffUser.id) ||
-            (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
-            null;
+        // Session middleware is only applied to Google OAuth routes, so req.session may be undefined
+        // Use JWT authentication (req.user) as primary method, session as fallback
+        let staffId = null;
+        
+        // Primary: Check JWT user first (most reliable for API routes)
+        if (req.user && typeof req.user === 'object') {
+            if ((req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) {
+                staffId = req.user.id;
+            }
+        }
+        
+        // Fallback: Try session only if JWT didn't provide staffId and session exists
+        if (!staffId) {
+            try {
+                // Use hasOwnProperty check to avoid errors if session is undefined
+                if (req && typeof req === 'object' && 'session' in req && req.session && typeof req.session === 'object') {
+                    if (req.session.adminUser && typeof req.session.adminUser === 'object' && req.session.adminUser.id) {
+                        staffId = req.session.adminUser.id;
+                    } else if (req.session.staffUser && typeof req.session.staffUser === 'object' && req.session.staffUser.id) {
+                        staffId = req.session.staffUser.id;
+                    }
+                }
+            } catch (sessionError) {
+                // Silently ignore session errors - JWT is primary auth method
+                console.warn('⚠️ Session access failed (expected if session middleware not applied):', sessionError.message);
+            }
+        }
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
