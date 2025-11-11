@@ -82,37 +82,136 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const loadIngredients = async () => {
     try {
       setLoadingIngredients(true);
-      const res = await axiosInstance.get('/api/inventory');
-      const data = res.data;
-      console.log('🔍 ProductDetailsForm - Inventory API response:', data);
+      console.log('🔄 ProductDetailsForm - Loading ingredients...');
+      console.log('🔄 API URL:', API_URL);
+      
+      let res;
+      let data;
+      
+      // Try /api/inventory first (public endpoint)
+      try {
+        console.log('🔄 Attempting /api/inventory...');
+        console.log('🔄 Axios baseURL:', axiosInstance.defaults.baseURL);
+        res = await axiosInstance.get('/api/inventory');
+        data = res.data;
+        console.log('✅ Successfully fetched from /api/inventory');
+      } catch (firstError: any) {
+        console.warn('⚠️ /api/inventory failed:', {
+          status: firstError?.response?.status,
+          statusText: firstError?.response?.statusText,
+          url: firstError?.config?.url,
+          baseURL: firstError?.config?.baseURL,
+          fullURL: `${firstError?.config?.baseURL || ''}${firstError?.config?.url || ''}`,
+          message: firstError?.message
+        });
+        
+        // Fallback: Try using fetch directly if axios fails
+        try {
+          console.log('🔄 Attempting with fetch API...');
+          const fetchUrl = API_URL ? `${API_URL}/api/inventory` : '/api/inventory';
+          console.log('🔄 Fetch URL:', fetchUrl);
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          
+          // Add JWT token if available
+          const token = localStorage.getItem('authToken');
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          
+          const fetchRes = await fetch(fetchUrl, {
+            method: 'GET',
+            headers: headers,
+            credentials: 'omit'
+          });
+          
+          if (!fetchRes.ok) {
+            throw new Error(`HTTP ${fetchRes.status}: ${fetchRes.statusText}`);
+          }
+          
+          data = await fetchRes.json();
+          console.log('✅ Successfully fetched with fetch API');
+        } catch (fetchError: any) {
+          console.warn('⚠️ Fetch also failed, trying /api/admin/inventory...', fetchError);
+          
+          // Final fallback to admin inventory endpoint (requires auth)
+          try {
+            console.log('🔄 Attempting /api/admin/inventory...');
+            res = await axiosInstance.get('/api/admin/inventory');
+            data = res.data;
+            console.log('✅ Successfully fetched from /api/admin/inventory');
+          } catch (secondError: any) {
+            console.error('❌ All endpoints failed');
+            console.error('❌ Final error:', {
+              status: secondError?.response?.status,
+              statusText: secondError?.response?.statusText,
+              url: secondError?.config?.url,
+              baseURL: secondError?.config?.baseURL,
+              message: secondError?.message
+            });
+            throw secondError || fetchError || firstError;
+          }
+        }
+      }
+      console.log('🔍 ProductDetailsForm - Full API response:', JSON.stringify(data, null, 2));
+      console.log('🔍 ProductDetailsForm - Response status:', res?.status || 'N/A (fetch used)');
+      console.log('🔍 ProductDetailsForm - Response data type:', typeof data);
+      console.log('🔍 ProductDetailsForm - data.ingredients exists:', !!data?.ingredients);
+      console.log('🔍 ProductDetailsForm - data.inventory exists:', !!data?.inventory);
+      console.log('🔍 ProductDetailsForm - data is array:', Array.isArray(data));
       
       // Check multiple possible response structures
       let ingredients = [];
       if (data && data.ingredients && Array.isArray(data.ingredients)) {
         ingredients = data.ingredients;
+        console.log('✅ Using data.ingredients, count:', ingredients.length);
       } else if (data && data.inventory && Array.isArray(data.inventory)) {
         ingredients = data.inventory;
+        console.log('✅ Using data.inventory, count:', ingredients.length);
       } else if (Array.isArray(data)) {
         ingredients = data;
+        console.log('✅ Using data as array, count:', ingredients.length);
+      } else if (data && data.success && data.ingredients) {
+        ingredients = Array.isArray(data.ingredients) ? data.ingredients : [];
+        console.log('✅ Using data.success.ingredients, count:', ingredients.length);
       }
       
       console.log('🔍 ProductDetailsForm - Parsed ingredients:', ingredients);
       console.log('🔍 ProductDetailsForm - Ingredients count:', ingredients.length);
       
       if (ingredients.length > 0) {
-        const mapped = ingredients.map((i: any) => ({ 
-          id: i.id, 
-          name: i.name, 
-          actual_unit: i.actual_unit || i.actualUnit || '' 
-        }));
-        setIngredientOptions(mapped);
-        console.log('✅ ProductDetailsForm - Set ingredient options:', mapped.length);
+        const mapped = ingredients
+          .filter((i: any) => i && i.id && i.name) // Filter out invalid entries
+          .map((i: any) => ({ 
+            id: Number(i.id), 
+            name: String(i.name || '').trim(), 
+            actual_unit: String(i.actual_unit || i.actualUnit || '').trim()
+          }))
+          .filter((i: { id: number; name: string; actual_unit: string }) => i.name.length > 0); // Remove entries with empty names
+        
+        console.log('✅ ProductDetailsForm - Mapped ingredients:', mapped);
+        console.log('✅ ProductDetailsForm - Valid ingredient count:', mapped.length);
+        
+        if (mapped.length > 0) {
+          setIngredientOptions(mapped);
+          console.log('✅ ProductDetailsForm - Successfully set ingredient options:', mapped.length);
+        } else {
+          console.warn('⚠️ ProductDetailsForm - All ingredients filtered out (no valid entries)');
+          setIngredientOptions([]);
+        }
       } else {
         console.warn('⚠️ ProductDetailsForm - No ingredients found in response');
+        console.warn('⚠️ ProductDetailsForm - Full response structure:', Object.keys(data || {}));
         setIngredientOptions([]);
       }
-    } catch (e) {
-      console.error('❌ ProductDetailsForm - Load ingredients failed', e);
+    } catch (e: any) {
+      console.error('❌ ProductDetailsForm - Load ingredients failed');
+      console.error('❌ Error details:', e);
+      console.error('❌ Error message:', e?.message);
+      console.error('❌ Error response:', e?.response?.data);
+      console.error('❌ Error status:', e?.response?.status);
       setIngredientOptions([]);
     } finally {
       setLoadingIngredients(false);
