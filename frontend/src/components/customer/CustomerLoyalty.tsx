@@ -489,7 +489,7 @@ const CustomerLoyalty: React.FC = () => {
         </div>
 
         {/* Points Overview */}
-        <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
+        <Card className="bg-white shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#6B5B5B]">
               <Coins className="h-6 w-6" />

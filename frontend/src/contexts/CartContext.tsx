@@ -29,8 +29,6 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  // Track if cart was just cleared to prevent race conditions
-  const clearTimestampRef = useRef<number>(0);
   // Flag to prevent reloading from localStorage after clear
   const isClearedRef = useRef<boolean>(false);
   
@@ -183,12 +181,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       // Find existing item or add new one
       const existing = currentItems.find(i => i.id === item.id);
       if (existing) {
+        // CRITICAL: When adding an existing item, always add exactly 1
+        // The item.quantity parameter should be ignored for existing items to prevent bugs
+        // where stale quantity data from menu items causes incorrect calculations
+        // Example: If user reduces quantity from 5 to 3, then clicks "Add to Cart" again,
+        // we should add 1 to 3 = 4, NOT use item.quantity (which might be 5) = 8
+        const currentQuantity = existing.quantity || 0;
+        const quantityToAdd = 1; // Always add 1 when clicking "Add to Cart" button
+        const newQuantity = currentQuantity + quantityToAdd;
+        
+        console.log(`🛒 Adding to existing item: current=${currentQuantity}, adding=${quantityToAdd}, new=${newQuantity}`);
+        
         const updated = currentItems.map(i => 
-          i.id === item.id ? { ...i, quantity: i.quantity + (item.quantity || 1) } : i
+          i.id === item.id ? { ...i, quantity: newQuantity } : i
         );
         return updated;
       }
-      return [...currentItems, { ...item, quantity: item.quantity || 1 }];
+      // New item - use the quantity from the item parameter or default to 1
+      // For new items, item.quantity is the initial quantity to add
+      const initialQuantity = (item.quantity && item.quantity > 0) ? item.quantity : 1;
+      return [...currentItems, { ...item, quantity: initialQuantity }];
     });
 
     Swal.fire({

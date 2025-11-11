@@ -393,7 +393,7 @@ export default function CustomerDasboard() {
             {/* Top Row: 3 summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
               {/* Points Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <Star className="h-8 w-8 text-[#a87437]" />
                 </div>
@@ -404,7 +404,7 @@ export default function CustomerDasboard() {
                 </span>
               </div>
               {/* Total Orders Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <ShoppingBag className="h-8 w-8 text-[#a87437]" />
                 </div>
@@ -415,7 +415,7 @@ export default function CustomerDasboard() {
                 </span>
               </div>
               {/* Current Order Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <Monitor className="h-8 w-8 text-[#a87437]" />
                 </div>
@@ -433,14 +433,14 @@ export default function CustomerDasboard() {
             {/* Bottom Row: Redeem Points and Popular Items */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 w-full">
               {/* Redeem with your points (always visible; shows empty state when none) */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
                 <h2 className="text-xl sm:text-2xl font-bold text-[#6B5B5B] mb-4">Redeem with your points</h2>
                 {redeemableItems.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">No rewards available to redeem right now</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {redeemableItems.map((item) => (
-                      <div key={item.id} className="flex flex-col items-center p-3 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                      <div key={item.id} className="flex flex-col items-center p-3 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                         <img 
                           src={item.image}
                           alt={item.name}
@@ -462,7 +462,7 @@ export default function CustomerDasboard() {
               </div>
 
                           {/* Popular items */}
-            <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
+            <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
                 <h2 className="text-xl sm:text-2xl font-bold text-[#6B5B5B] mb-4">Popular items</h2>
                                 <div className="space-y-3">
                   {popularItems.length > 0 ? (

@@ -254,7 +254,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Event Form - Left Side */}
-          <Card className="xl:col-span-2 border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
+          <Card className="xl:col-span-2 shadow-xl hover:shadow-2xl transition-shadow duration-300">
             <CardContent className="p-6">
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <h2 className="text-2xl font-bold text-[#6B5B5B] mb-6">Reserve for a Special Event</h2>
@@ -410,7 +410,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
           </Card>
 
           {/* Your Event Requests - Right Side */}
-          <Card className="xl:col-span-1 border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300 xl:sticky xl:top-4">
+          <Card className="xl:col-span-1 shadow-xl hover:shadow-2xl transition-shadow duration-300 xl:sticky xl:top-4">
             <CardContent className="p-6">
               <h3 className="text-xl font-bold text-[#6B5B5B] mb-6">Your Event Requests</h3>
         
@@ -427,7 +427,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               ) : (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
                   {userEvents.map((event) => (
-                    <div key={event.id} className="border-2 border-[#a87437] rounded-xl p-4 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <div key={event.id} className="rounded-xl p-4 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
                       <div className="flex justify-between items-start mb-3">
                         <h4 className="font-semibold text-[#6B5B5B]">{event.event_type}</h4>
                         <span className={`text-xs font-medium px-3 py-1 rounded-full ${getStatusColor(event.status)} bg-white border border-gray-200`}>
