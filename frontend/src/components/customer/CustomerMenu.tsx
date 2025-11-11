@@ -636,9 +636,6 @@ const CustomerMenu: React.FC = () => {
           })()}
         </div>
       )}
-        </div>
-      </div>
-
       {/* Cart Modal */}
       <CustomerCartModal 
         isOpen={isCartModalOpen}
