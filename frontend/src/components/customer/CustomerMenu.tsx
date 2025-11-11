@@ -500,141 +500,141 @@ const CustomerMenu: React.FC = () => {
 
       {/* Menu Items by Category */}
       {filteredItems.length === 0 ? (
-          <Card className="border-2 border-[#a87437] shadow-xl">
-            <CardContent className="text-center py-16">
-              <Coffee className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-[#6B5B5B] mb-2">No items found</h3>
-              <p className="text-gray-500 mb-4">
-                Try adjusting your search or filters
-              </p>
-              <Button 
-                onClick={clearFilters} 
-                variant="outline"
-                className="border-2 border-[#a87437]/30 hover:bg-[#a87437]/5"
-              >
-                Clear All Filters
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-8">
-            {(() => {
-              // Group items by category
-              const groupedItems = filteredItems.reduce((acc, item) => {
-                const category = item.category || 'Other';
-                if (!acc[category]) {
-                  acc[category] = [];
-                }
-                acc[category].push(item);
-                return acc;
-              }, {} as Record<string, MenuItem[]>);
+        <Card className="border-2 border-[#a87437] shadow-xl">
+          <CardContent className="text-center py-16">
+            <Coffee className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-[#6B5B5B] mb-2">No items found</h3>
+            <p className="text-gray-500 mb-4">
+              Try adjusting your search or filters
+            </p>
+            <Button 
+              onClick={clearFilters} 
+              variant="outline"
+              className="border-2 border-[#a87437]/30 hover:bg-[#a87437]/5"
+            >
+              Clear All Filters
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-8">
+          {(() => {
+            // Group items by category
+            const groupedItems = filteredItems.reduce((acc, item) => {
+              const category = item.category || 'Other';
+              if (!acc[category]) {
+                acc[category] = [];
+              }
+              acc[category].push(item);
+              return acc;
+            }, {} as Record<string, MenuItem[]>);
 
-              return Object.entries(groupedItems).map(([category, items]) => (
-                <div key={category} className="space-y-4">
-                  {/* Category Header */}
-                  <h2 className="text-2xl font-bold text-[#a87437] border-b-2 border-[#a87437]/30 pb-2">
-                    {category}
-                  </h2>
-                  
-                  {/* Items Display - Grid or List View */}
-                  {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {items.map((item) => (
-                        <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col">
-                          <CardContent className="p-0 flex flex-col h-full">
-                            {/* Image - With padding from card edges */}
-                            <div className="h-40 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-3">
-                              {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
-                                <div className="w-full h-full overflow-hidden">
-                                  <img
-                                    src={item.image_url}
-                                    alt={item.name}
-                                    className="w-full h-full object-contain"
-                                    loading="lazy"
-                                    onError={(e) => {
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = 'none';
-                                      const fallback = target.parentElement?.nextElementSibling as HTMLElement;
-                                      if (fallback) {
-                                        fallback.classList.remove('hidden');
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              ) : null}
-                              <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
-                                <div className="text-center">
-                                  <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-sm border-2 border-gray-200">
-                                    <span className="text-2xl">🍽️</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600 font-medium">No Image Available</p>
-                                </div>
+            return Object.entries(groupedItems).map(([category, items]) => (
+              <div key={category} className="space-y-4">
+                {/* Category Header */}
+                <h2 className="text-2xl font-bold text-[#a87437] border-b-2 border-[#a87437]/30 pb-2">
+                  {category}
+                </h2>
+                
+                {/* Items Display - Grid or List View */}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {items.map((item) => (
+                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col">
+                        <CardContent className="p-0 flex flex-col h-full">
+                          {/* Image - With padding from card edges */}
+                          <div className="h-40 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-3">
+                            {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
+                              <div className="w-full h-full overflow-hidden">
+                                <img
+                                  src={item.image_url}
+                                  alt={item.name}
+                                  className="w-full h-full object-contain"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const fallback = target.parentElement?.nextElementSibling as HTMLElement;
+                                    if (fallback) {
+                                      fallback.classList.remove('hidden');
+                                    }
+                                  }}
+                                />
                               </div>
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-sm border-2 border-gray-200">
+                                  <span className="text-2xl">🍽️</span>
+                                </div>
+                                <p className="text-sm text-gray-600 font-medium">No Image Available</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Content */}
+                          <div className="p-4 flex-1 flex flex-col min-h-0">
+                            <h3 className="text-lg font-semibold text-[#3f3532] mb-1 line-clamp-2">
+                              {item.name}
+                            </h3>
+                            {item.category && (
+                              <p className="text-sm text-gray-500 mb-2">{item.category}</p>
+                            )}
+                            <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                              {item.description}
+                            </p>
+                            
+                            {/* Price */}
+                            <div className="mb-2">
+                              <span className="text-xl font-bold text-[#a87437]">
+                                ₱{Number(item.price || 0).toFixed(2)}
+                              </span>
                             </div>
                             
-                            {/* Content */}
-                            <div className="p-4 flex-1 flex flex-col min-h-0">
-                              <h3 className="text-lg font-semibold text-[#3f3532] mb-1 line-clamp-2">
-                                {item.name}
-                              </h3>
-                              {item.category && (
-                                <p className="text-sm text-gray-500 mb-2">{item.category}</p>
-                              )}
-                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                                {item.description}
-                              </p>
-                              
-                              {/* Price */}
-                              <div className="mb-2">
-                                <span className="text-xl font-bold text-[#a87437]">
-                                  ₱{Number(item.price || 0).toFixed(2)}
-                                </span>
-                              </div>
-                              
-                              {/* Action Buttons */}
-                              <div className="flex flex-col gap-2 mt-auto pt-2">
-                                {item.allow_customization && (
-                                  <Button
-                                    onClick={() => setCustomizationModal({ isOpen: true, item: item })}
-                                    disabled={!hasValidTableAccess || item.is_available === false}
-                                    size="sm"
-                                    variant="outline"
-                                    className="w-full text-xs border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
-                                  >
-                                    Customize
-                                  </Button>
-                                )}
+                            {/* Action Buttons */}
+                            <div className="flex flex-col gap-2 mt-auto pt-2">
+                              {item.allow_customization && (
                                 <Button
-                                  onClick={() => handleAddToCart(item)}
+                                  onClick={() => setCustomizationModal({ isOpen: true, item: item })}
                                   disabled={!hasValidTableAccess || item.is_available === false}
                                   size="sm"
-                                  className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white text-xs"
+                                  variant="outline"
+                                  className="w-full text-xs border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
                                 >
-                                  Add to Cart
+                                  Customize
                                 </Button>
-                              </div>
+                              )}
+                              <Button
+                                onClick={() => handleAddToCart(item)}
+                                disabled={!hasValidTableAccess || item.is_available === false}
+                                size="sm"
+                                className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white text-xs"
+                              >
+                                Add to Cart
+                              </Button>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {items.map((item) => (
-                        <MenuItem
-                          key={item.id}
-                          item={item}
-                          onAddToCart={handleAddToCart}
-                          hasTableAccess={hasValidTableAccess}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ));
-            })()}
-          </div>
-        )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {items.map((item) => (
+                      <MenuItem
+                        key={item.id}
+                        item={item}
+                        onAddToCart={handleAddToCart}
+                        hasTableAccess={hasValidTableAccess}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
       </div>
 
       {/* Cart Modal */}
