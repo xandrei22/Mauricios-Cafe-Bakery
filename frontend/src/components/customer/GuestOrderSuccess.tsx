@@ -10,6 +10,7 @@ const GuestOrderSuccess: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const decodedId = decodeId(orderId);
   const encodedId = decodedId ? encodeId(decodedId) : (orderId || '');
+  const shortId = (encodedId || '').slice(0, 5);
   const navigate = useNavigate();
 
   return (
@@ -29,7 +30,7 @@ const GuestOrderSuccess: React.FC = () => {
           <CardContent className="space-y-6">
             <div className="text-center">
               <p className="text-lg text-gray-600 mb-2">Your order has been received and is being prepared.</p>
-              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{encodedId || 'Unknown'}</span></p>
+              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{shortId || 'Unknown'}</span></p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

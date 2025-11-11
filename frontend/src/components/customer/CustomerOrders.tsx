@@ -995,7 +995,7 @@ const CustomerOrders: React.FC = () => {
                            <Utensils className="w-6 h-6 text-amber-600" />
                          </div>
                          <div>
-                           <p className="font-bold text-gray-900">Order ID: {order.order_id}</p>
+                           <p className="font-bold text-gray-900">Order ID: {String(order.order_id).slice(0, 5)}</p>
                            <div className="flex items-center space-x-4 mt-1">
                              <div className="flex items-center text-sm text-gray-600">
                                <Calendar className="w-4 h-4 mr-1" />
@@ -1210,7 +1210,7 @@ const CustomerOrders: React.FC = () => {
                             <Utensils className="w-6 h-6 text-amber-600" />
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900">Order ID: {order.order_id}</p>
+                            <p className="font-bold text-gray-900">Order ID: {String(order.order_id).slice(0, 5)}</p>
                             <div className="flex items-center space-x-4 mt-1">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Calendar className="w-4 h-4 mr-1" />

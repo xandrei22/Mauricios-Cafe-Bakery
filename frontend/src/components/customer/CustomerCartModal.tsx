@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Minus, Plus, X, Trash2, Upload, FileImage } from 'lucide-react';
+import { Minus, Plus, X, Trash2, Upload, FileImage, ChevronDown } from 'lucide-react';
 
 export interface CustomerCartItem {
   id: number;
@@ -113,9 +113,21 @@ export default function CustomerCartModal({
               <div className="text-xl lg:text-2xl font-bold text-[#a87437]">Cart</div>
               <div className="text-2xl lg:text-3xl font-bold text-gray-700">({cart.length})</div>
             </div>
-            <button onClick={onClose} className="mt-6 lg:mt-8 p-2 lg:p-3 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
-              <X className="w-5 h-5 lg:w-6 lg:h-6" />
-            </button>
+            <div className="flex items-center gap-2 mt-6 lg:mt-8">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="h-10 px-3 flex items-center gap-2"
+                title="Minimize"
+              >
+                <ChevronDown className="w-4 h-4" />
+                <span className="text-sm">Minimize</span>
+              </Button>
+              <button onClick={onClose} className="p-2 lg:p-3 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
+                <X className="w-5 h-5 lg:w-6 lg:h-6" />
+              </button>
+            </div>
           </div>
 
           {/* MOBILE HEADER - Shown on mobile only */}
@@ -129,9 +141,21 @@ export default function CustomerCartModal({
                 <div className="text-sm text-gray-600">({cart.length} items)</div>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="h-10 px-3 flex items-center gap-2"
+                title="Minimize"
+              >
+                <ChevronDown className="w-4 h-4" />
+                <span className="text-xs">Min</span>
+              </Button>
+              <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Close cart">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           {/* RIGHT SIDE - Cart Content */}

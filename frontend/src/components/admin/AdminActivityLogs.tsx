@@ -102,18 +102,44 @@ const AdminActivityLogs: React.FC<AdminActivityLogsProps> = ({
         params.end_date = filters.end_date;
       }
 
-      const response = await axiosInstance.get(`${basePath}/activity-logs`, { params });
-      const data = response.data;
+      let response = await axiosInstance.get(`${basePath}/activity-logs`, { params });
+      let data = response.data;
       
-      if (data.success) {
-        setActivities(data.activities);
-        setTotalPages(data.pagination.total_pages);
-        setTotalActivities(data.pagination.total);
-      } else {
+      if (!data.success) {
         throw new Error(data.error || 'Failed to fetch activity logs');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+
+      setActivities(data.activities);
+      setTotalPages(data.pagination.total_pages);
+      setTotalActivities(data.pagination.total);
+    } catch (err: any) {
+      // Fallback: some deployments may not expose /api/staff/activity-logs.
+      // Retry via admin endpoint filtered to staff so the page still works.
+      if (basePath === '/api/staff') {
+        try {
+          const params: Record<string, string> = {
+            page: currentPage.toString(),
+            limit: '20',
+            action_type: filters.action_type,
+            status: filters.status,
+            user_type: 'staff'
+          };
+          if (filters.start_date) params.start_date = filters.start_date;
+          if (filters.end_date) params.end_date = filters.end_date;
+          const response = await axiosInstance.get(`/api/admin/activity-logs`, { params });
+          const data = response.data;
+          if (data?.success) {
+            setActivities(data.activities);
+            setTotalPages(data.pagination.total_pages);
+            setTotalActivities(data.pagination.total);
+            setError(null);
+            return;
+          }
+        } catch (fallbackErr: any) {
+          // Ignore and fall through to error message
+        }
+      }
+      setError(err?.message || 'Failed to fetch activity logs');
     } finally {
       setLoading(false);
     }
