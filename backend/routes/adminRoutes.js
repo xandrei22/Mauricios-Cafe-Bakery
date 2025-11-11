@@ -5322,11 +5322,18 @@ router.get('/sales/download', async(req, res) => {
 
         query += ' ORDER BY order_time DESC LIMIT 1000';
 
-        const [salesData] = await db.query(query, queryParams);
+        let salesData;
+        try {
+            const result = await db.query(query, queryParams);
+            salesData = result[0] || [];
+        } catch (queryError) {
+            console.error('Database query error:', queryError);
+            throw new Error('Failed to fetch sales data: ' + queryError.message);
+        }
 
         console.log(`Found ${salesData.length} orders for admin export`);
 
-        if (salesData.length === 0) {
+        if (!salesData || salesData.length === 0) {
             return res.status(404).json({
                 success: false,
                 error: 'No sales data found for the selected period'
@@ -5334,7 +5341,13 @@ router.get('/sales/download', async(req, res) => {
         }
 
         // Create workbook
-        const workbook = XLSX.utils.book_new();
+        let workbook;
+        try {
+            workbook = XLSX.utils.book_new();
+        } catch (bookError) {
+            console.error('Error creating workbook:', bookError);
+            throw new Error('Failed to create Excel workbook: ' + bookError.message);
+        }
 
         // Summary sheet
         const totalRevenue = salesData.reduce((sum, order) => {
@@ -5351,7 +5364,13 @@ router.get('/sales/download', async(req, res) => {
             'Generated On': new Date().toLocaleString()
         };
 
-        const summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        let summarySheet;
+        try {
+            summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        } catch (sheetError) {
+            console.error('Error creating summary sheet:', sheetError);
+            throw new Error('Failed to create summary sheet: ' + sheetError.message);
+        }
 
         // Transactions sheet - handle potential null/undefined values
         const transactionsData = salesData.map(transaction => {
@@ -5389,36 +5408,73 @@ router.get('/sales/download', async(req, res) => {
             };
         });
 
-        const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+        let transactionsSheet;
+        try {
+            transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+        } catch (sheetError) {
+            console.error('Error creating transactions sheet:', sheetError);
+            throw new Error('Failed to create transactions sheet: ' + sheetError.message);
+        }
 
         // Add sheets to workbook
-        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-        XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        try {
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+            XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        } catch (appendError) {
+            console.error('Error appending sheets:', appendError);
+            throw new Error('Failed to append sheets to workbook: ' + appendError.message);
+        }
 
-        // Generate buffer
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        // Generate buffer with error handling
+        let buffer;
+        try {
+            buffer = XLSX.write(workbook, { 
+                type: 'buffer', 
+                bookType: 'xlsx',
+                compression: true
+            });
+        } catch (writeError) {
+            console.error('XLSX.write error:', writeError);
+            throw new Error('Failed to generate Excel buffer: ' + writeError.message);
+        }
 
         if (!buffer || buffer.length === 0) {
-            throw new Error('Failed to generate Excel buffer');
+            throw new Error('Generated Excel buffer is empty');
         }
 
         console.log(`Generated admin Excel file with ${buffer.length} bytes`);
 
-        // Set response headers
+        // Set response headers before sending
         const filename = `admin-sales-report-${period}-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache');
 
         // Send file
-        res.send(buffer);
+        try {
+            res.send(buffer);
+        } catch (sendError) {
+            console.error('Error sending buffer:', sendError);
+            throw new Error('Failed to send Excel file: ' + sendError.message);
+        }
 
     } catch (error) {
         console.error('Error generating admin sales download:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
+        
+        // Check if response has already been sent
+        if (res.headersSent) {
+            console.error('Response already sent, cannot send error response');
+            return;
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to generate sales report: ' + (error.message || 'Unknown error')
+            error: 'Failed to generate sales report: ' + (error.message || 'Unknown error'),
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });

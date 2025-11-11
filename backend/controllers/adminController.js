@@ -437,39 +437,42 @@ async function editStaff(req, res) {
         let updateFields = [];
         let queryParams = [];
 
-        if (username) {
+        if (username !== undefined && username !== null && username !== '') {
             updateFields.push('username = ?');
             queryParams.push(username);
         }
 
-        if (email) {
+        if (email !== undefined && email !== null && email !== '') {
             updateFields.push('email = ?');
             queryParams.push(email);
         }
 
-        if (first_name || last_name) {
+        if (first_name !== undefined || last_name !== undefined) {
             // Get current values to construct full_name
             const [currentUser] = await db.query('SELECT first_name, last_name FROM users WHERE id = ?', [id]);
-            const newFirstName = first_name || currentUser[0].first_name;
-            const newLastName = last_name || currentUser[0].last_name;
-            const newFullName = `${newFirstName} ${newLastName}`;
-
-            if (first_name) {
-                updateFields.push('first_name = ?');
-                queryParams.push(first_name);
+            if (currentUser.length === 0) {
+                return res.status(404).json({ message: 'Staff account not found' });
             }
-            if (last_name) {
+            const newFirstName = first_name !== undefined ? (first_name || '') : currentUser[0].first_name;
+            const newLastName = last_name !== undefined ? (last_name || '') : currentUser[0].last_name;
+            const newFullName = `${newFirstName} ${newLastName}`.trim();
+
+            if (first_name !== undefined) {
+                updateFields.push('first_name = ?');
+                queryParams.push(first_name || '');
+            }
+            if (last_name !== undefined) {
                 updateFields.push('last_name = ?');
-                queryParams.push(last_name);
+                queryParams.push(last_name || '');
             }
             // Always update full_name when first_name or last_name changes
             updateFields.push('full_name = ?');
-            queryParams.push(newFullName);
+            queryParams.push(newFullName || '');
         }
 
-        if (age) {
+        if (age !== undefined && age !== null && age !== '') {
             updateFields.push('age = ?');
-            queryParams.push(age);
+            queryParams.push(parseInt(age) || 0);
         }
 
         if (password) {
@@ -483,60 +486,60 @@ async function editStaff(req, res) {
             queryParams.push(role);
         }
 
-        // Handle new HR fields
+        // Handle new HR fields - allow empty strings to be set to null
         if (phone !== undefined) {
             updateFields.push('phone = ?');
-            queryParams.push(phone);
+            queryParams.push(phone === '' ? null : phone);
         }
 
         if (address !== undefined) {
             updateFields.push('address = ?');
-            queryParams.push(address);
+            queryParams.push(address === '' ? null : address);
         }
 
         if (position !== undefined) {
             updateFields.push('position = ?');
-            queryParams.push(position);
+            queryParams.push(position === '' ? null : position);
         }
 
         if (work_schedule !== undefined) {
             updateFields.push('work_schedule = ?');
-            queryParams.push(work_schedule);
+            queryParams.push(work_schedule === '' ? null : work_schedule);
         }
 
         if (date_hired !== undefined) {
             updateFields.push('date_hired = ?');
-            queryParams.push(date_hired);
+            queryParams.push(date_hired === '' ? null : date_hired);
         }
 
         if (employee_id !== undefined) {
             updateFields.push('employee_id = ?');
-            queryParams.push(employee_id);
+            queryParams.push(employee_id === '' ? null : employee_id);
         }
 
         if (status !== undefined) {
             updateFields.push('status = ?');
-            queryParams.push(status);
+            queryParams.push(status === '' ? 'active' : status);
         }
 
         if (emergency_contact !== undefined) {
             updateFields.push('emergency_contact = ?');
-            queryParams.push(emergency_contact);
+            queryParams.push(emergency_contact === '' ? null : emergency_contact);
         }
 
         if (emergency_phone !== undefined) {
             updateFields.push('emergency_phone = ?');
-            queryParams.push(emergency_phone);
+            queryParams.push(emergency_phone === '' ? null : emergency_phone);
         }
 
         if (birthday !== undefined) {
             updateFields.push('birthday = ?');
-            queryParams.push(birthday);
+            queryParams.push(birthday === '' ? null : birthday);
         }
 
         if (gender !== undefined) {
             updateFields.push('gender = ?');
-            queryParams.push(gender);
+            queryParams.push(gender === '' ? null : gender);
         }
 
         if (updateFields.length === 0) {

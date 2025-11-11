@@ -363,13 +363,14 @@ router.post('/', async(req, res) => {
 // Get all orders
 router.get('/', async(req, res) => {
     try {
-        const { status, customerId, tableNumber, page = 1, limit = 20 } = req.query;
+        const { status, customerId, tableNumber, page = 1, limit = 100 } = req.query; // Increased default limit for POS dashboard
 
         let sql = 'SELECT * FROM orders WHERE 1=1';
         const params = [];
 
         // For POS dashboard, only show relevant orders by default
         // Include orders with pending payment status even if order status is different
+        // Also include cancelled orders for the cancelled orders tab
         if (!status) {
             sql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
             params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
@@ -390,10 +391,13 @@ router.get('/', async(req, res) => {
 
         sql += ' ORDER BY queue_position ASC, order_time ASC';
 
-        // Add pagination
-        const offset = (page - 1) * limit;
-        sql += ' LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
+        // Add pagination (only if limit is specified and reasonable)
+        const limitNum = parseInt(limit);
+        if (limitNum > 0 && limitNum <= 1000) {
+            const offset = (parseInt(page) - 1) * limitNum;
+            sql += ' LIMIT ? OFFSET ?';
+            params.push(limitNum, offset);
+        }
 
         const [orders] = await db.query(sql, params);
 
@@ -447,8 +451,8 @@ router.get('/', async(req, res) => {
                 shortOrderCode: order.order_number,
                 customerName: order.customer_name,
                 tableNumber: order.table_number,
-                totalPrice: order.total_amount,
-                orderTime: order.created_at,
+                totalPrice: order.total_price || order.total_amount || 0,
+                orderTime: order.created_at || order.order_time,
                 paymentStatus: order.payment_status,
                 paymentMethod: order.payment_method,
                 items: enrichedItems,
@@ -460,11 +464,15 @@ router.get('/', async(req, res) => {
             };
         }));
 
-        // Get total count
+        // Get total count - must match the main query conditions
         let countSql = 'SELECT COUNT(*) as total FROM orders WHERE 1=1';
         const countParams = [];
 
-        if (status) {
+        // Match the same WHERE conditions as the main query
+        if (!status) {
+            countSql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
+            countParams.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
+        } else if (status) {
             countSql += ' AND status = ?';
             countParams.push(status);
         }

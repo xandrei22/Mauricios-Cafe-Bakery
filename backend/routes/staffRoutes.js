@@ -2820,15 +2820,18 @@ router.get('/orders', async(req, res) => {
 });
 
 // Get staff orders (same as admin orders but for staff) - requires authentication
+// NOTE: This is a duplicate route - the main /orders route is at line 750
+// Keeping this for backward compatibility but it should use the same logic
 router.get('/orders', authenticateJWT, async(req, res) => {
     try {
-        const { status, customerId, tableNumber, page = 1, limit = 20 } = req.query;
+        const { status, customerId, tableNumber, page = 1, limit = 100 } = req.query; // Increased default limit for POS dashboard
 
         let sql = 'SELECT * FROM orders WHERE 1=1';
         const params = [];
 
         // For POS dashboard, only show relevant orders by default
         // Include orders with pending payment status even if order status is different
+        // Also include cancelled orders for the cancelled orders tab
         if (!status) {
             sql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
             params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
@@ -2849,10 +2852,13 @@ router.get('/orders', authenticateJWT, async(req, res) => {
 
         sql += ' ORDER BY queue_position ASC, order_time ASC';
 
-        // Add pagination
-        const offset = (page - 1) * limit;
-        sql += ' LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
+        // Add pagination (only if limit is specified and reasonable)
+        const limitNum = parseInt(limit);
+        if (limitNum > 0 && limitNum <= 1000) {
+            const offset = (parseInt(page) - 1) * limitNum;
+            sql += ' LIMIT ? OFFSET ?';
+            params.push(limitNum, offset);
+        }
 
         const [orders] = await db.query(sql, params);
 
