@@ -635,13 +635,12 @@ const CustomerMenu: React.FC = () => {
           })()}
         </div>
       )}
-      </div>
 
       {/* Cart Modal */}
       <CustomerCartModal 
         isOpen={isCartModalOpen}
         cart={cartContextItems.map(item => ({
-          id: parseInt(item.id),
+          id: parseInt(item.id, 10),
           name: item.name,
           base_price: item.price,
           cartItemId: item.id,
