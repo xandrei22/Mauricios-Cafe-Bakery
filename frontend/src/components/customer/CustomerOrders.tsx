@@ -1,10 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io, Socket } from 'socket.io-client';
 import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
+import naughtyWords from 'naughty-words';
+
+const wordLists = naughtyWords as Record<string, string[]>;
+const rawWordList: string[] = Array.isArray(wordLists?.en) && wordLists.en.length > 0
+  ? wordLists.en
+  : Array.isArray(wordLists?.english) && wordLists.english.length > 0
+    ? wordLists.english
+    : [];
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const PROFANITY_REGEXES = rawWordList
+  .filter((word) => typeof word === 'string' && word.trim().length > 0)
+  .map((word) => new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i'));
+
+const containsProfanity = (text: string | null | undefined) => {
+  if (!text || typeof text !== 'string' || PROFANITY_REGEXES.length === 0) return false;
+  return PROFANITY_REGEXES.some((regex) => regex.test(text));
+};
 
 interface Order {
   id: string;
@@ -49,6 +67,15 @@ const CustomerOrders: React.FC = () => {
   const [feedbackCategory, setFeedbackCategory] = useState('General');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [ordersWithFeedback, setOrdersWithFeedback] = useState<Set<string>>(new Set());
+
+  const commentContainsProfanity = useMemo(
+    () => containsProfanity(feedbackComment.trim()),
+    [feedbackComment]
+  );
+  const categoryContainsProfanity = useMemo(
+    () => containsProfanity(feedbackCategory.trim()),
+    [feedbackCategory]
+  );
 
   // Handle custom order placed event
   const handleOrderPlaced = (event: CustomEvent) => {
@@ -547,6 +574,14 @@ const CustomerOrders: React.FC = () => {
     e.preventDefault();
     if (!user || !selectedOrderForFeedback) return;
 
+    const trimmedComment = feedbackComment.trim();
+    const trimmedCategory = feedbackCategory.trim() || 'General';
+
+    if (containsProfanity(trimmedComment) || containsProfanity(trimmedCategory)) {
+      alert('Please remove inappropriate language before submitting your feedback.');
+      return;
+    }
+
     setSubmittingFeedback(true);
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -559,8 +594,8 @@ const CustomerOrders: React.FC = () => {
         body: JSON.stringify({
           customer_name: user.name || user.email,
           rating: feedbackRating,
-          comment: feedbackComment,
-          category: feedbackCategory,
+          comment: trimmedComment,
+          category: trimmedCategory,
           customer_email: user.email,
           order_id: selectedOrderForFeedback.order_id
         }),
@@ -575,9 +610,9 @@ const CustomerOrders: React.FC = () => {
         setFeedbackCategory('General');
         setSelectedOrderForFeedback(null);
       } else {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         console.error('Feedback submission error:', error);
-        alert('Failed to submit feedback. Please try again.');
+        alert(error?.message || 'Failed to submit feedback. Please try again.');
       }
     } catch (error) {
       console.error('Error submitting feedback:', error);
@@ -1720,6 +1755,11 @@ const CustomerOrders: React.FC = () => {
                     rows={4}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   />
+                  {(commentContainsProfanity || categoryContainsProfanity) && (
+                    <p className="mt-2 text-sm text-red-600">
+                      Please remove inappropriate language. Feedback containing profanity cannot be submitted.
+                    </p>
+                  )}
                 </div>
 
                 {/* Submit Button */}
@@ -1733,7 +1773,7 @@ const CustomerOrders: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={submittingFeedback}
+                    disabled={submittingFeedback || commentContainsProfanity || categoryContainsProfanity}
                     className="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   >
                     {submittingFeedback ? (
