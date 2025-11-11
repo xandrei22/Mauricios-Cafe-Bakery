@@ -5,19 +5,33 @@ const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateJWT } = require('../middleware/jwtAuth');
-router.use(authenticateJWT);
 
-// CRITICAL FIX: Create a safe session proxy to prevent "Cannot read properties of undefined" errors
+// CRITICAL FIX: Initialize req.session as a safe object to prevent "Cannot read properties of undefined" errors
+// This MUST run before any other middleware that might access req.session
 router.use(function(req, res, next) {
-    if (req.session === undefined || req.session === null) {
-        req.session = new Proxy({}, {
-            get: function(target, prop) {
-                return undefined;
-            }
-        });
+    // Ensure req.session is always a safe object (never undefined) to prevent errors
+    if (!req.session || typeof req.session !== 'object') {
+        // Create a safe object with null properties for common session properties
+        req.session = {
+            adminUser: null,
+            staffUser: null,
+            user: null,
+            customerUser: null,
+            admin: null,
+            staff: null
+        };
+    } else {
+        // If session exists but properties are undefined, set them to null
+        if (req.session.adminUser === undefined) req.session.adminUser = null;
+        if (req.session.staffUser === undefined) req.session.staffUser = null;
+        if (req.session.user === undefined) req.session.user = null;
+        if (req.session.customerUser === undefined) req.session.customerUser = null;
     }
     next();
 });
+
+// Apply JWT authentication middleware (requires token)
+router.use(authenticateJWT);
 
 // Generate random 5-character order code (letters and numbers)
 function generateShortOrderCode() {
@@ -33,6 +47,24 @@ function generateShortOrderCode() {
 router.post('/', async(req, res) => {
     // Wrap everything in a try-catch to catch any session access errors
     try {
+        // CRITICAL: Ensure req.session is safe before any access
+        if (!req.session || typeof req.session !== 'object') {
+            req.session = {
+                adminUser: null,
+                staffUser: null,
+                user: null,
+                customerUser: null
+            };
+        }
+
+        // CRITICAL: Ensure req.user exists (set by authenticateJWT middleware)
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: 'Authentication required. Please log in again.'
+            });
+        }
+
         // req.session is already safely initialized by middleware above
         // Handle both camelCase and snake_case field names
         const {
@@ -252,12 +284,19 @@ router.post('/', async(req, res) => {
         console.error('❌ Request headers:', req.headers);
 
         // Check if error is related to session access
-        if (error.message && error.message.includes('adminUser')) {
+        if (error.message && (error.message.includes('adminUser') || error.message.includes('Cannot read properties'))) {
             console.error('❌ SESSION ACCESS ERROR DETECTED - This should not happen!');
-            const errorLocation = error.stack ? error.stack.split('\n')[0] : 'unknown';
+            const errorLocation = error.stack ? error.stack.split('\n').slice(0, 5).join('\n') : 'unknown';
             console.error('❌ Error location:', errorLocation);
             console.error('❌ req.session exists:', !!req.session);
+            console.error('❌ req.session type:', typeof req.session);
             console.error('❌ req.user exists:', !!req.user);
+            console.error('❌ req.user:', req.user ? { id: req.user.id, role: req.user.role } : 'null');
+
+            // Ensure session is safe before any further access
+            if (!req.session || typeof req.session !== 'object') {
+                req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+            }
         }
 
         // Provide more specific error messages
