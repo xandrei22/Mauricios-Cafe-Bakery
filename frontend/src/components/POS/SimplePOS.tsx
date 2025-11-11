@@ -146,6 +146,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 		setCart([]);
 	};
 
+	const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 	const processOrder = async () => {
 		if (cart.length === 0 || !customerInfo.name.trim()) {
 			alert('Please add items to cart and enter customer name');
@@ -186,20 +188,26 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 			console.log('Sending order data:', orderData);
 
-			const response = await fetch('/api/orders', {
+			const response = await fetch(`${API_URL}/api/orders`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 				},
-				credentials: 'omit',
+				credentials: 'include',
 				body: JSON.stringify(orderData),
 			});
 
-            const result = await response.json();
+			let result: any = {};
+			try {
+				result = await response.json();
+			} catch (parseError) {
+				console.error('Failed to parse response while placing order:', parseError);
+				result = { success: false, message: 'Unexpected server response.' };
+			}
 
-            if (result.success) {
-                const newOrderId = result?.order?.orderId || result?.orderId || 'unknown';
-                alert(`Order placed successfully! Order ID: ${newOrderId}`);
+			if (response.ok && result.success) {
+				const newOrderId = result?.order?.orderId || result?.orderId || 'unknown';
+				alert(`Order placed successfully! Order ID: ${newOrderId}`);
 				clearCart();
 				setCustomerInfo({
 					name: '',
@@ -208,7 +216,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					paymentMethod: 'cash'
 				});
 			} else {
-				alert(`Failed to place order: ${result.message}`);
+				const errorMessage = result?.message || result?.error || result?.details || 'Unknown error';
+				alert(`Failed to place order: ${errorMessage}`);
 			}
 		} catch (error) {
 			console.error('Error placing order:', error);

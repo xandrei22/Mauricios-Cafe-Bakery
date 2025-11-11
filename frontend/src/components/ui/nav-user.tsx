@@ -34,9 +34,16 @@ export function NavUser({
     name: string
     email: string
     avatar: string
+    username?: string
   }
 }) {
   const { isMobile } = useSidebar()
+  const displayName =
+    (user as any).username && String((user as any).username).trim().length > 0
+      ? (user as any).username
+      : (user.name && user.name.trim().length > 0
+          ? user.name
+          : (user.email ? user.email.split('@')[0] : 'User'))
 
   return (
     <SidebarMenu>
@@ -52,7 +59,7 @@ export function NavUser({
                 <AvatarFallback className="rounded-lg">CN</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
+                <span className="truncate font-medium">{displayName}</span>
                 <span className="text-muted-foreground truncate text-xs">
                   {user.email}
                 </span>
@@ -73,7 +80,7 @@ export function NavUser({
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate font-medium">{displayName}</span>
                   <span className="text-muted-foreground truncate text-xs">
                     {user.email}
                   </span>
