@@ -369,7 +369,14 @@ const GuestOrderTracking: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Order Number</p>
-                    <p className="font-semibold">{String(order.orderId).slice(0, 5)}</p>
+                    <p className="font-semibold">{(() => {
+                      const raw = String(order.orderId || '');
+                      const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
+                      const digits = raw.replace(/\D/g, '').slice(-2);
+                      const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
+                      const partB = (digits || '00').padStart(2, '0');
+                      return partA + partB;
+                    })()}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Customer</p>

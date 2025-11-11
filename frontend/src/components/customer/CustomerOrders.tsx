@@ -995,7 +995,14 @@ const CustomerOrders: React.FC = () => {
                            <Utensils className="w-6 h-6 text-amber-600" />
                          </div>
                          <div>
-                           <p className="font-bold text-gray-900">Order ID: {String(order.order_id).slice(0, 5)}</p>
+                           <p className="font-bold text-gray-900">Order ID: {(() => {
+                             const raw = String(order.order_id || '');
+                             const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
+                             const digits = raw.replace(/\D/g, '').slice(-2);
+                             const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
+                             const partB = (digits || '00').padStart(2, '0');
+                             return partA + partB;
+                           })()}</p>
                            <div className="flex items-center space-x-4 mt-1">
                              <div className="flex items-center text-sm text-gray-600">
                                <Calendar className="w-4 h-4 mr-1" />
@@ -1210,7 +1217,14 @@ const CustomerOrders: React.FC = () => {
                             <Utensils className="w-6 h-6 text-amber-600" />
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900">Order ID: {String(order.order_id).slice(0, 5)}</p>
+                            <p className="font-bold text-gray-900">Order ID: {(() => {
+                              const raw = String(order.order_id || '');
+                              const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
+                              const digits = raw.replace(/\D/g, '').slice(-2);
+                              const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
+                              const partB = (digits || '00').padStart(2, '0');
+                              return partA + partB;
+                            })()}</p>
                             <div className="flex items-center space-x-4 mt-1">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Calendar className="w-4 h-4 mr-1" />

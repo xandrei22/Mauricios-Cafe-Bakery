@@ -10,7 +10,14 @@ const GuestOrderSuccess: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const decodedId = decodeId(orderId);
   const encodedId = decodedId ? encodeId(decodedId) : (orderId || '');
-  const shortId = (encodedId || '').slice(0, 5);
+  const shortId = (() => {
+    const raw = String(encodedId || '');
+    const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = raw.replace(/\D/g, '').slice(-2);
+    const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  })();
   const navigate = useNavigate();
 
   return (
