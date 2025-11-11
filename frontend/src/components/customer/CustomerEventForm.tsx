@@ -356,7 +356,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               value={contactName}
               onChange={e => setContactName(e.target.value)}
               required
-              className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           
@@ -369,7 +369,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               value={contactNumber}
               onChange={e => setContactNumber(e.target.value)}
               required
-              className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           

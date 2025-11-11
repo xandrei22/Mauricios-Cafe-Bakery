@@ -384,9 +384,9 @@ const CustomerMenu: React.FC = () => {
         </div>
 
       {/* Search and Filters */}
-      <div className="space-y-4">
+      <div className="flex flex-row gap-3 items-center flex-wrap">
         {/* Search Input - Full width on mobile, flex-1 on larger screens */}
-        <div className="relative w-full">
+        <div className="relative flex-1 min-w-[200px]">
           <Input
             placeholder="Search menu items..."
             value={searchTerm}
@@ -408,34 +408,32 @@ const CustomerMenu: React.FC = () => {
           </button>
         </div>
 
-        {/* Category Filter and View Toggle - Aligned with search bar */}
-        <div className="flex flex-row gap-3 items-center">
-          {/* Category Filter */}
-          <div className="flex-1">
-            <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-              <SelectTrigger className="h-12 text-lg border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 pr-8 flex items-center py-3 px-3 w-full">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {/* Category Filter */}
+        <div className="flex-shrink-0">
+          <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+            <SelectTrigger className="h-12 text-lg border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 pr-8 flex items-center py-3 px-3 w-auto min-w-fit">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-          {/* View Toggle */}
-          <div className="relative flex-shrink-0" ref={moreMenuRef}>
-            <Button
-              variant="outline"
-              onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className="h-12 w-12 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </Button>
+        {/* View Toggle */}
+        <div className="relative flex-shrink-0" ref={moreMenuRef}>
+          <Button
+            variant="outline"
+            onClick={() => setShowMoreMenu(!showMoreMenu)}
+            className="h-12 w-12 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </Button>
             
             {/* Dropdown Menu */}
             {showMoreMenu && (
