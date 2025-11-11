@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
+      <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-10 xl:px-12 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -635,7 +635,7 @@ const CustomerMenu: React.FC = () => {
           })()}
         </div>
       )}
-      </div>
+
 
       {/* Cart Modal */}
       <CustomerCartModal 
@@ -799,24 +799,29 @@ const CustomerMenu: React.FC = () => {
         />
       )}
 
-      {/* Wallet App Prompt Modal */}
-      {walletPrompt.isOpen && walletPrompt.method && (
+      {(() => {
+        const activeWalletMethod = walletPrompt.method;
+        if (!walletPrompt.isOpen || !activeWalletMethod) {
+          return null;
+        }
+        const methodLabel = activeWalletMethod.toUpperCase();
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Open {walletPrompt.method.toUpperCase()}</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Open {methodLabel}</h3>
             <p className="text-sm text-gray-700 mb-4">
               Order ID: {walletPrompt.orderId}
             </p>
             <p className="text-sm text-gray-600 mb-6">
-              Tap the button below to open the {walletPrompt.method.toUpperCase()} app and complete your payment.
+              Tap the button below to open the {methodLabel} app and complete your payment.
             </p>
 
             <div className="flex gap-3">
               <button
-                onClick={() => openDigitalWalletApp(walletPrompt.method as 'gcash' | 'paymaya')}
+                onClick={() => openDigitalWalletApp(activeWalletMethod)}
                 className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
-                Open {walletPrompt.method.toUpperCase()}
+                Open {methodLabel}
               </button>
               <button
                 onClick={() => setWalletPrompt({ isOpen: false, method: null, orderId: '', amount: 0 })}
@@ -827,7 +832,8 @@ const CustomerMenu: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
