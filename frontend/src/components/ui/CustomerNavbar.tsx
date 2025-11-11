@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { Home, Info, Star, MapPin, Heart, User, QrCode } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getApiUrl } from "../../utils/apiConfig";
+import { generateTableUrl } from "../../utils/urlGenerator";
+import { encodeId } from "../../utils/idObfuscator";
 
 interface TableMapping {
   tableNumber: number;
@@ -35,17 +37,57 @@ export function CustomerNavbar() {
     const fetchTableMappings = async () => {
       try {
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/api/table/table-mappings`);
+        const url = `${apiUrl}/api/table/table-mappings`;
+        console.log('🔍 Fetching table mappings from:', url);
+        
+        const response = await fetch(url);
+        console.log('📡 Response status:', response.status);
+        
+        if (!response.ok) {
+          console.error('❌ Response not OK:', response.status, response.statusText);
+          const errorText = await response.text();
+          console.error('❌ Error response:', errorText);
+          // Fallback: generate mappings locally
+          generateLocalMappings();
+          return;
+        }
+        
         const data = await response.json();
-        if (data.success && data.mappings) {
+        console.log('✅ Received data:', data);
+        
+        if (data.success && data.mappings && Array.isArray(data.mappings) && data.mappings.length > 0) {
+          console.log('✅ Setting table mappings:', data.mappings.length, 'tables');
           setTableMappings(data.mappings);
+        } else {
+          console.warn('⚠️ Unexpected data format or empty mappings, using fallback');
+          // Fallback: generate mappings locally
+          generateLocalMappings();
         }
       } catch (error) {
-        console.error('Error fetching table mappings:', error);
+        console.error('❌ Error fetching table mappings:', error);
+        // Fallback: generate mappings locally
+        generateLocalMappings();
       } finally {
         setLoadingMappings(false);
       }
     };
+
+    // Fallback function to generate mappings locally
+    const generateLocalMappings = () => {
+      const baseUrl = 'https://mauricios-cafe-bakery.shop';
+      const localMappings: TableMapping[] = [1, 2, 3, 4, 5, 6].map(tableNum => {
+        const obfuscatedId = encodeId(tableNum.toString());
+        const url = generateTableUrl(tableNum.toString(), baseUrl);
+        return {
+          tableNumber: tableNum,
+          obfuscatedId: obfuscatedId,
+          url: url
+        };
+      });
+      console.log('🔄 Using local fallback mappings:', localMappings.length, 'tables');
+      setTableMappings(localMappings);
+    };
+
     fetchTableMappings();
   }, []);
 
