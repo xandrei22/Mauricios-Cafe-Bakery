@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
+import { encodeId } from '../../utils/idObfuscation';
 const CLIENT_PROFANITY_WORDS: string[] = [
   // Minimal built-in list for client-side UX only; server enforces full list
   'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
@@ -1264,11 +1265,18 @@ const CustomerOrders: React.FC = () => {
                           <div>
                             <p className="font-bold text-gray-900">Order ID: {(() => {
                               const raw = String(order.order_id || '');
-                              const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
-                              const digits = raw.replace(/\D/g, '').slice(-2);
-                              const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
-                              const partB = (digits || '00').padStart(2, '0');
-                              return partA + partB;
+                              // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+                              try {
+                                const encoded = encodeId(raw);
+                                const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+                                const digits = encoded.replace(/\D/g, '').slice(-2);
+                                const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+                                const partB = (digits || '00').padStart(2, '0');
+                                return partA + partB;
+                              } catch {
+                                // Fallback: last 5 non-separator characters
+                                return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
+                              }
                             })()}</p>
                             <div className="flex items-center space-x-4 mt-1">
                               <div className="flex items-center text-sm text-gray-600">

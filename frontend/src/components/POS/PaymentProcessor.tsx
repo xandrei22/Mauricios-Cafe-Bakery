@@ -42,13 +42,14 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const pendingOrders = orders.filter(order => {
+    // Include orders with pending payment status regardless of order status
+    // This ensures admin/staff placed orders with pending payment appear here
     const hasPendingPayment = order.paymentStatus === 'pending' || order.paymentStatus === 'pending_verification';
     const isNotCancelled = order.status !== 'cancelled';
     const isNotCompleted = order.status !== 'completed';
-    const isNotPreparing = order.status !== 'preparing';
-    const isNotReady = order.status !== 'ready';
-    const include = hasPendingPayment && isNotCancelled && isNotCompleted && isNotPreparing && isNotReady;
-    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, includeInPending=${include}`);
+    // Removed isNotPreparing and isNotReady filters - orders can have pending payment even if preparing/ready
+    const include = hasPendingPayment && isNotCancelled && isNotCompleted;
+    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, placedBy=${order.placedBy}, includeInPending=${include}`);
     return include;
   });
   

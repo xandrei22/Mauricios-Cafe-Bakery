@@ -64,6 +64,10 @@ const WorkingPOS: React.FC = () => {
           orderId: o.orderId || o.id || o.order_id,
           paymentStatus: o.paymentStatus || o.payment_status,
           totalPrice: Number(o.totalPrice ?? o.total_price ?? 0),
+          placedBy: o.placedBy || (o.staff_id ? 'staff' : 'customer'),
+          cancelledBy: o.cancelledBy || o.cancelled_by,
+          cancellationReason: o.cancellationReason || o.cancellation_reason,
+          cancelledAt: o.cancelledAt || o.cancelled_at,
         }));
         setOrders(normalized);
       }

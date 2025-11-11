@@ -187,6 +187,9 @@ const POSDashboard: React.FC = () => {
           notes: o.notes || undefined,
           placedBy: o.placedBy || 'customer',
           receiptPath: o.receiptPath || o.receipt_path,
+          cancelledBy: o.cancelledBy || o.cancelled_by,
+          cancellationReason: o.cancellationReason || o.cancellation_reason,
+          cancelledAt: o.cancelledAt || o.cancelled_at,
         }));
         console.log('📋 Orders with pending_verification:', normalized.filter(o => o.paymentStatus === 'pending_verification'));
         console.log('📋 All orders statuses:', normalized.map(o => ({ orderId: o.orderId, status: o.status, paymentStatus: o.paymentStatus })));

@@ -27,6 +27,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { encodeId } from '../../utils/idObfuscation';
 
 ChartJS.register(
   CategoryScale,
@@ -103,11 +104,19 @@ const formatOrderId = (value: unknown): string => {
   if (!value) return '—';
   const raw = String(value).trim();
   if (!raw) return '—';
-  const segments = raw.split('-');
-  if (segments.length >= 3) {
-    return `${segments[0]}-${segments[1]}`;
+  
+  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+  try {
+    const encoded = encodeId(raw);
+    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = encoded.replace(/\D/g, '').slice(-2);
+    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  } catch {
+    // Fallback: last 5 non-separator characters
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
   }
-  return raw;
 };
 
 const StaffSales: React.FC = () => {

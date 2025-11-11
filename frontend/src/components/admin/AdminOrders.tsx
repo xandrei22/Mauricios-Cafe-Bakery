@@ -21,6 +21,7 @@ import {
 import { io, Socket } from 'socket.io-client';
 import axiosInstance from '../../utils/axiosInstance';
 import { getApiUrl } from '../../utils/apiConfig';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface Order {
   orderId: string;
@@ -43,11 +44,19 @@ const formatOrderId = (value: unknown): string => {
   if (!value) return '—';
   const raw = String(value).trim();
   if (!raw) return '—';
-  const segments = raw.split('-');
-  if (segments.length >= 3) {
-    return `${segments[0]}-${segments[1]}`;
+  
+  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+  try {
+    const encoded = encodeId(raw);
+    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = encoded.replace(/\D/g, '').slice(-2);
+    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  } catch {
+    // Fallback: last 5 non-separator characters
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
   }
-  return raw;
 };
 
 const transformOrderRecord = (order: any): Order => {
@@ -1015,7 +1024,7 @@ const AdminOrders: React.FC = () => {
                 <p className="text-gray-600 mb-4">Payment has been processed and verified. Order is now pending preparation.</p>
                 <div className="bg-green-50 rounded-lg p-4 mb-4">
                   <p className="text-sm text-green-800">
-                    <strong>Order ID:</strong> {paymentSuccessData.orderId}
+                    <strong>Order ID:</strong> {formatOrderId(paymentSuccessData.orderId)}
                   </p>
                   <p className="text-sm text-green-800">
                     <strong>Amount Paid:</strong> ₱{paymentSuccessData.amount}

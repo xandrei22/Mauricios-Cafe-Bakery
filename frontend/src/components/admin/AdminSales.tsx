@@ -22,6 +22,7 @@ import {
   Clock,
   Search
 } from 'lucide-react';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface SalesData {
   revenue: {
@@ -131,11 +132,19 @@ const formatOrderId = (value: unknown): string => {
   if (!value) return '—';
   const raw = String(value).trim();
   if (!raw) return '—';
-  const segments = raw.split('-');
-  if (segments.length >= 3) {
-    return `${segments[0]}-${segments[1]}`;
+  
+  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+  try {
+    const encoded = encodeId(raw);
+    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = encoded.replace(/\D/g, '').slice(-2);
+    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  } catch {
+    // Fallback: last 5 non-separator characters
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
   }
-  return raw;
 };
 
 const AdminSales: React.FC = () => {
@@ -322,8 +331,17 @@ const AdminSales: React.FC = () => {
       console.log('Download response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = await response.text();
         console.error('Download error response:', errorText);
+        
+        // Try to parse as JSON for better error message
+        try {
+          const errorData = JSON.parse(errorText);
+          errorText = errorData.error || errorData.message || errorText;
+        } catch (e) {
+          // If not JSON, use the text as is
+        }
+        
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 

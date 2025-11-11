@@ -231,7 +231,10 @@ const AdminStaff: React.FC = () => {
       fetchStaff();
       fetchStats();
     } catch (error: any) {
-      const message = error?.response?.data?.message || error?.message || 'Error updating staff member';
+      const errorData = error?.response?.data;
+      const message = errorData?.message || errorData?.error || error?.message || 'Error updating staff member';
+      console.error('Staff update error:', error);
+      console.error('Error details:', errorData);
       setError(message);
     } finally {
       setLoading(false);
