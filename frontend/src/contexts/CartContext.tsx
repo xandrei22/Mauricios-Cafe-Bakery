@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 
 interface CartItem {
@@ -29,6 +29,9 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  // Track if cart was just cleared to prevent race conditions
+  const clearTimestampRef = useRef<number>(0);
+  
   const [items, setItems] = useState<CartItem[]>(() => {
     // Load cart from localStorage on initialization
     try {
@@ -120,6 +123,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = (item: CartItem) => {
     setItems(prev => {
+      // CRITICAL: Check if cart was recently cleared (within last 500ms)
+      // This prevents race conditions where localStorage might still have old data
+      const timeSinceClear = Date.now() - clearTimestampRef.current;
+      if (timeSinceClear < 500) {
+        console.log('⚠️ Cart was recently cleared, ensuring localStorage is empty...');
+        localStorage.setItem('cart', '[]');
+      }
+      
       // CRITICAL: Verify localStorage is in sync before adding
       // This prevents merging with stale localStorage data
       try {
@@ -193,6 +204,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => {
     console.log('🧹 Clearing cart completely...');
+    
+    // Record clear timestamp to prevent race conditions
+    clearTimestampRef.current = Date.now();
     
     // Step 1: Clear ALL cart-related localStorage keys FIRST
     const cartKeys = ['cart', 'guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];

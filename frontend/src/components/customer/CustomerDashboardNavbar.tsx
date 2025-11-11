@@ -193,21 +193,51 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
   const loadCartFromStorage = () => {
     try {
       const savedCart = localStorage.getItem('cart');
-      if (savedCart) {
-        const cart = JSON.parse(savedCart);
-        // Ensure all cart items have proper structure with default values
-        const normalizedCart = cart.map((item: any) => ({
-          ...item,
-          customizations: item.customizations || [],
-          notes: item.notes || '',
-          price: item.price || 0,
-          quantity: item.quantity || 1
-        }));
-        setCartItems(normalizedCart);
-        setCartItemCount(normalizedCart.reduce((total: number, item: any) => total + item.quantity, 0));
+      
+      // CRITICAL: Check if cart is empty or null
+      if (!savedCart || savedCart === '[]' || savedCart.trim() === '[]') {
+        console.log('🛒 Cart is empty in localStorage, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
       }
+      
+      const cart = JSON.parse(savedCart);
+      
+      // Validate that cart is an array
+      if (!Array.isArray(cart)) {
+        console.warn('⚠️ Invalid cart data: not an array, clearing...');
+        setCartItems([]);
+        setCartItemCount(0);
+        localStorage.setItem('cart', '[]');
+        return;
+      }
+      
+      // If array is empty, clear state
+      if (cart.length === 0) {
+        console.log('🛒 Cart array is empty, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
+      }
+      
+      // Ensure all cart items have proper structure with default values
+      const normalizedCart = cart.map((item: any) => ({
+        ...item,
+        customizations: item.customizations || [],
+        notes: item.notes || '',
+        price: item.price || 0,
+        quantity: item.quantity || 1
+      }));
+      
+      setCartItems(normalizedCart);
+      setCartItemCount(normalizedCart.reduce((total: number, item: any) => total + item.quantity, 0));
     } catch (error) {
-      console.error('Error loading cart from storage:', error);
+      console.error('❌ Error loading cart from storage:', error);
+      // On error, clear state and localStorage
+      setCartItems([]);
+      setCartItemCount(0);
+      localStorage.setItem('cart', '[]');
     }
   };
 
@@ -238,9 +268,24 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
 
 
   const clearCart = () => {
+    console.log('🧹 CustomerDashboardNavbar: Clearing cart...');
+    // Clear local state first
     setCartItems([]);
     setCartItemCount(0);
-    localStorage.setItem('cart', JSON.stringify([]));
+    
+    // Clear all cart-related localStorage keys
+    const cartKeys = ['cart', 'guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
+    cartKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Explicitly set to empty array
+    localStorage.setItem('cart', '[]');
+    
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('cartUpdated'));
+    
+    console.log('✅ CustomerDashboardNavbar: Cart cleared');
   };
 
   const processOrder = async () => {
@@ -354,7 +399,10 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
     
     // Listen for custom cart update events (from same tab)
     const handleCartUpdate = () => {
-      loadCartFromStorage();
+      // Add a small delay to ensure localStorage is fully updated
+      setTimeout(() => {
+        loadCartFromStorage();
+      }, 50);
     };
     
     window.addEventListener('cartUpdated', handleCartUpdate);
