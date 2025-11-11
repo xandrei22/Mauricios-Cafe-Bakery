@@ -18,7 +18,37 @@ function generateShortOrderCode() {
 // Create a new order
 router.post('/', async(req, res) => {
     try {
-        const { customer_info, items, total_amount, payment_method, notes, orderType = 'dine_in' } = req.body;
+        // Handle both camelCase and snake_case field names
+        const { 
+            customer_info, 
+            items, 
+            total_amount, 
+            payment_method, 
+            notes, 
+            orderType = req.body.order_type || 'dine_in' 
+        } = req.body;
+        
+        // Validate required fields
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Order must contain at least one item' 
+            });
+        }
+        
+        if (!customer_info || !customer_info.name) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Customer name is required' 
+            });
+        }
+        
+        if (!total_amount || isNaN(total_amount) || total_amount <= 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Valid total amount is required' 
+            });
+        }
 
         // Extract customer info from the frontend structure
         const customerId = customer_info.id || null;
@@ -33,38 +63,45 @@ router.post('/', async(req, res) => {
             null;
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Generate random 5-character display code
         let shortOrderCode;
         let isUnique = false;
         let attempts = 0;
         const maxAttempts = 10;
-        
+
         // Ensure uniqueness (check against existing order_number values)
         while (!isUnique && attempts < maxAttempts) {
             shortOrderCode = generateShortOrderCode();
             const [existing] = await db.query(
-                'SELECT id FROM orders WHERE order_number = ?',
-                [shortOrderCode]
+                'SELECT id FROM orders WHERE order_number = ?', [shortOrderCode]
             );
             if (existing.length === 0) {
                 isUnique = true;
             }
             attempts++;
         }
-        
+
         // Fallback: if we couldn't generate a unique code, use a timestamp-based one
         if (!isUnique) {
             shortOrderCode = generateShortOrderCode() + Date.now().toString().slice(-2);
         }
 
-        // Get next queue position
-        const [queueResult] = await db.query(`
-            SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position 
-            FROM orders 
-            WHERE DATE(order_time) = CURDATE() AND status IN ('pending', 'preparing', 'ready')
-        `);
-        const queuePosition = queueResult[0].next_position;
+        // Get next queue position - handle both order_time and created_at columns
+        let queuePosition = 1;
+        try {
+            const [queueResult] = await db.query(`
+                SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position 
+                FROM orders 
+                WHERE DATE(COALESCE(order_time, created_at)) = CURDATE() 
+                AND status IN ('pending', 'preparing', 'ready', 'pending_verification')
+            `);
+            queuePosition = queueResult[0]?.next_position || 1;
+        } catch (queueError) {
+            console.warn('⚠️ Error getting queue position, using default:', queueError.message);
+            // If query fails, just use 1 as default
+            queuePosition = 1;
+        }
 
         // Calculate estimated ready time (15 minutes from now for dine-in, 10 minutes for takeout)
         const estimatedReadyTime = new Date();
@@ -80,12 +117,31 @@ router.post('/', async(req, res) => {
             const orderStatus = isImmediatePay ? 'pending_verification' : 'pending';
             const paymentStatus = isImmediatePay ? 'pending' : 'pending';
 
+            console.log('🔧 Creating order with data:', {
+                orderId,
+                shortOrderCode,
+                customerId,
+                customerName,
+                tableNumber,
+                itemsCount: items.length,
+                totalPrice,
+                orderStatus,
+                paymentStatus,
+                paymentMethod,
+                orderType,
+                queuePosition,
+                staffId
+            });
+
             // Insert order with short order code
-            await connection.query(`
+            // Note: created_at/order_time are auto-generated, so we don't include them
+            const insertResult = await connection.query(`
                 INSERT INTO orders 
-                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
+                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes || null, orderType, queuePosition, estimatedReadyTime, staffId]);
+            
+            console.log('✅ Order inserted successfully:', insertResult[0]?.insertId || 'unknown');
 
             // Generate QR code for payment if needed
             let qrCode = null;
@@ -154,17 +210,46 @@ router.post('/', async(req, res) => {
                     paymentUrl: qrCode ? qrCode.url : null
                 }
             });
-        } catch (error) {
+        } catch (innerError) {
             await connection.rollback();
-            throw error;
+            console.error('❌ Transaction error in order creation:', innerError);
+            console.error('❌ Transaction error stack:', innerError.stack);
+            throw innerError;
         } finally {
             connection.release();
         }
     } catch (error) {
-        console.error('Error creating order:', error);
-        console.error('Error stack:', error.stack);
-        console.error('Request body:', req.body);
-        res.status(500).json({ success: false, error: 'Failed to create order', details: error.message });
+        console.error('❌ Error creating order:', error);
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
+        console.error('❌ Request headers:', req.headers);
+        
+        // Provide more specific error messages
+        let errorMessage = 'Failed to create order';
+        let errorDetails = error.message || 'Unknown error';
+        
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            errorMessage = 'Database table not found';
+            errorDetails = 'The orders table does not exist. Please check database setup.';
+        } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+            errorMessage = 'Database field error';
+            errorDetails = `Invalid field in database query: ${error.message}`;
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+            errorMessage = 'Database connection error';
+            errorDetails = 'Could not connect to database. Please check database server.';
+        } else if (error.message && error.message.includes('JSON')) {
+            errorMessage = 'Invalid data format';
+            errorDetails = 'Error processing order items. Please check the data format.';
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            error: errorMessage,
+            details: errorDetails,
+            code: error.code || 'UNKNOWN_ERROR'
+        });
     }
 });
 
