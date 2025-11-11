@@ -58,8 +58,10 @@ router.post('/', async(req, res) => {
         const paymentMethod = payment_method;
 
         // Get staff ID from session (for admin/staff orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Safely access session to avoid errors when session is undefined
+        const staffId = (req.session && req.session.adminUser && req.session.adminUser.id) ||
+            (req.session && req.session.staffUser && req.session.staffUser.id) ||
+            (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
