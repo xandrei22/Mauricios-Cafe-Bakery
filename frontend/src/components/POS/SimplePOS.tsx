@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search } from "lucide-react";
 import UnifiedCustomizeModal from "../customer/UnifiedCustomizeModal";
 import { toast } from "sonner";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
 import axiosInstance from "../../utils/axiosInstance";
 import { getApiUrl } from "../../utils/apiConfig";
 
@@ -52,7 +52,6 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 	const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
 	const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
 		name: '',
 		tableNumber: undefined,
@@ -81,7 +80,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			reconnectionAttempts: 5,
 			reconnectionDelay: 1000
 		});
-		setSocket(newSocket);
+		// Socket is stored locally for cleanup, no need for state
 
 		// Listen for real-time menu updates
 		newSocket.on('menu-updated', (data) => {
@@ -99,8 +98,11 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			fetchMenuItems();
 		}
 
+		// Cleanup: disconnect socket on unmount
 		return () => {
-			newSocket.close();
+			if (newSocket) {
+				newSocket.disconnect();
+			}
 		};
 	}, [sidebarOnly]);
 
@@ -178,7 +180,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 		try {
 			const orderData = {
 				customer_info: {
-					id: customerInfo.id || null,
+					id: null, // POS orders don't have customer IDs
 					name: customerInfo.name.trim(),
 					tableNumber: customerInfo.orderType === 'dine_in' ? customerInfo.tableNumber : null,
 					orderType: customerInfo.orderType
@@ -187,7 +189,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					menu_item_id: item.id,
 					name: item.name || '',
 					quantity: item.quantity || 1,
-					price: item.price || item.customPrice || 0,
+					price: item.customPrice || item.base_price || 0,
 					notes: item.notes || '',
 					customizations: item.customizations || [],
 					custom_price: item.customPrice || null
@@ -219,9 +221,21 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				const errorMessage = result?.message || result?.error || result?.details || 'Unknown error';
 				alert(`Failed to place order: ${errorMessage}`);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Error placing order:', error);
-			alert('Failed to place order. Please try again.');
+			console.error('Error response:', error?.response?.data);
+			console.error('Error status:', error?.response?.status);
+			
+			// Extract detailed error message
+			let errorMessage = 'Failed to place order. Please try again.';
+			if (error?.response?.data) {
+				const errorData = error.response.data;
+				errorMessage = errorData.details || errorData.error || errorData.message || errorMessage;
+			} else if (error?.message) {
+				errorMessage = error.message;
+			}
+			
+			alert(`Failed to place order: ${errorMessage}`);
 		}
 	};
 
