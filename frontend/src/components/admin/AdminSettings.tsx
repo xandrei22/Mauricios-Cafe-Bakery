@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, Lock, Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import AdminLoyaltySettings from './AdminLoyaltySettings';
 import { useAuth } from '../customer/AuthContext';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface AdminSettings {
     email: string;
@@ -32,7 +34,7 @@ const AdminSettings: React.FC = () => {
     const [showPasswordForm, setShowPasswordForm] = useState(false);
     const [updatingPassword, setUpdatingPassword] = useState(false);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const API_URL = getApiUrl();
     const accountInfoRef = useRef<HTMLDivElement>(null as unknown as HTMLDivElement);
     const loyaltySettingsRef = useRef<HTMLDivElement>(null as unknown as HTMLDivElement);
 
@@ -49,23 +51,17 @@ const AdminSettings: React.FC = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/settings/admin/settings`, {
-                credentials: 'omit'
-            });
+            setError(null);
+            const response = await axiosInstance.get(`${API_URL}/api/settings/admin/settings`);
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setSettings(data.settings);
-                } else {
-                    setError(data.error || 'Failed to fetch settings');
-                }
+            if (response.data.success) {
+                setSettings(response.data.settings);
             } else {
-                setError('Failed to fetch settings');
+                setError(response.data.error || 'Failed to fetch settings');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching settings:', error);
-            setError('Failed to fetch settings');
+            setError(error.response?.data?.error || error.message || 'Failed to fetch settings');
         } finally {
             setLoading(false);
         }
@@ -80,26 +76,21 @@ const AdminSettings: React.FC = () => {
         try {
             setUpdatingUsername(true);
             setError(null);
-            const response = await fetch(`${API_URL}/api/settings/admin/username/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit',
-                body: JSON.stringify({
-                    newUsername: newUsername.trim(),
-                    currentPassword: usernamePassword
-                })
+            const response = await axiosInstance.post(`${API_URL}/api/settings/admin/username/request`, {
+                newUsername: newUsername.trim(),
+                currentPassword: usernamePassword
             });
-            const data = await response.json();
-            if (response.ok && data.success) {
+            if (response.data.success) {
                 setSuccess('Verification email sent. Please confirm to update your username.');
                 setNewUsername('');
                 setUsernamePassword('');
                 setShowUsernameForm(false);
             } else {
-                setError(data.error || 'Failed to update username');
+                setError(response.data.error || 'Failed to update username');
             }
-        } catch (err) {
-            setError('Failed to update username');
+        } catch (err: any) {
+            console.error('Error updating username:', err);
+            setError(err.response?.data?.error || err.message || 'Failed to update username');
         } finally {
             setUpdatingUsername(false);
         }
@@ -115,26 +106,21 @@ const AdminSettings: React.FC = () => {
             setUpdatingEmail(true);
             setError(null);
             // Request an email verification link for email change
-            const response = await fetch(`${API_URL}/api/settings/admin/email/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit',
-                body: JSON.stringify({
-                    newEmail: newEmail.trim(),
-                    currentPassword: emailPassword
-                })
+            const response = await axiosInstance.post(`${API_URL}/api/settings/admin/email/request`, {
+                newEmail: newEmail.trim(),
+                currentPassword: emailPassword
             });
-            const data = await response.json();
-            if (response.ok && data.success) {
+            if (response.data.success) {
                 setSuccess('Verification email sent. Please confirm via the link to complete the change.');
                 setNewEmail('');
                 setEmailPassword('');
                 setShowEmailForm(false);
             } else {
-                setError(data.error || 'Failed to update email');
+                setError(response.data.error || 'Failed to update email');
             }
-        } catch (err) {
-            setError('Failed to update email');
+        } catch (err: any) {
+            console.error('Error updating email:', err);
+            setError(err.response?.data?.error || err.message || 'Failed to update email');
         } finally {
             setUpdatingEmail(false);
         }
@@ -145,20 +131,16 @@ const AdminSettings: React.FC = () => {
         try {
             setUpdatingPassword(true);
             setError(null);
-            const response = await fetch(`${API_URL}/api/settings/admin/password/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit'
-            });
-            const data = await response.json();
-            if (response.ok && data.success) {
+            const response = await axiosInstance.post(`${API_URL}/api/settings/admin/password/request`);
+            if (response.data.success) {
                 setSuccess('Password change verification email sent.');
                 setShowPasswordForm(false);
             } else {
-                setError(data.error || 'Failed to send password change link');
+                setError(response.data.error || 'Failed to send password change link');
             }
-        } catch (err) {
-            setError('Failed to send password change link');
+        } catch (err: any) {
+            console.error('Error requesting password change:', err);
+            setError(err.response?.data?.error || err.message || 'Failed to send password change link');
         } finally {
             setUpdatingPassword(false);
         }

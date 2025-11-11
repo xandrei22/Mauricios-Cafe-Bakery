@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../customer/AuthContext';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface StaffSettings {
     email: string;
@@ -22,7 +24,7 @@ const StaffSettings: React.FC = () => {
     const [showPasswordForm, setShowPasswordForm] = useState(false);
     const [updatingPassword, setUpdatingPassword] = useState(false);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const API_URL = getApiUrl();
 
     useEffect(() => {
         fetchSettings();
@@ -31,23 +33,17 @@ const StaffSettings: React.FC = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/settings/staff/settings`, {
-                credentials: 'omit'
-            });
+            setError(null);
+            const response = await axiosInstance.get(`${API_URL}/api/settings/staff/settings`);
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setSettings(data.settings);
-                } else {
-                    setError(data.error || 'Failed to fetch settings');
-                }
+            if (response.data.success) {
+                setSettings(response.data.settings);
             } else {
-                setError('Failed to fetch settings');
+                setError(response.data.error || 'Failed to fetch settings');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching settings:', error);
-            setError('Failed to fetch settings');
+            setError(error.response?.data?.error || error.message || 'Failed to fetch settings');
         } finally {
             setLoading(false);
         }
@@ -58,20 +54,16 @@ const StaffSettings: React.FC = () => {
         try {
             setUpdatingPassword(true);
             setError(null);
-            const response = await fetch(`${API_URL}/api/settings/staff/password/request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit'
-            });
-            const data = await response.json();
-            if (response.ok && data.success) {
+            const response = await axiosInstance.post(`${API_URL}/api/settings/staff/password/request`);
+            if (response.data.success) {
                 setSuccess('Password change verification email sent.');
                 setShowPasswordForm(false);
             } else {
-                setError(data.error || 'Failed to send password change link');
+                setError(response.data.error || 'Failed to send password change link');
             }
-        } catch (err) {
-            setError('Failed to send password change link');
+        } catch (err: any) {
+            console.error('Error requesting password change:', err);
+            setError(err.response?.data?.error || err.message || 'Failed to send password change link');
         } finally {
             setUpdatingPassword(false);
         }

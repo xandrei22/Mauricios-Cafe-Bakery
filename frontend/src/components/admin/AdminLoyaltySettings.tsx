@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface LoyaltySettings {
     points_per_peso: { value: string; description: string; updated_at: string };
@@ -25,26 +27,23 @@ const AdminLoyaltySettings: React.FC = () => {
         fetchSettings();
     }, []);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const API_URL = getApiUrl();
 
     const fetchSettings = async () => {
         setLoading(true);
+        setError(null);
         try {
-            const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
-                credentials: 'omit'
-            });
-            if (res.ok) {
-                const data = await res.json();
-                console.log('Fetched settings:', data);
-                setSettings(data.settings);
+            const res = await axiosInstance.get(`${API_URL}/api/admin/loyalty/settings`);
+            if (res.data.settings) {
+                console.log('Fetched settings:', res.data);
+                setSettings(res.data.settings);
             } else {
-                const errorData = await res.json();
-                console.error('Failed to load settings:', errorData);
+                console.error('Failed to load settings:', res.data);
                 setError('Failed to load loyalty settings');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error fetching settings:', e);
-            setError('Failed to load loyalty settings');
+            setError(e.response?.data?.error || e.message || 'Failed to load loyalty settings');
         } finally {
             setLoading(false);
         }
@@ -65,25 +64,16 @@ const AdminLoyaltySettings: React.FC = () => {
                 if (setting) settingsToUpdate[key] = (setting as any).value;
             });
             console.log('Saving settings:', settingsToUpdate);
-            const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit',
-                body: JSON.stringify({ settings: settingsToUpdate })
+            const res = await axiosInstance.put(`${API_URL}/api/admin/loyalty/settings`, {
+                settings: settingsToUpdate
             });
-            const responseData = await res.json();
-            console.log('Save response:', responseData);
-            if (res.ok) {
-                setMessage('Settings saved successfully!');
-                setTimeout(() => setMessage(null), 3000);
-                await fetchSettings();
-            } else {
-                setError(responseData.error || 'Failed to save settings');
-                await fetchSettings();
-            }
-        } catch (e) {
+            console.log('Save response:', res.data);
+            setMessage('Settings saved successfully!');
+            setTimeout(() => setMessage(null), 3000);
+            await fetchSettings();
+        } catch (e: any) {
             console.error('Error saving settings:', e);
-            setError('Failed to save settings');
+            setError(e.response?.data?.error || e.message || 'Failed to save settings');
             await fetchSettings();
         } finally {
             setSaving(false);
@@ -99,26 +89,17 @@ const AdminLoyaltySettings: React.FC = () => {
         setSettings(prev => prev ? { ...prev, [settingKey]: { ...(prev as any)[settingKey], value: newValue } } : null);
         try {
             console.log('Toggling setting:', settingKey, 'to', newValue);
-            const res = await fetch(`${API_URL}/api/admin/loyalty/settings`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'omit',
-                body: JSON.stringify({ settings: { [settingKey]: newValue } })
+            const res = await axiosInstance.put(`${API_URL}/api/admin/loyalty/settings`, {
+                settings: { [settingKey]: newValue }
             });
-            const responseData = await res.json();
-            console.log('Toggle response:', responseData);
-            if (!res.ok) {
-                setSettings(prev => prev ? { ...prev, [settingKey]: { ...(prev as any)[settingKey], value: currentValue } } : null);
-                setError(responseData.error || 'Failed to update setting');
-            } else {
-                setError(null);
-                setMessage('Setting updated successfully!');
-                setTimeout(() => setMessage(null), 3000);
-            }
-        } catch (e) {
+            console.log('Toggle response:', res.data);
+            setError(null);
+            setMessage('Setting updated successfully!');
+            setTimeout(() => setMessage(null), 3000);
+        } catch (e: any) {
             console.error('Error toggling setting:', e);
             setSettings(prev => prev ? { ...prev, [settingKey]: { ...(prev as any)[settingKey], value: currentValue } } : null);
-            setError('Failed to update setting');
+            setError(e.response?.data?.error || e.message || 'Failed to update setting');
         } finally {
             setSaving(false);
         }
