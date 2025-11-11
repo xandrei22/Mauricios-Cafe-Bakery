@@ -5,6 +5,16 @@ const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const { v4: uuidv4 } = require('uuid');
 
+// Generate random 5-character order code (letters and numbers)
+function generateShortOrderCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
 // Create a new order
 router.post('/', async(req, res) => {
     try {
@@ -23,6 +33,30 @@ router.post('/', async(req, res) => {
             null;
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Generate random 5-character display code
+        let shortOrderCode;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        // Ensure uniqueness (check against existing order_number values)
+        while (!isUnique && attempts < maxAttempts) {
+            shortOrderCode = generateShortOrderCode();
+            const [existing] = await db.query(
+                'SELECT id FROM orders WHERE order_number = ?',
+                [shortOrderCode]
+            );
+            if (existing.length === 0) {
+                isUnique = true;
+            }
+            attempts++;
+        }
+        
+        // Fallback: if we couldn't generate a unique code, use a timestamp-based one
+        if (!isUnique) {
+            shortOrderCode = generateShortOrderCode() + Date.now().toString().slice(-2);
+        }
 
         // Get next queue position
         const [queueResult] = await db.query(`
@@ -46,12 +80,12 @@ router.post('/', async(req, res) => {
             const orderStatus = isImmediatePay ? 'pending_verification' : 'pending';
             const paymentStatus = isImmediatePay ? 'pending' : 'pending';
 
-            // Insert order (omit optional order_number to be compatible with DBs that don't have the column)
+            // Insert order with short order code
             await connection.query(`
                 INSERT INTO orders 
-                (order_id, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            `, [orderId, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
+                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
 
             // Generate QR code for payment if needed
             let qrCode = null;
@@ -104,6 +138,7 @@ router.post('/', async(req, res) => {
                 success: true,
                 order: {
                     orderId,
+                    shortOrderCode,
                     customerId,
                     customerName,
                     tableNumber,
@@ -216,6 +251,7 @@ router.get('/', async(req, res) => {
                 ...order,
                 id: order.id || order.order_id,
                 orderId: order.order_id,
+                shortOrderCode: order.order_number,
                 customerName: order.customer_name,
                 tableNumber: order.table_number,
                 totalPrice: order.total_amount,

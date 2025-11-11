@@ -477,6 +477,7 @@ class OrderProcessingService {
                 SELECT 
                     o.id,
                     o.order_id,
+                    o.order_number,
                     o.customer_name,
                     o.items,
                     o.total_price,
