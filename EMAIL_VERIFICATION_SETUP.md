@@ -110,3 +110,8 @@ UPDATE customers SET email_verified = 1 WHERE id = <customer_id>;
 
 
 
+
+
+
+
+

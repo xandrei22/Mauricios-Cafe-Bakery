@@ -231,9 +231,11 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				alert(`Failed to place order: ${errorMessage}`);
 			}
 		} catch (error: any) {
-			console.error('Error placing order:', error);
-			console.error('Error response:', error?.response?.data);
-			console.error('Error status:', error?.response?.status);
+			console.error('❌ Error placing order:', error);
+			console.error('❌ Error response:', error?.response?.data);
+			console.error('❌ Error status:', error?.response?.status);
+			console.error('❌ Error message:', error?.message);
+			console.error('❌ Full error object:', JSON.stringify(error, null, 2));
 			
 			// Check if it's an authentication error
 			if (error?.response?.status === 401) {
@@ -241,7 +243,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				console.error('❌ Authentication failed - Token check:', {
 					hasToken: !!token,
 					tokenLength: token?.length || 0,
-					errorMessage: error?.response?.data?.message || 'Unauthorized'
+					errorMessage: error?.response?.data?.message || 'Unauthorized',
+					responseData: error?.response?.data
 				});
 				
 				alert('Authentication required. Please log in again.');
@@ -257,8 +260,23 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			if (error?.response?.data) {
 				const errorData = error.response.data;
 				errorMessage = errorData.details || errorData.error || errorData.message || errorMessage;
+				console.error('❌ Backend error details:', {
+					error: errorData.error,
+					details: errorData.details,
+					message: errorData.message,
+					code: errorData.code
+				});
 			} else if (error?.message) {
 				errorMessage = error.message;
+			}
+			
+			// Check if error message contains adminUser (session error)
+			if (errorMessage.includes('adminUser') || errorMessage.includes('Cannot read properties')) {
+				console.error('❌ SESSION ERROR DETECTED IN FRONTEND:', {
+					errorMessage,
+					responseData: error?.response?.data,
+					hasToken: !!localStorage.getItem('authToken')
+				});
 			}
 			
 			alert(`Failed to place order: ${errorMessage}`);

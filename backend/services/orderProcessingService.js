@@ -111,11 +111,13 @@ class OrderProcessingService {
             const initialStatus = paymentMethod === 'cash' ? 'pending_verification' : 'pending';
             const initialPaymentStatus = paymentMethod === 'cash' ? 'pending' : 'pending';
 
+            // CRITICAL: Include created_at explicitly to avoid "Field 'created_at' doesn't have a default value" error
+            const currentTime = new Date();
             await connection.query(`
                 INSERT INTO orders 
                 (order_id, order_number, customer_id, customer_name, table_number, items, total_price, 
-                 payment_method, order_type, status, payment_status, notes, order_time, queue_position, estimated_ready_time, staff_id)
-                VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0, DATE_ADD(NOW(), INTERVAL 15 MINUTE), ?)
+                 payment_method, order_type, status, payment_status, notes, order_time, created_at, queue_position, estimated_ready_time, staff_id)
+                VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, DATE_ADD(?, INTERVAL 15 MINUTE), ?)
             `, [
                 nextOrderNumber,
                 customerId,
@@ -128,6 +130,9 @@ class OrderProcessingService {
                 initialStatus,
                 initialPaymentStatus,
                 notes,
+                currentTime,
+                currentTime,
+                currentTime,
                 staffId
             ]);
 
