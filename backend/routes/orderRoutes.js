@@ -8,6 +8,13 @@ const { optionalJWT } = require('../middleware/jwtAuth');
 
 // Apply optional JWT middleware to all order routes
 // This sets req.user if a JWT token is present, but doesn't fail if it's missing
+router.use((req, res, next) => {
+    // Ensure req.session is always defined (even if null) to prevent undefined errors
+    if (req.session === undefined) {
+        req.session = null;
+    }
+    next();
+});
 router.use(optionalJWT);
 
 // Generate random 5-character order code (letters and numbers)
@@ -22,7 +29,12 @@ function generateShortOrderCode() {
 
 // Create a new order
 router.post('/', async(req, res) => {
+    // Wrap everything in a try-catch to catch any session access errors
     try {
+        // Ensure req.session is safely initialized to prevent undefined errors
+        if (!req.session) {
+            req.session = null; // Explicitly set to null to prevent undefined access
+        }
         // Handle both camelCase and snake_case field names
         const { 
             customer_info, 
@@ -62,34 +74,19 @@ router.post('/', async(req, res) => {
         const totalPrice = total_amount;
         const paymentMethod = payment_method;
 
-        // Get staff ID from session (for admin/staff orders)
-        // Session middleware is only applied to Google OAuth routes, so req.session may be undefined
-        // Use JWT authentication (req.user) as primary method, session as fallback
+        // Get staff ID from JWT authentication only (no session access)
+        // optionalJWT middleware sets req.user if JWT token is present
         let staffId = null;
         
-        // Primary: Check JWT user first (most reliable for API routes)
-        if (req.user && typeof req.user === 'object') {
-            if ((req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) {
+        // Only use JWT user - no session access to avoid undefined errors
+        if (req.user && typeof req.user === 'object' && req.user.id) {
+            // Check if user is admin or staff
+            if (req.user.role === 'admin' || req.user.role === 'staff') {
                 staffId = req.user.id;
             }
         }
         
-        // Fallback: Try session only if JWT didn't provide staffId and session exists
-        if (!staffId) {
-            try {
-                // Use hasOwnProperty check to avoid errors if session is undefined
-                if (req && typeof req === 'object' && 'session' in req && req.session && typeof req.session === 'object') {
-                    if (req.session.adminUser && typeof req.session.adminUser === 'object' && req.session.adminUser.id) {
-                        staffId = req.session.adminUser.id;
-                    } else if (req.session.staffUser && typeof req.session.staffUser === 'object' && req.session.staffUser.id) {
-                        staffId = req.session.staffUser.id;
-                    }
-                }
-            } catch (sessionError) {
-                // Silently ignore session errors - JWT is primary auth method
-                console.warn('⚠️ Session access failed (expected if session middleware not applied):', sessionError.message);
-            }
-        }
+        // staffId will be null for guest orders, which is fine
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -255,6 +252,14 @@ router.post('/', async(req, res) => {
         console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
         console.error('❌ Request headers:', req.headers);
         
+        // Check if error is related to session access
+        if (error.message && error.message.includes('adminUser')) {
+            console.error('❌ SESSION ACCESS ERROR DETECTED - This should not happen!');
+            console.error('❌ Error location:', error.stack?.split('\n')[0] || 'unknown');
+            console.error('❌ req.session exists:', !!req.session);
+            console.error('❌ req.user exists:', !!req.user);
+        }
+        
         // Provide more specific error messages
         let errorMessage = 'Failed to create order';
         let errorDetails = error.message || 'Unknown error';
@@ -271,6 +276,9 @@ router.post('/', async(req, res) => {
         } else if (error.message && error.message.includes('JSON')) {
             errorMessage = 'Invalid data format';
             errorDetails = 'Error processing order items. Please check the data format.';
+        } else if (error.message && error.message.includes('adminUser')) {
+            errorMessage = 'Authentication error';
+            errorDetails = 'Session access error. Please ensure you are logged in with a valid token.';
         }
         
         res.status(500).json({ 
