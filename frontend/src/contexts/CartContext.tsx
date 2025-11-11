@@ -35,13 +35,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const isClearedRef = useRef<boolean>(false);
   
   const [items, setItems] = useState<CartItem[]>(() => {
-    // Check if cart was recently cleared (within last 2 seconds)
+    // Check if cart was recently cleared (within last 5 seconds)
     const lastClearTime = localStorage.getItem('cartLastCleared');
     if (lastClearTime) {
       const timeSinceClear = Date.now() - parseInt(lastClearTime);
-      if (timeSinceClear < 2000) {
+      if (timeSinceClear < 5000) {
         console.log('🛑 Cart was recently cleared, starting with empty cart');
         isClearedRef.current = true;
+        // Ensure localStorage is also removed
+        localStorage.removeItem('cart');
         return [];
       }
     }
@@ -49,49 +51,56 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // Load cart from localStorage on initialization
     try {
       const savedCart = localStorage.getItem('cart');
-      if (savedCart) {
-        // Check if cart is empty array
-        if (savedCart === '[]' || savedCart.trim() === '[]') {
-          console.log('Cart is empty in localStorage, starting with empty cart');
-          return [];
-        }
-        
-        const parsedCart = JSON.parse(savedCart);
-        
-        // Validate that the cart is an array
-        if (!Array.isArray(parsedCart)) {
-          console.warn('Invalid cart data: not an array, clearing...');
+      
+      // If no cart key exists, return empty
+      if (!savedCart) {
+        console.log('No cart in localStorage, starting with empty cart');
+        return [];
+      }
+      
+      // If cart is empty array string, return empty
+      if (savedCart === '[]' || savedCart.trim() === '[]') {
+        console.log('Cart is empty in localStorage, starting with empty cart');
+        // Remove the key since it's empty
+        localStorage.removeItem('cart');
+        return [];
+      }
+      
+      const parsedCart = JSON.parse(savedCart);
+      
+      // Validate that the cart is an array
+      if (!Array.isArray(parsedCart)) {
+        console.warn('Invalid cart data: not an array, clearing...');
+        localStorage.removeItem('cart');
+        return [];
+      }
+      
+      // If array is empty, return empty and remove key
+      if (parsedCart.length === 0) {
+        console.log('Cart array is empty, starting with empty cart');
+        localStorage.removeItem('cart');
+        return [];
+      }
+      
+      // Validate that all items have required properties
+      const validItems = parsedCart.filter(item => 
+        item && typeof item.id === 'string' && typeof item.quantity === 'number'
+      );
+      
+      if (validItems.length !== parsedCart.length) {
+        console.warn('Some cart items are invalid, removing invalid items...');
+        // Save only valid items back to localStorage
+        if (validItems.length > 0) {
+          localStorage.setItem('cart', JSON.stringify(validItems));
+          return validItems;
+        } else {
           localStorage.removeItem('cart');
           return [];
         }
-        
-        // If array is empty, return empty
-        if (parsedCart.length === 0) {
-          console.log('Cart array is empty, starting with empty cart');
-          return [];
-        }
-        
-        // Validate that all items have required properties
-        const validItems = parsedCart.filter(item => 
-          item && typeof item.id === 'string' && typeof item.quantity === 'number'
-        );
-        
-        if (validItems.length !== parsedCart.length) {
-          console.warn('Some cart items are invalid, removing invalid items...');
-          // Save only valid items back to localStorage
-          if (validItems.length > 0) {
-            localStorage.setItem('cart', JSON.stringify(validItems));
-            return validItems;
-          } else {
-            localStorage.removeItem('cart');
-            return [];
-          }
-        }
-        
-        console.log('Loaded cart from localStorage:', validItems.length, 'items');
-        return validItems;
       }
-      return [];
+      
+      console.log('Loaded cart from localStorage:', validItems.length, 'items');
+      return validItems;
     } catch (error) {
       console.error('Error loading cart from localStorage:', error);
       localStorage.removeItem('cart');
@@ -103,27 +112,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Save cart to localStorage whenever items change
   useEffect(() => {
-    // CRITICAL: If cart was just cleared, don't save anything yet
-    // This prevents the useEffect from overwriting the cleared state
-    if (isClearedRef.current && items.length === 0) {
+    // CRITICAL: If cart was just cleared, don't save anything
+    // This prevents the useEffect from restoring old data
+    if (isClearedRef.current) {
       console.log('🛑 Cart was cleared, skipping save to prevent reload');
-      // Reset the flag after a brief delay
-      setTimeout(() => {
-        isClearedRef.current = false;
-      }, 1000);
       return;
     }
     
     try {
-      // Always save current state to localStorage (even if empty array)
-      // This ensures localStorage stays in sync with state
-      const cartData = JSON.stringify(items);
-      
-      // CRITICAL: Only save if items array matches what we expect
-      // If items is empty, ensure we save '[]' not any other value
+      // Only save if we have items
       if (items.length === 0) {
-        localStorage.setItem('cart', '[]');
+        // If empty, remove the key completely (don't set to '[]')
+        localStorage.removeItem('cart');
       } else {
+        // Save cart data
+        const cartData = JSON.stringify(items);
         localStorage.setItem('cart', cartData);
       }
       
@@ -136,26 +139,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Error saving cart to localStorage:', error);
-      // On error, ensure localStorage is at least set to empty array
+      // On error, remove the key
       try {
-        localStorage.setItem('cart', '[]');
+        localStorage.removeItem('cart');
       } catch (e) {
-        console.error('Failed to set empty cart in localStorage:', e);
+        console.error('Failed to remove cart from localStorage:', e);
       }
     }
   }, [items]);
 
   const addToCart = (item: CartItem) => {
     setItems(prev => {
-      // CRITICAL: Check if cart was recently cleared (within last 3 seconds)
-      // This prevents race conditions where localStorage might still have old data
+      // CRITICAL: Check if cart was recently cleared (within last 5 seconds)
       const lastClearTime = localStorage.getItem('cartLastCleared');
       if (lastClearTime) {
         const timeSinceClear = Date.now() - parseInt(lastClearTime);
-        if (timeSinceClear < 3000) {
-          console.log('⚠️ Cart was recently cleared, ensuring localStorage is empty...');
-          localStorage.setItem('cart', '[]');
-          // If state is empty, start fresh
+        if (timeSinceClear < 5000) {
+          console.log('⚠️ Cart was recently cleared, ensuring localStorage is removed...');
+          localStorage.removeItem('cart');
+          // If state is empty, start fresh with just the new item
           if (prev.length === 0) {
             console.log('✅ Starting fresh cart after clear');
             return [{ ...item, quantity: item.quantity || 1 }];
@@ -163,40 +165,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       }
       
-      // CRITICAL: Verify localStorage is in sync before adding
-      // This prevents merging with stale localStorage data
-      try {
+      // CRITICAL: If state is empty, ensure localStorage is also empty/removed
+      // This prevents loading old data from localStorage
+      if (prev.length === 0) {
         const storedCart = localStorage.getItem('cart');
-        if (storedCart && storedCart !== '[]' && storedCart.trim() !== '[]') {
-          const parsedStored = JSON.parse(storedCart);
-          // If localStorage has different items than state, use state (state is source of truth)
-          // But if state is empty and localStorage has items, that means we need to clear localStorage
-          if (Array.isArray(parsedStored) && parsedStored.length > 0 && prev.length === 0) {
-            console.warn('⚠️ State is empty but localStorage has items. Clearing localStorage...');
-            localStorage.setItem('cart', '[]');
-            // Continue with empty state and add new item
-            return [{ ...item, quantity: item.quantity || 1 }];
-          }
-        }
-      } catch (error) {
-        console.error('Error checking localStorage in addToCart:', error);
-        localStorage.setItem('cart', '[]');
-      }
-      
-      // Ensure we're working with clean state (not accidentally merging with old localStorage data)
-      const currentItems = Array.isArray(prev) ? prev : [];
-      
-      // Double-check: if state is empty, ensure localStorage is also empty
-      if (currentItems.length === 0) {
-        const storedCart = localStorage.getItem('cart');
-        if (storedCart && storedCart !== '[]' && storedCart.trim() !== '[]') {
-          console.warn('⚠️ State is empty but localStorage is not. Forcing localStorage to empty.');
-          localStorage.setItem('cart', '[]');
+        if (storedCart) {
+          console.warn('⚠️ State is empty but localStorage has data. Removing localStorage...');
+          localStorage.removeItem('cart');
           // Start fresh with just the new item
           return [{ ...item, quantity: item.quantity || 1 }];
         }
       }
       
+      // Ensure we're working with clean state
+      const currentItems = Array.isArray(prev) ? prev : [];
+      
+      // Find existing item or add new one
       const existing = currentItems.find(i => i.id === item.id);
       if (existing) {
         const updated = currentItems.map(i => 
@@ -240,27 +224,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => {
     console.log('🧹 Clearing cart completely...');
     
-    // Set flag to prevent reloading from localStorage
+    // CRITICAL: Set flag FIRST to prevent useEffect from saving
     isClearedRef.current = true;
     
-    // Record clear timestamp to prevent race conditions
-    clearTimestampRef.current = Date.now();
+    // CRITICAL: Remove localStorage COMPLETELY (not just set to '[]')
+    // This is the key fix - completely remove the key, don't just set it to empty
+    localStorage.removeItem('cart');
     
-    // CRITICAL: Set timestamp in localStorage to mark cart as cleared
-    localStorage.setItem('cartLastCleared', Date.now().toString());
-    
-    // CRITICAL: Set state to empty FIRST (synchronous, immediate update)
-    // This ensures React re-renders immediately
-    setItems([]);
-    
-    // Step 1: Clear ALL cart-related localStorage keys
-    const cartKeys = ['cart', 'guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
+    // Clear ALL other cart-related localStorage keys
+    const cartKeys = ['guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
     cartKeys.forEach(key => {
       localStorage.removeItem(key);
       console.log('Removed cart key:', key);
     });
     
-    // Step 2: Clear ALL cart-related keys (case-insensitive search) as backup
+    // Clear ALL cart-related keys (case-insensitive search) as backup
     Object.keys(localStorage).forEach(key => {
       if (key.toLowerCase().includes('cart') && key !== 'cartLastCleared') {
         localStorage.removeItem(key);
@@ -268,47 +246,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     });
     
-    // Step 3: Explicitly set localStorage to empty array to prevent any race conditions
-    localStorage.setItem('cart', '[]');
+    // Set timestamp to mark cart as cleared
+    localStorage.setItem('cartLastCleared', Date.now().toString());
     
-    // Step 4: Force a re-render by dispatching the cart update event immediately
-    window.dispatchEvent(new CustomEvent('cartUpdated'));
+    // CRITICAL: Set state to empty (synchronous, immediate update)
+    setItems([]);
     
-    // Step 5: Close the cart modal if it's open
+    // Close the cart modal
     setIsCartModalOpen(false);
     
-    // Step 6: Double-check and force clear after a brief delay to catch any race conditions
-    setTimeout(() => {
-      const remainingCart = localStorage.getItem('cart');
-      if (remainingCart && remainingCart !== '[]' && remainingCart.trim() !== '[]') {
-        console.warn('⚠️ Cart data still exists in localStorage after clear, force removing...');
-        localStorage.setItem('cart', '[]');
-        localStorage.setItem('cartLastCleared', Date.now().toString());
-        setItems([]);
-        window.dispatchEvent(new CustomEvent('cartUpdated'));
-      } else {
-        console.log('✅ Cart successfully cleared');
-      }
-    }, 50);
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('cartUpdated'));
     
-    // Step 7: Final verification after useEffect has run
-    setTimeout(() => {
-      const finalCheck = localStorage.getItem('cart');
-      if (finalCheck && finalCheck !== '[]' && finalCheck.trim() !== '[]') {
-        console.error('❌ Cart still not empty after all clear attempts:', finalCheck);
-        localStorage.setItem('cart', '[]');
-        localStorage.setItem('cartLastCleared', Date.now().toString());
-        setItems([]);
-        window.dispatchEvent(new CustomEvent('cartUpdated'));
-      }
-    }, 200);
+    console.log('✅ Cart state and localStorage cleared');
     
-    // Step 8: Remove the clear timestamp after 3 seconds (allows time for all components to sync)
+    // Remove the clear timestamp after 5 seconds
     setTimeout(() => {
       localStorage.removeItem('cartLastCleared');
       isClearedRef.current = false;
-      console.log('🔄 Clear timestamp removed, cart can now be loaded normally');
-    }, 3000);
+      console.log('🔄 Clear timestamp removed');
+    }, 5000);
   };
 
   const total = items.reduce((sum, item) => {
