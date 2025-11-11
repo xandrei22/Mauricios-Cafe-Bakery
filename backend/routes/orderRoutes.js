@@ -303,6 +303,11 @@ router.post('/', async(req, res) => {
         let errorMessage = 'Failed to create order';
         let errorDetails = error.message || 'Unknown error';
 
+        // CRITICAL: Ensure session is safe before accessing it in error handling
+        if (!req.session || typeof req.session !== 'object') {
+            req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+        }
+
         if (error.code === 'ER_NO_SUCH_TABLE') {
             errorMessage = 'Database table not found';
             errorDetails = 'The orders table does not exist. Please check database setup.';
@@ -315,7 +320,7 @@ router.post('/', async(req, res) => {
         } else if (error.message && error.message.includes('JSON')) {
             errorMessage = 'Invalid data format';
             errorDetails = 'Error processing order items. Please check the data format.';
-        } else if (error.message && error.message.includes('adminUser')) {
+        } else if (error.message && (error.message.includes('adminUser') || error.message.includes('Cannot read properties'))) {
             errorMessage = 'Authentication error';
             errorDetails = 'Session access error. Please ensure you are logged in with a valid token.';
         }

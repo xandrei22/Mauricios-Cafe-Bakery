@@ -192,6 +192,32 @@ app.use('/api/auth/google', sessionMiddleware);
 app.use('/api/auth/google', passport.session());
 
 // -------------------
+// CRITICAL: Initialize req.session globally to prevent "Cannot read properties of undefined" errors
+// This MUST run before any routes that might access req.session
+// -------------------
+app.use(function(req, res, next) {
+    // Ensure req.session is always a safe object (never undefined) to prevent errors
+    if (!req.session || typeof req.session !== 'object') {
+        // Create a safe object with null properties for common session properties
+        req.session = {
+            adminUser: null,
+            staffUser: null,
+            user: null,
+            customerUser: null,
+            admin: null,
+            staff: null
+        };
+    } else {
+        // If session exists but properties are undefined, set them to null
+        if (req.session.adminUser === undefined) req.session.adminUser = null;
+        if (req.session.staffUser === undefined) req.session.staffUser = null;
+        if (req.session.user === undefined) req.session.user = null;
+        if (req.session.customerUser === undefined) req.session.customerUser = null;
+    }
+    next();
+});
+
+// -------------------
 // Routes
 // -------------------
 const authRoutes = require('./routes/authRoutes');
