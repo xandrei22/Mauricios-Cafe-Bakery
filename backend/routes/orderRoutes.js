@@ -4,18 +4,20 @@ const db = require('../config/db');
 const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const { v4: uuidv4 } = require('uuid');
-const { optionalJWT } = require('../middleware/jwtAuth');
+const { authenticateJWT } = require('../middleware/jwtAuth');
+router.use(authenticateJWT);
 
-// Apply optional JWT middleware to all order routes
-// This sets req.user if a JWT token is present, but doesn't fail if it's missing
-router.use((req, res, next) => {
-    // Ensure req.session is always defined (even if null) to prevent undefined errors
-    if (req.session === undefined) {
-        req.session = null;
+// CRITICAL FIX: Create a safe session proxy to prevent "Cannot read properties of undefined" errors
+router.use(function(req, res, next) {
+    if (req.session === undefined || req.session === null) {
+        req.session = new Proxy({}, {
+            get: function(target, prop) {
+                return undefined;
+            }
+        });
     }
     next();
 });
-router.use(optionalJWT);
 
 // Generate random 5-character order code (letters and numbers)
 function generateShortOrderCode() {
@@ -31,39 +33,36 @@ function generateShortOrderCode() {
 router.post('/', async(req, res) => {
     // Wrap everything in a try-catch to catch any session access errors
     try {
-        // Ensure req.session is safely initialized to prevent undefined errors
-        if (!req.session) {
-            req.session = null; // Explicitly set to null to prevent undefined access
-        }
+        // req.session is already safely initialized by middleware above
         // Handle both camelCase and snake_case field names
-        const { 
-            customer_info, 
-            items, 
-            total_amount, 
-            payment_method, 
-            notes, 
-            orderType = req.body.order_type || 'dine_in' 
+        const {
+            customer_info,
+            items,
+            total_amount,
+            payment_method,
+            notes,
+            orderType = req.body.order_type || 'dine_in'
         } = req.body;
-        
+
         // Validate required fields
         if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Order must contain at least one item' 
+            return res.status(400).json({
+                success: false,
+                error: 'Order must contain at least one item'
             });
         }
-        
+
         if (!customer_info || !customer_info.name) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Customer name is required' 
+            return res.status(400).json({
+                success: false,
+                error: 'Customer name is required'
             });
         }
-        
+
         if (!total_amount || isNaN(total_amount) || total_amount <= 0) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Valid total amount is required' 
+            return res.status(400).json({
+                success: false,
+                error: 'Valid total amount is required'
             });
         }
 
@@ -77,7 +76,7 @@ router.post('/', async(req, res) => {
         // Get staff ID from JWT authentication only (no session access)
         // optionalJWT middleware sets req.user if JWT token is present
         let staffId = null;
-        
+
         // Only use JWT user - no session access to avoid undefined errors
         if (req.user && typeof req.user === 'object' && req.user.id) {
             // Check if user is admin or staff
@@ -85,7 +84,7 @@ router.post('/', async(req, res) => {
                 staffId = req.user.id;
             }
         }
-        
+
         // staffId will be null for guest orders, which is fine
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -122,7 +121,7 @@ router.post('/', async(req, res) => {
                 WHERE DATE(COALESCE(order_time, created_at)) = CURDATE() 
                 AND status IN ('pending', 'preparing', 'ready', 'pending_verification')
             `);
-            queuePosition = queueResult[0]?.next_position || 1;
+            queuePosition = (queueResult[0] && queueResult[0].next_position) || 1;
         } catch (queueError) {
             console.warn('⚠️ Error getting queue position, using default:', queueError.message);
             // If query fails, just use 1 as default
@@ -166,8 +165,8 @@ router.post('/', async(req, res) => {
                 (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes || null, orderType, queuePosition, estimatedReadyTime, staffId]);
-            
-            console.log('✅ Order inserted successfully:', insertResult[0]?.insertId || 'unknown');
+
+            console.log('✅ Order inserted successfully:', (insertResult[0] && insertResult[0].insertId) || 'unknown');
 
             // Generate QR code for payment if needed
             let qrCode = null;
@@ -251,19 +250,20 @@ router.post('/', async(req, res) => {
         console.error('❌ Error stack:', error.stack);
         console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
         console.error('❌ Request headers:', req.headers);
-        
+
         // Check if error is related to session access
         if (error.message && error.message.includes('adminUser')) {
             console.error('❌ SESSION ACCESS ERROR DETECTED - This should not happen!');
-            console.error('❌ Error location:', error.stack?.split('\n')[0] || 'unknown');
+            const errorLocation = error.stack ? error.stack.split('\n')[0] : 'unknown';
+            console.error('❌ Error location:', errorLocation);
             console.error('❌ req.session exists:', !!req.session);
             console.error('❌ req.user exists:', !!req.user);
         }
-        
+
         // Provide more specific error messages
         let errorMessage = 'Failed to create order';
         let errorDetails = error.message || 'Unknown error';
-        
+
         if (error.code === 'ER_NO_SUCH_TABLE') {
             errorMessage = 'Database table not found';
             errorDetails = 'The orders table does not exist. Please check database setup.';
@@ -280,9 +280,9 @@ router.post('/', async(req, res) => {
             errorMessage = 'Authentication error';
             errorDetails = 'Session access error. Please ensure you are logged in with a valid token.';
         }
-        
-        res.status(500).json({ 
-            success: false, 
+
+        res.status(500).json({
+            success: false,
             error: errorMessage,
             details: errorDetails,
             code: error.code || 'UNKNOWN_ERROR'
@@ -727,8 +727,10 @@ router.put('/:orderId/status', async(req, res) => {
         }
 
         // Update staff_id if admin/staff member is processing this order
-        const currentStaffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Use JWT authentication (req.user) instead of session
+        const currentStaffId =
+            req.user && (req.user.role === 'admin' || req.user.role === 'staff') ?
+            req.user.id :
             null;
 
         if (currentStaffId) {
@@ -1153,8 +1155,10 @@ router.put('/:orderId/payment-status', async(req, res) => {
         }
 
         // Update staff_id if admin/staff member is processing this payment
-        const currentStaffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Use JWT authentication (req.user) instead of session
+        const currentStaffId =
+            req.user && (req.user.role === 'admin' || req.user.role === 'staff') ?
+            req.user.id :
             null;
 
         if (currentStaffId) {
