@@ -31,8 +31,21 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   // Track if cart was just cleared to prevent race conditions
   const clearTimestampRef = useRef<number>(0);
+  // Flag to prevent reloading from localStorage after clear
+  const isClearedRef = useRef<boolean>(false);
   
   const [items, setItems] = useState<CartItem[]>(() => {
+    // Check if cart was recently cleared (within last 2 seconds)
+    const lastClearTime = localStorage.getItem('cartLastCleared');
+    if (lastClearTime) {
+      const timeSinceClear = Date.now() - parseInt(lastClearTime);
+      if (timeSinceClear < 2000) {
+        console.log('🛑 Cart was recently cleared, starting with empty cart');
+        isClearedRef.current = true;
+        return [];
+      }
+    }
+    
     // Load cart from localStorage on initialization
     try {
       const savedCart = localStorage.getItem('cart');
@@ -90,6 +103,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Save cart to localStorage whenever items change
   useEffect(() => {
+    // CRITICAL: If cart was just cleared, don't save anything yet
+    // This prevents the useEffect from overwriting the cleared state
+    if (isClearedRef.current && items.length === 0) {
+      console.log('🛑 Cart was cleared, skipping save to prevent reload');
+      // Reset the flag after a brief delay
+      setTimeout(() => {
+        isClearedRef.current = false;
+      }, 1000);
+      return;
+    }
+    
     try {
       // Always save current state to localStorage (even if empty array)
       // This ensures localStorage stays in sync with state
@@ -123,12 +147,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addToCart = (item: CartItem) => {
     setItems(prev => {
-      // CRITICAL: Check if cart was recently cleared (within last 500ms)
+      // CRITICAL: Check if cart was recently cleared (within last 3 seconds)
       // This prevents race conditions where localStorage might still have old data
-      const timeSinceClear = Date.now() - clearTimestampRef.current;
-      if (timeSinceClear < 500) {
-        console.log('⚠️ Cart was recently cleared, ensuring localStorage is empty...');
-        localStorage.setItem('cart', '[]');
+      const lastClearTime = localStorage.getItem('cartLastCleared');
+      if (lastClearTime) {
+        const timeSinceClear = Date.now() - parseInt(lastClearTime);
+        if (timeSinceClear < 3000) {
+          console.log('⚠️ Cart was recently cleared, ensuring localStorage is empty...');
+          localStorage.setItem('cart', '[]');
+          // If state is empty, start fresh
+          if (prev.length === 0) {
+            console.log('✅ Starting fresh cart after clear');
+            return [{ ...item, quantity: item.quantity || 1 }];
+          }
+        }
       }
       
       // CRITICAL: Verify localStorage is in sync before adding
@@ -142,7 +174,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(parsedStored) && parsedStored.length > 0 && prev.length === 0) {
             console.warn('⚠️ State is empty but localStorage has items. Clearing localStorage...');
             localStorage.setItem('cart', '[]');
-            // Continue with empty state
+            // Continue with empty state and add new item
+            return [{ ...item, quantity: item.quantity || 1 }];
           }
         }
       } catch (error) {
@@ -159,6 +192,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         if (storedCart && storedCart !== '[]' && storedCart.trim() !== '[]') {
           console.warn('⚠️ State is empty but localStorage is not. Forcing localStorage to empty.');
           localStorage.setItem('cart', '[]');
+          // Start fresh with just the new item
+          return [{ ...item, quantity: item.quantity || 1 }];
         }
       }
       
@@ -205,8 +240,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => {
     console.log('🧹 Clearing cart completely...');
     
+    // Set flag to prevent reloading from localStorage
+    isClearedRef.current = true;
+    
     // Record clear timestamp to prevent race conditions
     clearTimestampRef.current = Date.now();
+    
+    // CRITICAL: Set timestamp in localStorage to mark cart as cleared
+    localStorage.setItem('cartLastCleared', Date.now().toString());
     
     // CRITICAL: Set state to empty FIRST (synchronous, immediate update)
     // This ensures React re-renders immediately
@@ -221,7 +262,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     
     // Step 2: Clear ALL cart-related keys (case-insensitive search) as backup
     Object.keys(localStorage).forEach(key => {
-      if (key.toLowerCase().includes('cart')) {
+      if (key.toLowerCase().includes('cart') && key !== 'cartLastCleared') {
         localStorage.removeItem(key);
         console.log('Removed additional cart key:', key);
       }
@@ -242,6 +283,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (remainingCart && remainingCart !== '[]' && remainingCart.trim() !== '[]') {
         console.warn('⚠️ Cart data still exists in localStorage after clear, force removing...');
         localStorage.setItem('cart', '[]');
+        localStorage.setItem('cartLastCleared', Date.now().toString());
         setItems([]);
         window.dispatchEvent(new CustomEvent('cartUpdated'));
       } else {
@@ -255,10 +297,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (finalCheck && finalCheck !== '[]' && finalCheck.trim() !== '[]') {
         console.error('❌ Cart still not empty after all clear attempts:', finalCheck);
         localStorage.setItem('cart', '[]');
+        localStorage.setItem('cartLastCleared', Date.now().toString());
         setItems([]);
         window.dispatchEvent(new CustomEvent('cartUpdated'));
       }
     }, 200);
+    
+    // Step 8: Remove the clear timestamp after 3 seconds (allows time for all components to sync)
+    setTimeout(() => {
+      localStorage.removeItem('cartLastCleared');
+      isClearedRef.current = false;
+      console.log('🔄 Clear timestamp removed, cart can now be loaded normally');
+    }, 3000);
   };
 
   const total = items.reduce((sum, item) => {
