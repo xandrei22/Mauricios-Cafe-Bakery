@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { CartProvider } from "./contexts/CartContext";
+import "./utils/cartClearDebug"; // Import debug utility
 import { AuthProvider } from "./components/customer/AuthContext";
 import { AlertProvider } from "./contexts/AlertContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";

@@ -224,7 +224,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => {
     console.log('🧹 Clearing cart completely...');
     
-    // CRITICAL: Set flag FIRST to prevent useEffect from saving
+    // CRITICAL: Set timestamp FIRST (before anything else)
+    // This prevents other components from reloading old data
+    const clearTimestamp = Date.now().toString();
+    localStorage.setItem('cartLastCleared', clearTimestamp);
+    
+    // CRITICAL: Set flag to prevent useEffect from saving
     isClearedRef.current = true;
     
     // CRITICAL: Remove localStorage COMPLETELY (not just set to '[]')
@@ -246,19 +251,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     });
     
-    // Set timestamp to mark cart as cleared
-    localStorage.setItem('cartLastCleared', Date.now().toString());
-    
     // CRITICAL: Set state to empty (synchronous, immediate update)
     setItems([]);
     
     // Close the cart modal
     setIsCartModalOpen(false);
     
-    // Dispatch event to notify other components
-    window.dispatchEvent(new CustomEvent('cartUpdated'));
-    
-    console.log('✅ Cart state and localStorage cleared');
+    // Dispatch event AFTER everything is cleared
+    // Use setTimeout to ensure localStorage is cleared before event fires
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cartUpdated'));
+      console.log('✅ Cart state and localStorage cleared, event dispatched');
+    }, 10);
     
     // Remove the clear timestamp after 5 seconds
     setTimeout(() => {

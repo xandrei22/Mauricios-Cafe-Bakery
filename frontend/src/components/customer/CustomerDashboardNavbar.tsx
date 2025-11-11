@@ -192,10 +192,31 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
   // Cart management functions
   const loadCartFromStorage = () => {
     try {
+      // CRITICAL: Check if cart was recently cleared (within last 5 seconds)
+      // This prevents reloading old data after clear
+      const lastClearTime = localStorage.getItem('cartLastCleared');
+      if (lastClearTime) {
+        const timeSinceClear = Date.now() - parseInt(lastClearTime);
+        if (timeSinceClear < 5000) {
+          console.log('🛑 Cart was recently cleared, NOT loading from localStorage');
+          setCartItems([]);
+          setCartItemCount(0);
+          return;
+        }
+      }
+      
       const savedCart = localStorage.getItem('cart');
       
       // CRITICAL: Check if cart is empty or null
-      if (!savedCart || savedCart === '[]' || savedCart.trim() === '[]') {
+      if (!savedCart) {
+        console.log('🛒 No cart in localStorage, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
+      }
+      
+      // If cart is empty array string, clear state
+      if (savedCart === '[]' || savedCart.trim() === '[]') {
         console.log('🛒 Cart is empty in localStorage, clearing local state');
         setCartItems([]);
         setCartItemCount(0);
@@ -209,7 +230,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
         console.warn('⚠️ Invalid cart data: not an array, clearing...');
         setCartItems([]);
         setCartItemCount(0);
-        localStorage.setItem('cart', '[]');
+        localStorage.removeItem('cart');
         return;
       }
       
@@ -237,7 +258,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
       // On error, clear state and localStorage
       setCartItems([]);
       setCartItemCount(0);
-      localStorage.setItem('cart', '[]');
+      localStorage.removeItem('cart');
     }
   };
 
@@ -269,18 +290,29 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
 
   const clearCart = () => {
     console.log('🧹 CustomerDashboardNavbar: Clearing cart...');
+    
+    // CRITICAL: Set timestamp FIRST to prevent reloading
+    localStorage.setItem('cartLastCleared', Date.now().toString());
+    
     // Clear local state first
     setCartItems([]);
     setCartItemCount(0);
     
+    // CRITICAL: Remove localStorage COMPLETELY (not just set to '[]')
+    localStorage.removeItem('cart');
+    
     // Clear all cart-related localStorage keys
-    const cartKeys = ['cart', 'guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
+    const cartKeys = ['guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
     cartKeys.forEach(key => {
       localStorage.removeItem(key);
     });
     
-    // Explicitly set to empty array
-    localStorage.setItem('cart', '[]');
+    // Clear ALL cart-related keys (case-insensitive search) as backup
+    Object.keys(localStorage).forEach(key => {
+      if (key.toLowerCase().includes('cart') && key !== 'cartLastCleared') {
+        localStorage.removeItem(key);
+      }
+    });
     
     // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('cartUpdated'));
@@ -399,10 +431,22 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
     
     // Listen for custom cart update events (from same tab)
     const handleCartUpdate = () => {
-      // Add a small delay to ensure localStorage is fully updated
+      // CRITICAL: Check if cart was recently cleared BEFORE loading
+      const lastClearTime = localStorage.getItem('cartLastCleared');
+      if (lastClearTime) {
+        const timeSinceClear = Date.now() - parseInt(lastClearTime);
+        if (timeSinceClear < 5000) {
+          console.log('🛑 Cart was recently cleared in event handler, NOT reloading');
+          setCartItems([]);
+          setCartItemCount(0);
+          return;
+        }
+      }
+      
+      // Add a delay to ensure localStorage is fully updated
       setTimeout(() => {
         loadCartFromStorage();
-      }, 50);
+      }, 100);
     };
     
     window.addEventListener('cartUpdated', handleCartUpdate);
