@@ -227,6 +227,8 @@ app.use('/api/customer', customerOrderRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/guest', guestOrderRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/admin/inventory', adminInventoryRoutes);
 app.use('/api', eventRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
