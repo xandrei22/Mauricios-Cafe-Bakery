@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
+      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -635,7 +635,7 @@ const CustomerMenu: React.FC = () => {
           })()}
         </div>
       )}
-
+      </div>
 
       {/* Cart Modal */}
       <CustomerCartModal 
