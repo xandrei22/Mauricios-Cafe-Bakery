@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CheckCircle, CreditCard, FileImage, X, Download, Printer } from 'lucide-react';
 import CashPaymentModal from './CashPaymentModal';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface Order {
   orderId: string;
@@ -58,6 +59,20 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   }, [orders, pendingOrders]);
   
   const cancelledOrders = orders.filter(order => order.status === 'cancelled');
+
+  const toShortId = (rawOrderId: string) => {
+    try {
+      const encoded = encodeId(String(rawOrderId || ''));
+      const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+      const digits = encoded.replace(/\D/g, '').slice(-2);
+      const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+      const partB = (digits || '00').padStart(2, '0');
+      return partA + partB;
+    } catch {
+      // Fallback: last 5 non-separator characters
+      return String(rawOrderId || '').replace(/[^A-Za-z0-9]/g, '').slice(-5) || String(rawOrderId || '');
+    }
+  };
 
   // Real-time updates are handled automatically by the parent component
 
@@ -281,21 +296,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                           </div>
                         </div>
                         <div className="flex flex-col">
-                          <div className="text-sm font-bold text-gray-900">
-                            {(() => {
-                              const parts = order.orderId.split('-');
-                              if (parts.length >= 2) {
-                                return (
-                                  <>
-                                    {parts[0]}-{parts[1]}
-                                    <br />
-                                    {parts.slice(2).join('-')}
-                                  </>
-                                );
-                              }
-                              return order.orderId;
-                            })()}
-                          </div>
+                          <div className="text-sm font-bold text-gray-900">{toShortId(order.orderId)}</div>
                           <span className="text-sm text-gray-500">Click to view details</span>
                         </div>
                       </div>
@@ -377,7 +378,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               <div className="bg-gray-50 rounded-lg p-3 mb-3">
                 <h4 className="font-semibold text-gray-800 mb-2 text-sm">Order Details</h4>
                 <div className="space-y-1 text-sm text-gray-600">
-                  <p><strong>Order ID:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Order ID:</strong> {toShortId(selectedOrder.orderId)}</p>
                   <p><strong>Customer:</strong> {selectedOrder.customerName}</p>
                   <p><strong>{selectedOrder.tableNumber === 0 ? 'Takeout' : 'Table'}:</strong> {selectedOrder.tableNumber === 0 ? '' : selectedOrder.tableNumber}</p>
                   <p><strong>Total:</strong> ₱{selectedOrder.totalPrice}</p>
@@ -565,7 +566,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-2">Order Details</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                  <p><strong>Order ID:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Order ID:</strong> {toShortId(selectedOrder.orderId)}</p>
                   <p><strong>Customer:</strong> {selectedOrder.customerName}</p>
                   <p><strong>{selectedOrder.tableNumber === 0 ? 'Takeout' : 'Table'}:</strong> {selectedOrder.tableNumber === 0 ? '' : selectedOrder.tableNumber}</p>
                   <p><strong>Total:</strong> ₱{selectedOrder.totalPrice}</p>
@@ -649,7 +650,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="font-semibold text-gray-800 mb-2">Order Details</h4>
                 <div className="text-sm text-gray-600 space-y-1">
-                  <p><strong>Order ID:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Order ID:</strong> {toShortId(selectedOrder.orderId)}</p>
                   <p><strong>Customer:</strong> {selectedOrder.customerName}</p>
                   <p><strong>Total:</strong> ₱{selectedOrder.totalPrice}</p>
                   <p><strong>Method:</strong> {selectedOrder.paymentMethod.toUpperCase()}</p>

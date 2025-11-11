@@ -46,14 +46,12 @@ router.post('/', async(req, res) => {
             const orderStatus = isImmediatePay ? 'pending_verification' : 'pending';
             const paymentStatus = isImmediatePay ? 'pending' : 'pending';
 
-            // Generate a unique order number for display purposes
-            const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
+            // Insert order (omit optional order_number to be compatible with DBs that don't have the column)
             await connection.query(`
                 INSERT INTO orders 
-                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            `, [orderId, orderNumber, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
+                (order_id, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `, [orderId, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
 
             // Generate QR code for payment if needed
             let qrCode = null;
