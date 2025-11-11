@@ -9,7 +9,9 @@ const CLIENT_PROFANITY_WORDS: string[] = [
   // Minimal built-in list for client-side UX only; server enforces full list
   'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
   'damn', 'dick', 'fuck', 'fucking', 'motherfucker', 'piss', 'prick',
-  'shit', 'slut', 'twat', 'whore'
+  'shit', 'slut', 'twat', 'whore',
+  // Add some Spanish/Tagalog commonly encountered words
+  'puta', 'putangina', 'gago', 'ulol', 'punyeta'
 ];
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

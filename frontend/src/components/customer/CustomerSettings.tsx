@@ -12,7 +12,7 @@ interface CustomerSettings {
 }
 
 const CustomerSettings: React.FC = () => {
-    const { user } = useAuth();
+    const { user, refreshSession } = useAuth();
     const [settings, setSettings] = useState<CustomerSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -78,6 +78,23 @@ const CustomerSettings: React.FC = () => {
                 setUsernamePassword('');
                 setShowUsernameForm(false);
                 fetchSettings(); // Refresh settings
+                // Update auth context and localStorage so sidebar reflects immediately
+                try {
+                    await refreshSession();
+                } catch (e) {
+                    // Fallback: patch localStorage if refreshSession fails
+                    const storedUser = localStorage.getItem('customerUser');
+                    if (storedUser) {
+                        try {
+                            const parsed = JSON.parse(storedUser);
+                            parsed.name = response.data?.username || newUsername.trim();
+                            parsed.username = response.data?.username || newUsername.trim();
+                            localStorage.setItem('customerUser', JSON.stringify(parsed));
+                            // Inform listeners that user changed
+                            window.dispatchEvent(new Event('storage'));
+                        } catch {}
+                    }
+                }
             } else {
                 setError(response.data.error || 'Failed to update username');
             }
