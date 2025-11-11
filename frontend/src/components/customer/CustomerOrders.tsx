@@ -5,23 +5,21 @@ import { io, Socket } from 'socket.io-client';
 import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
-import naughtyWords from 'naughty-words';
-
-const wordLists = naughtyWords as Record<string, string[]>;
-const rawWordList: string[] = Array.isArray(wordLists?.en) && wordLists.en.length > 0
-  ? wordLists.en
-  : Array.isArray(wordLists?.english) && wordLists.english.length > 0
-    ? wordLists.english
-    : [];
+const CLIENT_PROFANITY_WORDS: string[] = [
+  // Minimal built-in list for client-side UX only; server enforces full list
+  'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
+  'damn', 'dick', 'fuck', 'fucking', 'motherfucker', 'piss', 'prick',
+  'shit', 'slut', 'twat', 'whore'
+];
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const PROFANITY_REGEXES = rawWordList
+const CLIENT_PROFANITY_REGEXES = CLIENT_PROFANITY_WORDS
   .filter((word) => typeof word === 'string' && word.trim().length > 0)
   .map((word) => new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i'));
 
 const containsProfanity = (text: string | null | undefined) => {
-  if (!text || typeof text !== 'string' || PROFANITY_REGEXES.length === 0) return false;
-  return PROFANITY_REGEXES.some((regex) => regex.test(text));
+  if (!text || typeof text !== 'string' || CLIENT_PROFANITY_REGEXES.length === 0) return false;
+  return CLIENT_PROFANITY_REGEXES.some((regex) => regex.test(text));
 };
 
 interface Order {
