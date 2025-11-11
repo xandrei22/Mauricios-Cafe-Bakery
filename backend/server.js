@@ -193,12 +193,36 @@ app.use('/api/auth/google', passport.session());
 
 // -------------------
 // CRITICAL: Initialize req.session globally to prevent "Cannot read properties of undefined" errors
-// This MUST run before any routes that might access req.session
+// This MUST run BEFORE any routes, middleware, or code that might access req.session
+// This runs for ALL routes, not just Google OAuth
 // -------------------
 app.use(function(req, res, next) {
-    // Ensure req.session is always a safe object (never undefined) to prevent errors
-    if (!req.session || typeof req.session !== 'object') {
-        // Create a safe object with null properties for common session properties
+    try {
+        // CRITICAL: Always ensure req.session exists and is a safe object
+        // This prevents "Cannot read properties of undefined" errors
+        if (req.session === undefined || req.session === null || typeof req.session !== 'object') {
+            // Create a safe object with null properties for common session properties
+            req.session = {
+                adminUser: null,
+                staffUser: null,
+                user: null,
+                customerUser: null,
+                admin: null,
+                staff: null
+            };
+        } else {
+            // If session exists but properties are undefined, set them to null
+            // This prevents "Cannot read properties of undefined" when accessing nested properties
+            if (req.session.adminUser === undefined) req.session.adminUser = null;
+            if (req.session.staffUser === undefined) req.session.staffUser = null;
+            if (req.session.user === undefined) req.session.user = null;
+            if (req.session.customerUser === undefined) req.session.customerUser = null;
+            if (req.session.admin === undefined) req.session.admin = null;
+            if (req.session.staff === undefined) req.session.staff = null;
+        }
+    } catch (initError) {
+        // If initialization fails, create a minimal safe object
+        console.error('❌ Error initializing req.session in global middleware:', initError);
         req.session = {
             adminUser: null,
             staffUser: null,
@@ -207,12 +231,6 @@ app.use(function(req, res, next) {
             admin: null,
             staff: null
         };
-    } else {
-        // If session exists but properties are undefined, set them to null
-        if (req.session.adminUser === undefined) req.session.adminUser = null;
-        if (req.session.staffUser === undefined) req.session.staffUser = null;
-        if (req.session.user === undefined) req.session.user = null;
-        if (req.session.customerUser === undefined) req.session.customerUser = null;
     }
     next();
 });

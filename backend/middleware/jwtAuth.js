@@ -7,6 +7,16 @@ const jwt = require('jsonwebtoken');
  */
 function authenticateJWT(req, res, next) {
     try {
+        // CRITICAL: Ensure req.session is safe before any access (defensive programming)
+        if (!req.session || typeof req.session !== 'object') {
+            req.session = {
+                adminUser: null,
+                staffUser: null,
+                user: null,
+                customerUser: null
+            };
+        }
+        
         // Log all headers for debugging (but not sensitive values)
         const headerKeys = Object.keys(req.headers);
 

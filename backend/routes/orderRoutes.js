@@ -45,18 +45,25 @@ function generateShortOrderCode() {
 
 // Create a new order
 router.post('/', async(req, res) => {
-    // Wrap everything in a try-catch to catch any session access errors
+    // CRITICAL: Initialize session FIRST before anything else
     try {
-        // CRITICAL: Ensure req.session is safe before any access
         if (!req.session || typeof req.session !== 'object') {
             req.session = {
                 adminUser: null,
                 staffUser: null,
                 user: null,
-                customerUser: null
+                customerUser: null,
+                admin: null,
+                staff: null
             };
         }
+    } catch (sessionInitError) {
+        console.error('❌ Error initializing session:', sessionInitError);
+        req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+    }
 
+    // Wrap everything in a try-catch to catch any session access errors
+    try {
         // CRITICAL: Ensure req.user exists (set by authenticateJWT middleware)
         if (!req.user) {
             return res.status(401).json({
@@ -191,12 +198,13 @@ router.post('/', async(req, res) => {
             });
 
             // Insert order with short order code
-            // Note: created_at/order_time are auto-generated, so we don't include them
+            // CRITICAL: Include created_at explicitly to avoid "Field 'created_at' doesn't have a default value" error
+            const currentTime = new Date();
             const insertResult = await connection.query(`
                 INSERT INTO orders 
-                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes || null, orderType, queuePosition, estimatedReadyTime, staffId]);
+                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at, order_time) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes || null, orderType, queuePosition, estimatedReadyTime, staffId, currentTime, currentTime]);
 
             console.log('✅ Order inserted successfully:', (insertResult[0] && insertResult[0].insertId) || 'unknown');
 
@@ -276,37 +284,55 @@ router.post('/', async(req, res) => {
             connection.release();
         }
     } catch (error) {
+        // CRITICAL: Ensure session is safe BEFORE any error logging or processing
+        try {
+            if (!req.session || typeof req.session !== 'object') {
+                req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+            }
+        } catch (sessionError) {
+            // If we can't even initialize session, create a minimal safe object
+            req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+        }
+
         console.error('❌ Error creating order:', error);
         console.error('❌ Error name:', error.name);
         console.error('❌ Error message:', error.message);
         console.error('❌ Error stack:', error.stack);
-        console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
-        console.error('❌ Request headers:', req.headers);
+
+        // Safely stringify request body (might fail if circular references)
+        try {
+            console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
+        } catch (e) {
+            console.error('❌ Request body (stringify failed):', typeof req.body);
+        }
+
+        // Safely log headers
+        try {
+            console.error('❌ Request headers:', Object.keys(req.headers || {}));
+        } catch (e) {
+            console.error('❌ Request headers (access failed)');
+        }
 
         // Check if error is related to session access
-        if (error.message && (error.message.includes('adminUser') || error.message.includes('Cannot read properties'))) {
+        const isSessionError = error.message && (
+            error.message.includes('adminUser') ||
+            error.message.includes('staffUser') ||
+            error.message.includes('Cannot read properties')
+        );
+
+        if (isSessionError) {
             console.error('❌ SESSION ACCESS ERROR DETECTED - This should not happen!');
-            const errorLocation = error.stack ? error.stack.split('\n').slice(0, 5).join('\n') : 'unknown';
+            const errorLocation = error.stack ? error.stack.split('\n').slice(0, 10).join('\n') : 'unknown';
             console.error('❌ Error location:', errorLocation);
             console.error('❌ req.session exists:', !!req.session);
             console.error('❌ req.session type:', typeof req.session);
             console.error('❌ req.user exists:', !!req.user);
             console.error('❌ req.user:', req.user ? { id: req.user.id, role: req.user.role } : 'null');
-
-            // Ensure session is safe before any further access
-            if (!req.session || typeof req.session !== 'object') {
-                req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
-            }
         }
 
         // Provide more specific error messages
         let errorMessage = 'Failed to create order';
         let errorDetails = error.message || 'Unknown error';
-
-        // CRITICAL: Ensure session is safe before accessing it in error handling
-        if (!req.session || typeof req.session !== 'object') {
-            req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
-        }
 
         if (error.code === 'ER_NO_SUCH_TABLE') {
             errorMessage = 'Database table not found';
