@@ -188,24 +188,11 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 			console.log('Sending order data:', orderData);
 
-			const response = await fetch(`${API_URL}/api/orders`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				credentials: 'include',
-				body: JSON.stringify(orderData),
-			});
+			const response = await axiosInstance.post(`${API_URL}/api/orders`, orderData);
 
-			let result: any = {};
-			try {
-				result = await response.json();
-			} catch (parseError) {
-				console.error('Failed to parse response while placing order:', parseError);
-				result = { success: false, message: 'Unexpected server response.' };
-			}
+			const result: any = response?.data || {};
 
-			if (response.ok && result.success) {
+			if (response.status >= 200 && response.status < 300 && result.success) {
 				const newOrderId = result?.order?.orderId || result?.orderId || 'unknown';
 				alert(`Order placed successfully! Order ID: ${newOrderId}`);
 				clearCart();

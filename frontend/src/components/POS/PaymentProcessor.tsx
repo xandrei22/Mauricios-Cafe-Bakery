@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { CheckCircle, CreditCard, FileImage, X, Download, Printer } from 'lucide-react';
 import CashPaymentModal from './CashPaymentModal';
 import { encodeId } from '../../utils/idObfuscation';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface Order {
   orderId: string;
@@ -27,6 +29,7 @@ interface PaymentProcessorProps {
 }
 
 const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentProcessed, staffId, children }) => {
+  const API_URL = getApiUrl();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showCashModal, setShowCashModal] = useState(false);
@@ -140,22 +143,16 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const verifyPayment = async (orderId: string, reference?: string, transactionId?: string) => {
     try {
       setProcessingPayment(true);
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/admin/orders/${orderId}/verify-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit',
-        body: JSON.stringify({ 
-          paymentMethod: selectedOrder?.paymentMethod,
-          verifiedBy: 'admin',
-          reference: reference,
-          transactionId: transactionId
-        }),
+      // Correct endpoint lives under /api/orders, not /api/admin/orders
+      const res = await axiosInstance.post(`${API_URL}/api/orders/${orderId}/verify-payment`, {
+        paymentMethod: selectedOrder?.paymentMethod,
+        verifiedBy: 'admin',
+        reference,
+        transactionId
       });
 
-      if (response.ok) {
-        const result = await response.json();
+      if (res.status >= 200 && res.status < 300) {
+        const result = res.data || {};
         if (result.success) {
           // Show success message with better visibility
           alert('Payment verified successfully! Order is now pending preparation.');
@@ -167,9 +164,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
           alert(`Failed to verify payment: ${result.message || result.error || 'Unknown error'}`);
         }
       } else {
-        const errorResult = await response.json().catch(() => ({}));
-        const errorMessage = errorResult.message || errorResult.error || `Server error (${response.status})`;
-        alert(`Failed to verify payment: ${errorMessage}`);
+        alert(`Failed to verify payment: HTTP ${res.status}`);
       }
     } catch (error) {
       console.error('Error verifying payment:', error);
@@ -473,21 +468,15 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                       if (confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
                         try {
                           // Use the staff orders endpoint instead of admin
-                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/orders/${selectedOrder.orderId}/status`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ 
-                              status: 'cancelled',
-                              cancelledBy: staffId,
-                              cancellationReason: 'Cancelled by staff during payment processing',
-                              cancelledAt: new Date().toISOString()
-                            }),
+                          const res = await axiosInstance.put(`${API_URL}/api/orders/${selectedOrder.orderId}/status`, {
+                            status: 'cancelled',
+                            cancelledBy: staffId,
+                            cancellationReason: 'Cancelled by staff during payment processing',
+                            cancelledAt: new Date().toISOString()
                           });
-                          
-                          if (response.ok) {
-                            const result = await response.json();
+
+                          if (res.status >= 200 && res.status < 300) {
+                            const result = res.data || {};
                             if (result.success) {
                               alert('Order cancelled successfully');
                               onPaymentProcessed(); // Refresh the orders list
@@ -496,8 +485,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                               alert(`Failed to cancel order: ${result.error || 'Unknown error'}`);
                             }
                           } else {
-                            const errorData = await response.json().catch(() => ({}));
-                            alert(`Failed to cancel order: ${errorData.message || `HTTP ${response.status}`}`);
+                            alert(`Failed to cancel order: HTTP ${res.status}`);
                           }
                         } catch (error) {
                           console.error('Error cancelling order:', error);

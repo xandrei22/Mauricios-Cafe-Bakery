@@ -36,6 +36,7 @@ interface Staff {
 }
 
 const AdminStaff: React.FC = () => {
+  const API_URL = getApiUrl();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
@@ -117,7 +118,7 @@ const AdminStaff: React.FC = () => {
 
   const fetchStaff = async () => {
     try {
-      const response = await axiosInstance.get('/api/admin/staff');
+      const response = await axiosInstance.get(`${API_URL}/api/admin/staff`);
       const data = response.data;
       setStaff(data);
       // Derive active staff count from fetched data to avoid stale/incorrect stats
@@ -140,7 +141,7 @@ const AdminStaff: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axiosInstance.get('/api/admin/staff/stats');
+      const response = await axiosInstance.get(`${API_URL}/api/admin/staff/stats`);
       const data = response.data;
       setStaffCount(data.totalStaff || 0);
     } catch (err: any) {
@@ -177,7 +178,7 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      await axiosInstance.post('/api/admin/staff', form);
+      await axiosInstance.post(`${API_URL}/api/admin/staff`, form);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -188,7 +189,7 @@ const AdminStaff: React.FC = () => {
         username: '', email: '', password: '', confirmPassword: '', 
         first_name: '', last_name: '', age: '', role: 'staff',
         phone: '', address: '', position: '', work_schedule: 'flexible',
-        date_hired: '', employee_id: '', gender: ''
+        date_hired: '', employee_id: '', gender: '', birthday: ''
       });
       setShowModal(false);
       fetchStaff();
@@ -218,7 +219,7 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      await axiosInstance.put(`/api/admin/staff/${editForm?.id}`, editForm);
+      await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm?.id}`, editForm);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -259,7 +260,7 @@ const AdminStaff: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        await axiosInstance.delete(`/api/admin/staff/${id}`);
+        await axiosInstance.delete(`${API_URL}/api/admin/staff/${id}`);
         Swal.fire({
           icon: 'success',
           title: 'Deleted!',

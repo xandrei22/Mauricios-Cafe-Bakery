@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   Package, 
   Calculator, 
   Settings,
@@ -15,6 +15,8 @@ import {
   X as CloseIcon,
   Image as ImageIcon
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface ProductDetailsFormProps {
   product?: any;
@@ -73,15 +75,15 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     // load ingredients for recipe builder
     const load = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/inventory`);
-        const data = await res.json();
-        if (data?.ingredients) {
+        const res = await axiosInstance.get(`${API_URL}/api/inventory`);
+        const data = res.data;
+        if (data && data.ingredients) {
           setIngredientOptions(
             data.ingredients.map((i: any) => ({ id: i.id, name: i.name, actual_unit: i.actual_unit }))
           );
@@ -110,9 +112,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     // Load categories from backend so they are shared globally
     const loadCategories = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/menu/categories`);
-        const data = await res.json();
-        if (data.success) setCategories(data.categories || []);
+        const res = await axiosInstance.get(`${API_URL}/api/menu/categories`);
+        const data = res.data;
+        if (data && data.success) setCategories(data.categories || []);
       } catch (_) {}
     };
     loadCategories();
@@ -122,13 +124,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     const name = newCategoryName.trim();
     if (!name) return;
     try {
-      const res = await fetch(`${API_URL}/api/menu/categories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await axiosInstance.post(`${API_URL}/api/menu/categories`, { name });
+      const data = res.data;
+      if (data && data.success) {
         setCategories(prev => (prev.includes(name) ? prev : [...prev, name]));
         setFormData(prev => ({ ...prev, category: name }));
       }
@@ -139,11 +137,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
 
   const deleteCategory = async (name: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/menu/categories/${encodeURIComponent(name)}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await axiosInstance.delete(`${API_URL}/api/menu/categories/${encodeURIComponent(name)}`);
+      const data = res.data;
+      if (data && data.success) {
         setCategories(prev => prev.filter(c => c !== name));
         if (formData.category === name) {
           setFormData(prev => ({ ...prev, category: '' }));
