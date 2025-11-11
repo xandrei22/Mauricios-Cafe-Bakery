@@ -50,7 +50,7 @@ module.exports = (passport, db) => {
                 try {
                     console.log('🔍 Google OAuth profile received:', {
                         id: profile.id,
-                        email: profile.emails ? .[0] ? .value,
+                        email: profile.emails && profile.emails.length > 0 ? profile.emails[0].value : undefined,
                         displayName: profile.displayName,
                         hasEmails: !!profile.emails && profile.emails.length > 0
                     });
