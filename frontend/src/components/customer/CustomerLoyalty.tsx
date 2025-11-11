@@ -498,18 +498,18 @@ const CustomerLoyalty: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-[#a87437] mb-2">{loyaltyData?.loyalty_points || 0}</div>
                 <p className="text-gray-600">Current Points</p>
                 <p className="text-xs text-green-600 mt-1">
                   +{(loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (loyaltyData.points_earned_history[0].points_earned || 0) : 0)} from last order
                 </p>
               </div>
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-green-600 mb-2">{loyaltyData?.total_earned || 0}</div>
                 <p className="text-gray-600">Total Earned</p>
               </div>
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-purple-600 mb-2">{loyaltyData?.total_redeemed || 0}</div>
                 <p className="text-gray-600">Total Redeemed</p>
               </div>
@@ -523,7 +523,7 @@ const CustomerLoyalty: React.FC = () => {
             /* Mobile Dropdown */
             <div className="w-full">
               <Select value={activeTab} onValueChange={setActiveTab}>
-                <SelectTrigger className="w-full bg-white border-2 border-[#a87437]/60 shadow-lg rounded-lg h-12">
+                <SelectTrigger className="w-full bg-white border border-gray-300 shadow-lg rounded-lg h-12">
                   <SelectValue placeholder="Select a section" />
                 </SelectTrigger>
                 <SelectContent>
@@ -551,7 +551,7 @@ const CustomerLoyalty: React.FC = () => {
                       {loyaltyData.available_rewards
                         .filter(reward => !isRewardClaimed(reward.id))
                         .map((reward) => (
-                        <Card key={reward.id} className="bg-white border-2 border-[#a87437] shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <Card key={reward.id} className="bg-white border border-gray-300 shadow-lg hover:shadow-xl transition-shadow duration-300">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-[#6B5B5B]">
                               <span className="text-lg">{reward.name}</span>
@@ -592,7 +592,7 @@ const CustomerLoyalty: React.FC = () => {
                   {loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (
                     <div className="space-y-3">
                       {loyaltyData.points_earned_history.map((history, index) => (
-                        <Card key={index} className="bg-white border-2 border-[#a87437] shadow-lg">
+                        <Card key={index} className="bg-white border border-gray-300 shadow-lg">
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                               <div>
@@ -651,7 +651,7 @@ const CustomerLoyalty: React.FC = () => {
           ) : (
             /* Desktop Content */
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid grid-cols-3 bg-white border-2 border-[#a87437]/60 shadow-lg rounded-lg mx-auto w-[98%] sm:w-[96%] lg:w-[94%]">
+              <TabsList className="grid grid-cols-3 bg-white border border-gray-300 shadow-lg rounded-lg mx-auto w-[98%] sm:w-[96%] lg:w-[94%]">
                 {tabOptions.map((option) => (
                   <TabsTrigger 
                     key={option.value}
@@ -698,7 +698,7 @@ const CustomerLoyalty: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
+              <Card className="bg-white border border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
                 <CardContent className="text-center py-8">
                   <Gift className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No rewards available at the moment</p>
@@ -729,7 +729,7 @@ const CustomerLoyalty: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {claimedRewards.map((claimedReward) => (
-                    <Card key={claimedReward.id} className="border-2 border-[#a87437]/60 bg-amber-50 shadow-md">
+                    <Card key={claimedReward.id} className="border border-gray-300 bg-amber-50 shadow-md">
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-[#6B5B5B]">
                           <span className="text-lg">{claimedReward.name}</span>
@@ -769,7 +769,7 @@ const CustomerLoyalty: React.FC = () => {
             {loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (
               <div className="space-y-4">
                 {loyaltyData.points_earned_history.map((history, index) => (
-                  <Card key={index} className="bg-white border-2 border-[#a87437]/60 shadow-md">
+                  <Card key={index} className="bg-white border border-gray-300 shadow-md">
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">

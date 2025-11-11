@@ -264,7 +264,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               <Label htmlFor="occasion" className="text-sm font-medium text-[#6B5B5B] mb-2 block">Event Type/Occasion *</Label>
               <Select value={selectedOccasion} onValueChange={setSelectedOccasion} required>
                 <SelectTrigger 
-                  className="w-full h-12 min-h-[48px] border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 flex items-center justify-between"
+                  className="w-full h-12 min-h-[48px] border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 flex items-center justify-between"
                   style={{ height: '48px', minHeight: '48px' }}
                 >
                   <SelectValue placeholder="Select an occasion" />
@@ -287,7 +287,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 min={getMinDate()}
                 onChange={e => setEventDate(e.target.value)}
                 required
-                className="h-12 min-h-[48px] border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 min-h-[48px] border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 style={{ height: '48px', minHeight: '48px' }}
               />
               <p className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap text-center">Minimum 1 day advance booking</p>
@@ -303,7 +303,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={eventStartTime}
                 onChange={e => setEventStartTime(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
             <div className="md:col-span-2">
@@ -314,7 +314,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={eventEndTime}
                 onChange={e => setEventEndTime(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
             <div className="md:col-span-2">
@@ -327,7 +327,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 onChange={e => setCups(e.target.value)}
                 placeholder="Minimum order is 80 cups"
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />
             </div>
           </div>
@@ -342,7 +342,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={customOccasion}
                 onChange={e => setCustomOccasion(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />
             </div>
           )}
@@ -382,7 +382,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               onChange={e => setAddress(e.target.value)}
               required
               rows={3}
-              className="border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           
@@ -394,7 +394,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
-              className="border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           

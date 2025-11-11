@@ -413,7 +413,7 @@ const CustomerMenu: React.FC = () => {
           {/* Category Filter */}
           <div className="flex-1">
             <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-              <SelectTrigger className="h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 pr-8 flex items-center py-3 px-3 w-full">
+              <SelectTrigger className="h-12 text-lg border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 pr-8 flex items-center py-3 px-3 w-full">
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
