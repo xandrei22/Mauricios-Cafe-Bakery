@@ -74,26 +74,54 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [loadingIngredients, setLoadingIngredients] = useState(false);
 
   const API_URL = getApiUrl();
 
-  useEffect(() => {
-    // load ingredients for recipe builder
-    const load = async () => {
-      try {
-        const res = await axiosInstance.get('/api/inventory');
-        const data = res.data;
-        if (data && data.ingredients) {
-          setIngredientOptions(
-            data.ingredients.map((i: any) => ({ id: i.id, name: i.name, actual_unit: i.actual_unit }))
-          );
-        }
-      } catch (e) {
-        console.error('Load ingredients failed', e);
+  // Load ingredients function that can be called multiple times
+  const loadIngredients = async () => {
+    try {
+      setLoadingIngredients(true);
+      const res = await axiosInstance.get('/api/inventory');
+      const data = res.data;
+      console.log('🔍 ProductDetailsForm - Inventory API response:', data);
+      
+      // Check multiple possible response structures
+      let ingredients = [];
+      if (data && data.ingredients && Array.isArray(data.ingredients)) {
+        ingredients = data.ingredients;
+      } else if (data && data.inventory && Array.isArray(data.inventory)) {
+        ingredients = data.inventory;
+      } else if (Array.isArray(data)) {
+        ingredients = data;
+      }
+      
+      console.log('🔍 ProductDetailsForm - Parsed ingredients:', ingredients);
+      console.log('🔍 ProductDetailsForm - Ingredients count:', ingredients.length);
+      
+      if (ingredients.length > 0) {
+        const mapped = ingredients.map((i: any) => ({ 
+          id: i.id, 
+          name: i.name, 
+          actual_unit: i.actual_unit || i.actualUnit || '' 
+        }));
+        setIngredientOptions(mapped);
+        console.log('✅ ProductDetailsForm - Set ingredient options:', mapped.length);
+      } else {
+        console.warn('⚠️ ProductDetailsForm - No ingredients found in response');
         setIngredientOptions([]);
       }
-    };
-    load();
+    } catch (e) {
+      console.error('❌ ProductDetailsForm - Load ingredients failed', e);
+      setIngredientOptions([]);
+    } finally {
+      setLoadingIngredients(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load ingredients on mount
+    loadIngredients();
 
     // Load existing recipe data if editing
     if (product && product.ingredients && product.ingredients.length > 0) {
@@ -585,23 +613,58 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                 </CardHeader>
                 <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <Button 
-                    type="button" 
-                    onClick={addRecipeRow} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                    disabled={ingredientOptions.length === 0}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Ingredient
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      type="button" 
+                      onClick={addRecipeRow} 
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={ingredientOptions.length === 0}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Ingredient
+                    </Button>
+                    <Button 
+                      type="button" 
+                      onClick={loadIngredients}
+                      variant="outline"
+                      className="px-3 py-2"
+                      disabled={loadingIngredients}
+                      title="Refresh ingredients list"
+                    >
+                      {loadingIngredients ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                      ) : (
+                        '↻'
+                      )}
+                    </Button>
+                  </div>
                   <span className="text-sm text-gray-500">
                     {recipe.length} ingredient{recipe.length !== 1 ? 's' : ''} added
+                    {ingredientOptions.length > 0 && (
+                      <span className="ml-2 text-green-600">
+                        ({ingredientOptions.length} available)
+                      </span>
+                    )}
                   </span>
                 </div>
 
-                {ingredientOptions.length === 0 && (
+                {ingredientOptions.length === 0 && !loadingIngredients && (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm px-4 py-3">
                     No ingredients found. Add inventory items under <strong>Manage Inventory</strong> first so they can be selected in the recipe.
+                    <Button
+                      type="button"
+                      onClick={loadIngredients}
+                      variant="link"
+                      className="ml-2 h-auto p-0 text-amber-700 underline"
+                    >
+                      Click here to refresh
+                    </Button>
+                  </div>
+                )}
+                
+                {loadingIngredients && (
+                  <div className="text-center py-2 text-sm text-gray-500">
+                    Loading ingredients...
                   </div>
                 )}
                   

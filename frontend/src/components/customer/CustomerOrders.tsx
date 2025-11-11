@@ -27,6 +27,7 @@ const containsProfanity = (text: string | null | undefined) => {
 interface Order {
   id: string;
   order_id: string;
+  order_number?: string;
   customer_name: string;
   items: Array<{
     name: string;
@@ -545,10 +546,15 @@ const CustomerOrders: React.FC = () => {
     return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
   };
 
-  // Format order ID to 5 characters (3 letters + 2 digits)
-  const formatOrderId = (orderId: string | null | undefined): string => {
-    if (!orderId) return 'N/A';
-    const raw = String(orderId);
+  // Get short order code - use order_number if available, otherwise fallback to formatted order_id
+  const getShortOrderCode = (order: Order | null | undefined): string => {
+    if (!order) return 'N/A';
+    // Use order_number (short code) if available, otherwise format from order_id
+    if (order.order_number) {
+      return order.order_number;
+    }
+    // Fallback: format from order_id (for older orders without order_number)
+    const raw = String(order.order_id || '');
     const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
     const digits = raw.replace(/\D/g, '').slice(-2);
     const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
@@ -797,7 +803,7 @@ const CustomerOrders: React.FC = () => {
                      <div className="grid grid-cols-2 gap-6 mb-6">
                        <div>
                          <p className="text-sm text-gray-600 mb-1">Order ID</p>
-                         <p className="font-medium text-gray-900">{formatOrderId(getCurrentOrder()?.order_id)}</p>
+                         <p className="font-medium text-gray-900">{getShortOrderCode(getCurrentOrder())}</p>
                        </div>
                        <div>
                          <p className="text-sm text-gray-600 mb-1">Queue Position</p>
@@ -1041,7 +1047,7 @@ const CustomerOrders: React.FC = () => {
                            <Utensils className="w-6 h-6 text-amber-600" />
                          </div>
                          <div>
-                           <p className="font-bold text-gray-900">Order ID: {formatOrderId(order.order_id)}</p>
+                           <p className="font-bold text-gray-900">Order ID: {getShortOrderCode(order)}</p>
                            <div className="flex items-center space-x-4 mt-1">
                              <div className="flex items-center text-sm text-gray-600">
                                <Calendar className="w-4 h-4 mr-1" />
@@ -1506,7 +1512,7 @@ const CustomerOrders: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <p className="text-sm text-gray-600">Order ID</p>
-                    <p className="font-bold text-gray-900">{formatOrderId(selectedOrderForDetails.order_id)}</p>
+                    <p className="font-bold text-gray-900">{getShortOrderCode(selectedOrderForDetails)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Service Options</p>
@@ -1700,7 +1706,7 @@ const CustomerOrders: React.FC = () => {
                 {/* Order Info */}
                 <div className="bg-gray-50 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-900 mb-2">Order Details</h3>
-                  <p className="text-sm text-gray-600">Order ID: {formatOrderId(selectedOrderForFeedback.order_id)}</p>
+                  <p className="text-sm text-gray-600">Order ID: {getShortOrderCode(selectedOrderForFeedback)}</p>
                   <p className="text-sm text-gray-600">Total: ₱{formatPrice(selectedOrderForFeedback.total_price)}</p>
                 </div>
 

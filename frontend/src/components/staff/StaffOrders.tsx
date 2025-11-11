@@ -17,9 +17,11 @@ import {
   X,
   User
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
 
 interface Order {
   orderId: string;
+  displayOrderId?: string;
   customerName: string;
   tableNumber?: number;
   items: any[];
@@ -32,6 +34,40 @@ interface Order {
   orderTime: string;
   paymentMethod: string;
 }
+
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  const segments = raw.split('-');
+  if (segments.length >= 3) {
+    return `${segments[0]}-${segments[1]}`;
+  }
+  return raw;
+};
+
+const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
+  return ordersData.map((order: any) => {
+    const rawOrderId = String(order.order_id || order.orderId || order.id || '').trim();
+    return {
+      orderId: rawOrderId,
+      displayOrderId: formatOrderId(rawOrderId),
+      customerName: (order.customer_name || order.customerName || '').toString().trim(),
+      tableNumber: order.table_number ?? order.tableNumber,
+      items: Array.isArray(order.items)
+        ? order.items
+        : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []),
+      totalPrice: Number(order.total_price ?? order.totalPrice ?? 0),
+      status: String(order.status || '').toLowerCase().trim() as Order['status'],
+      paymentStatus: String(order.payment_status || order.paymentStatus || '').toLowerCase().trim() as Order['paymentStatus'],
+      orderType: String(order.order_type || order.orderType || 'dine_in').toLowerCase().trim() as Order['orderType'],
+      queuePosition: order.queue_position ?? order.queuePosition ?? 0,
+      estimatedReadyTime: order.estimated_ready_time || order.estimatedReadyTime,
+      orderTime: order.order_time || order.orderTime,
+      paymentMethod: String(order.payment_method || order.paymentMethod || '')
+    };
+  });
+};
 
 const StaffOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -85,33 +121,18 @@ const StaffOrders: React.FC = () => {
   const fetchOrders = async (silent?: boolean) => {
     try {
       if (!silent) setLoading(true);
-      const response = await fetch(`${API_URL}/api/staff/orders`, {
-        credentials: 'omit'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          const transformedOrders: Order[] = data.orders.map((order: any) => ({
-            orderId: String(order.order_id || order.id).trim(),
-            customerName: (order.customer_name || '').toString().trim(),
-            tableNumber: order.table_number,
-            items: order.items || [],
-            totalPrice: Number(order.total_price),
-            status: String(order.status || '').toLowerCase().trim(),
-            paymentStatus: String(order.payment_status || order.paymentStatus || '').toLowerCase().trim(),
-            orderType: String(order.order_type || '').toLowerCase().trim(),
-            queuePosition: 0,
-            estimatedReadyTime: order.estimated_ready_time,
-            orderTime: order.order_time,
-            paymentMethod: String(order.payment_method || '')
-          }));
-          
-          setOrders(transformedOrders);
-        }
+      const response = await axiosInstance.get('/api/staff/orders');
+      const data = response.data;
+      if (data && data.success && Array.isArray(data.orders)) {
+        setOrders(transformOrdersResponse(data.orders));
+      } else if (data && Array.isArray(data.orders)) {
+        setOrders(transformOrdersResponse(data.orders));
+      } else {
+        setOrders([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      if (!silent) setOrders([]);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -119,18 +140,8 @@ const StaffOrders: React.FC = () => {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/staff/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit',
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        fetchOrders();
-      }
+      await axiosInstance.put(`/api/staff/orders/${orderId}/status`, { status });
+      fetchOrders(true);
     } catch (error) {
       console.error('Error updating order status:', error);
     }
@@ -138,8 +149,10 @@ const StaffOrders: React.FC = () => {
 
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.orderId.toLowerCase().includes(searchTerm.toLowerCase());
+    const loweredSearch = searchTerm.toLowerCase();
+    const normalizedOrderId = (order.displayOrderId || order.orderId || '').toLowerCase();
+    const matchesSearch = order.customerName.toLowerCase().includes(loweredSearch) ||
+                         normalizedOrderId.includes(loweredSearch);
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesType = orderTypeFilter === 'all' || order.orderType === orderTypeFilter;
     
@@ -373,7 +386,7 @@ const StaffOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-blue-800">Order #{order.orderId}</span>
+                              <span className="text-blue-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-blue-100 text-blue-800 border-blue-200">
                                 Preparing
                               </Badge>
@@ -439,7 +452,7 @@ const StaffOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-green-800">Order #{order.orderId}</span>
+                              <span className="text-green-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-green-100 text-green-800 border-green-200">
               Ready
                               </Badge>
@@ -529,7 +542,7 @@ const StaffOrders: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                         <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                          <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                          <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                           <span>•</span>
                           <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                           <span>•</span>
@@ -606,7 +619,7 @@ const StaffOrders: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                         <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                          <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                          <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                           <span>•</span>
                           <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                           <span>•</span>

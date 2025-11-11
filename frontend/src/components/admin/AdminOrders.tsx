@@ -76,7 +76,7 @@ const transformOrderRecord = (order: any): Order => {
     status: normalizedStatus as Order['status'],
     paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as Order['paymentStatus'],
     orderType: (order.orderType || order.order_type || 'dine_in') as Order['orderType'],
-    queuePosition: order.queuePosition || 0,
+    queuePosition: order.queuePosition ?? order.queue_position ?? 0,
     estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
     orderTime: order.orderTime || order.order_time,
     paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
@@ -102,6 +102,7 @@ const AdminOrders: React.FC = () => {
   const [activeTab, setActiveTab] = useState('preparing');
   const [isMobile, setIsMobile] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const API_URL = getApiUrl();
 
   // Tab options for dropdown - will be defined after orders are loaded
 
@@ -142,8 +143,6 @@ const AdminOrders: React.FC = () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
   }, []);
-
-  const API_URL = getApiUrl();
 
   useEffect(() => {
     fetchOrders();
@@ -271,7 +270,7 @@ const AdminOrders: React.FC = () => {
         const order = orders.find(o => o.orderId === orderId);
         if (order) {
           setPaymentSuccessData({
-            orderId: order.orderId,
+          orderId: order.displayOrderId || formatOrderId(order.orderId),
             amount: order.totalPrice,
           change: 0,
           });
@@ -309,8 +308,10 @@ const AdminOrders: React.FC = () => {
 
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.orderId.toLowerCase().includes(searchTerm.toLowerCase());
+    const loweredSearch = searchTerm.toLowerCase();
+    const normalizedOrderId = (order.displayOrderId || order.orderId || '').toLowerCase();
+    const matchesSearch = order.customerName.toLowerCase().includes(loweredSearch) ||
+                         normalizedOrderId.includes(loweredSearch);
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesType = orderTypeFilter === 'all' || order.orderType === orderTypeFilter;
     
@@ -908,7 +909,7 @@ const AdminOrders: React.FC = () => {
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                           <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                            <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                            <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                             <span>•</span>
                             <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                             <span>•</span>
@@ -966,7 +967,7 @@ const AdminOrders: React.FC = () => {
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
               <h2 className="text-xl font-bold mb-4">Verify Payment</h2>
               <p className="text-gray-600 mb-6">
-                Verify payment for order #{selectedOrder.orderId}
+                Verify payment for order #{selectedOrder.displayOrderId || selectedOrder.orderId}
               </p>
               
               <div className="space-y-4">

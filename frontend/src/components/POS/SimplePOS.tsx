@@ -8,6 +8,8 @@ import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search } from "luc
 import UnifiedCustomizeModal from "../customer/UnifiedCustomizeModal";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
+import axiosInstance from "../../utils/axiosInstance";
+import { getApiUrl } from "../../utils/apiConfig";
 
 interface MenuItem {
 	id: number;
@@ -62,10 +64,12 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 	const [showMoreMenu, setShowMoreMenu] = useState(false);
 	const moreMenuRef = useRef<HTMLDivElement>(null);
 
+	// Define API_URL at component level
+	const API_URL = getApiUrl() || import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 
   useEffect(() => {
 		// Initialize Socket.IO connection for real-time updates
-		const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 		const newSocket = io(API_URL, {
 			transports: ['polling', 'websocket'],
 			path: '/socket.io',
@@ -188,7 +192,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 			console.log('Sending order data:', orderData);
 
-			const response = await axiosInstance.post(`${API_URL}/api/orders`, orderData);
+			const response = await axiosInstance.post('/api/orders', orderData);
 
 			const result: any = response?.data || {};
 
@@ -385,9 +389,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			setError(null);
 			
 			// Fetch menu items that are visible in POS
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-			const response = await fetch(`${API_URL}/api/menu/pos`);
-			const data = await response.json();
+			const response = await axiosInstance.get('/api/menu/pos');
+			const data = response.data;
 			
 			if (data.success && data.menu_items) {
 				// Ensure proper type conversion for numeric fields

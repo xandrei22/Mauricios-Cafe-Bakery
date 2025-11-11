@@ -26,6 +26,7 @@ interface OrderItem {
 interface Order {
   id: string;
   order_id: string;
+  order_number?: string;
   customer_name: string;
   items: OrderItem[];
   total_price: number;
@@ -198,10 +199,15 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
     return `${Math.floor(diffInMinutes / 1440)} days ago`;
   };
 
-  // Format order ID to 5 characters (3 letters + 2 digits)
-  const formatOrderId = (orderId: string | null | undefined): string => {
-    if (!orderId) return 'N/A';
-    const raw = String(orderId);
+  // Get short order code - use order_number if available, otherwise fallback to formatted order_id
+  const getShortOrderCode = (order: Order | null | undefined): string => {
+    if (!order) return 'N/A';
+    // Use order_number (short code) if available, otherwise format from order_id
+    if (order.order_number) {
+      return order.order_number;
+    }
+    // Fallback: format from order_id (for older orders without order_number)
+    const raw = String(order.order_id || '');
     const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
     const digits = raw.replace(/\D/g, '').slice(-2);
     const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
@@ -252,7 +258,7 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
               <CardHeader className="bg-gray-50">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="text-lg">Order #{formatOrderId(order.order_id)}</CardTitle>
+                    <CardTitle className="text-lg">Order #{getShortOrderCode(order)}</CardTitle>
                     <p className="text-sm text-gray-600">
                       Placed {formatTimeAgo(order.order_time)} • {formatDateTime(order.order_time)}
                     </p>
