@@ -202,6 +202,15 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			};
 
 			console.log('Sending order data:', orderData);
+			
+			// Verify token exists before making request (backend now requires JWT authentication)
+			const token = localStorage.getItem('authToken');
+			if (!token) {
+				alert('You must be logged in to place orders. Please log in again.');
+				window.location.href = '/admin/login';
+				return;
+			}
+			console.log('✅ Token verified, sending order request...');
 
 			const response = await axiosInstance.post('/api/orders', orderData);
 
@@ -225,6 +234,23 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			console.error('Error placing order:', error);
 			console.error('Error response:', error?.response?.data);
 			console.error('Error status:', error?.response?.status);
+			
+			// Check if it's an authentication error
+			if (error?.response?.status === 401) {
+				const token = localStorage.getItem('authToken');
+				console.error('❌ Authentication failed - Token check:', {
+					hasToken: !!token,
+					tokenLength: token?.length || 0,
+					errorMessage: error?.response?.data?.message || 'Unauthorized'
+				});
+				
+				alert('Authentication required. Please log in again.');
+				// Redirect to admin login if token is missing
+				if (!token) {
+					window.location.href = '/admin/login';
+					return;
+				}
+			}
 			
 			// Extract detailed error message
 			let errorMessage = 'Failed to place order. Please try again.';

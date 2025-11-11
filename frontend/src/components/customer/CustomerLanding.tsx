@@ -254,11 +254,11 @@ export default function CustomerLanding() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             {/* Fresh Pastries Card */}
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              <div className="relative">
+              <div className="relative h-64 overflow-hidden">
                 <img 
                   src="/images/freshpastries.jpg" 
                   alt="Fresh Pastries" 
-                  className="w-full h-64 object-cover"
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute bottom-4 left-4">
                   <span className="bg-[#8B4513] text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
@@ -277,11 +277,11 @@ export default function CustomerLanding() {
             
             {/* Cozy Ambiance Card */}
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              <div className="relative">
+              <div className="relative h-64 overflow-hidden">
                 <img 
                   src="/images/cozy.jpg" 
                   alt="Cozy Ambiance" 
-                  className="w-full h-64 object-cover"
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute bottom-4 left-4">
                   <span className="bg-[#8B4513] text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
@@ -300,11 +300,11 @@ export default function CustomerLanding() {
             
             {/* Coffee Customization Card */}
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              <div className="relative">
+              <div className="relative h-64 overflow-hidden">
                 <img 
                   src="/images/customization.jpg" 
                   alt="Coffee Customization" 
-                  className="w-full h-64 object-cover object-top -mt-4"
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute bottom-4 left-4">
                   <span className="bg-[#8B4513] text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
