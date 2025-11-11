@@ -205,21 +205,64 @@ const AdminStaff: React.FC = () => {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editForm?.password && !editPasswordsMatch) {
-      setError('Passwords do not match');
+    if (!editForm || !editForm.id) {
+      setError('Invalid staff member data');
       return;
     }
 
-    if (editForm?.password && !editAllValid) {
-      setError('Please meet all password requirements');
-      return;
+    // Only validate password if it's provided and not empty
+    if (editForm?.password && editForm.password.trim() !== '') {
+      if (!editPasswordsMatch) {
+        setError('Passwords do not match');
+        return;
+      }
+
+      if (!editAllValid) {
+        setError('Please meet all password requirements');
+        return;
+      }
     }
 
     setLoading(true);
     setError('');
 
     try {
-      await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm?.id}`, editForm);
+      // Prepare update data - only include fields that should be sent to backend
+      const updateData: any = {
+        username: editForm.username,
+        email: editForm.email,
+        first_name: editForm.first_name,
+        last_name: editForm.last_name,
+        age: editForm.age,
+        role: editForm.role,
+        phone: editForm.phone || null,
+        address: editForm.address || null,
+        position: editForm.position || null,
+        work_schedule: editForm.work_schedule || null,
+        date_hired: editForm.date_hired || null,
+        employee_id: editForm.employee_id || null,
+        status: editForm.status || 'active',
+        gender: editForm.gender || null,
+        birthday: editForm.birthday || null,
+        emergency_contact: editForm.emergency_contact || null,
+        emergency_phone: editForm.emergency_phone || null,
+      };
+
+      // Only include password if it's provided and not empty
+      if (editForm.password && editForm.password.trim() !== '') {
+        updateData.password = editForm.password;
+      }
+
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      console.log('Updating staff with data:', updateData);
+
+      await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm.id}`, updateData);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -235,6 +278,7 @@ const AdminStaff: React.FC = () => {
       const message = errorData?.message || errorData?.error || error?.message || 'Error updating staff member';
       console.error('Staff update error:', error);
       console.error('Error details:', errorData);
+      console.error('Request data sent:', editForm);
       setError(message);
     } finally {
       setLoading(false);
