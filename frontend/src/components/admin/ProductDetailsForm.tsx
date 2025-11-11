@@ -199,7 +199,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
           console.log('✅ ProductDetailsForm - Successfully set ingredient options:', mapped.length);
         } else {
           console.warn('⚠️ ProductDetailsForm - All ingredients filtered out (no valid entries)');
-          setIngredientOptions([]);
+        setIngredientOptions([]);
         }
       } else {
         console.warn('⚠️ ProductDetailsForm - No ingredients found in response');
@@ -223,18 +223,61 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     loadIngredients();
 
     // Load existing recipe data if editing
-    if (product && product.ingredients && product.ingredients.length > 0) {
-      console.log('Loading existing recipe:', product.ingredients);
-      setRecipe(product.ingredients.map((ing: any) => ({
-        id: crypto.randomUUID(),
-        ingredient_id: ing.ingredient_id || ing.id || 0,
-        amount: ing.base_quantity || ing.amount || 0,
-        unit: ing.base_unit || ing.unit || '',
-        is_optional: ing.is_optional || false,
-        extra_price_per_unit: ing.extra_price_per_unit || ing.extra_step_price || 0
-      })));
+    if (product) {
+      console.log('🔍 ProductDetailsForm - Product changed:', {
+        id: product.id,
+        name: product.name,
+        hasIngredients: !!product.ingredients,
+        ingredientsCount: product.ingredients?.length || 0,
+        ingredients: product.ingredients
+      });
+      
+      if (product.ingredients && Array.isArray(product.ingredients) && product.ingredients.length > 0) {
+        console.log('✅ Loading existing recipe:', product.ingredients);
+        const mappedRecipe = product.ingredients.map((ing: any) => ({
+          id: crypto.randomUUID(),
+          ingredient_id: ing.ingredient_id || ing.id || 0,
+          amount: ing.base_quantity || ing.amount || ing.required_display_amount || 0,
+          unit: ing.base_unit || ing.unit || ing.recipe_unit || '',
+          is_optional: ing.is_optional || false,
+          extra_price_per_unit: ing.extra_price_per_unit || ing.extra_step_price || 0
+        }));
+        console.log('✅ Mapped recipe rows:', mappedRecipe);
+        setRecipe(mappedRecipe);
+      } else if (product.id) {
+        // If product has ID but no ingredients, try to fetch them
+        console.log('⚠️ Product has no ingredients, attempting to fetch...');
+        const fetchProductIngredients = async () => {
+          try {
+            const res = await axiosInstance.get(`/api/menu/items/${product.id}`);
+            const data = res.data;
+            if (data.success && data.item && data.item.ingredients) {
+              console.log('✅ Fetched ingredients from API:', data.item.ingredients);
+              const mappedRecipe = data.item.ingredients.map((ing: any) => ({
+                id: crypto.randomUUID(),
+                ingredient_id: ing.ingredient_id || ing.id || 0,
+                amount: ing.base_quantity || ing.amount || 0,
+                unit: ing.base_unit || ing.unit || '',
+                is_optional: ing.is_optional || false,
+                extra_price_per_unit: ing.extra_price_per_unit || 0
+              }));
+              setRecipe(mappedRecipe);
+            }
+          } catch (err) {
+            console.warn('Could not fetch ingredients for product:', err);
+          }
+        };
+        fetchProductIngredients();
+      } else {
+        // New product, clear recipe
+        console.log('🆕 New product, clearing recipe');
+        setRecipe([]);
+      }
+    } else {
+      // No product, clear recipe
+      setRecipe([]);
     }
-  }, [product]);
+  }, [product?.id]); // Only re-run when product ID changes
 
   useEffect(() => {
     // Load categories from backend so they are shared globally
@@ -312,12 +355,25 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate recipe before submission
-    const invalidIngredients = recipe.filter(row => !row.ingredient_id || row.ingredient_id <= 0 || row.amount <= 0);
-    if (invalidIngredients.length > 0) {
-      alert('Please complete all ingredient information before saving.');
-      return;
-    }
+    // Filter out invalid recipe rows (empty or incomplete) instead of blocking submission
+    const validRecipeRows = recipe.filter(row => 
+      row.ingredient_id && 
+      row.ingredient_id > 0 && 
+      row.amount > 0 && 
+      row.unit && 
+      row.unit.trim().length > 0
+    );
+    
+    console.log('🔧 ProductDetailsForm - Recipe validation:', {
+      totalRows: recipe.length,
+      validRows: validRecipeRows.length,
+      invalidRows: recipe.length - validRecipeRows.length,
+      validIngredients: validRecipeRows.map(r => ({ 
+        id: r.ingredient_id, 
+        amount: r.amount, 
+        unit: r.unit 
+      }))
+    });
 
     // Prepare data for backend with proper recipe structure
     const submitData = {
@@ -335,12 +391,12 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       notes: formData.notes,
       image_url: typeof formData.image_url === 'object' ? formData.image_url.medium : formData.image_url,
       variants: formData.variants,
-      // Enhanced recipe data for unit conversion system
-      ingredients: recipe.map(row => ({
+      // Enhanced recipe data for unit conversion system - only send valid rows
+      ingredients: validRecipeRows.map(row => ({
         ingredient_id: row.ingredient_id,
         base_quantity: row.amount,
         base_unit: row.unit,
-        is_optional: row.is_optional,
+        is_optional: row.is_optional || false,
         extra_price_per_unit: Number(row.extra_price_per_unit) || 0
       }))
     };
@@ -350,7 +406,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       name: submitData.name,
       visibleInPos: submitData.visibleInPos,
       visibleInCustomerMenu: submitData.visibleInCustomerMenu,
-      allow_customization: submitData.allow_customization
+      allow_customization: submitData.allow_customization,
+      ingredientsCount: submitData.ingredients.length,
+      ingredients: submitData.ingredients
     });
 
     onSave(submitData);
@@ -713,15 +771,15 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                 <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Button 
-                      type="button" 
-                      onClick={addRecipeRow} 
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                      disabled={ingredientOptions.length === 0}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Ingredient
-                    </Button>
+                  <Button 
+                    type="button" 
+                    onClick={addRecipeRow} 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={ingredientOptions.length === 0}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Ingredient
+                  </Button>
                     <Button 
                       type="button" 
                       onClick={loadIngredients}

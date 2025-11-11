@@ -177,17 +177,26 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 		try {
 			const orderData = {
-				customer_info: customerInfo,
+				customer_info: {
+					id: customerInfo.id || null,
+					name: customerInfo.name.trim(),
+					tableNumber: customerInfo.orderType === 'dine_in' ? customerInfo.tableNumber : null,
+					orderType: customerInfo.orderType
+				},
 				items: cart.map(item => ({
 					menu_item_id: item.id,
-					quantity: item.quantity,
-					notes: item.notes,
-					customizations: item.customizations,
-					custom_price: item.customPrice
+					name: item.name || '',
+					quantity: item.quantity || 1,
+					price: item.price || item.customPrice || 0,
+					notes: item.notes || '',
+					customizations: item.customizations || [],
+					custom_price: item.customPrice || null
 				})),
 				total_amount: totalAmount,
+				orderType: customerInfo.orderType, // Send both formats for compatibility
 				order_type: customerInfo.orderType,
-				payment_method: customerInfo.paymentMethod
+				payment_method: customerInfo.paymentMethod || 'cash',
+				notes: cart.map(item => item.notes).filter(Boolean).join('; ') || ''
 			};
 
 			console.log('Sending order data:', orderData);

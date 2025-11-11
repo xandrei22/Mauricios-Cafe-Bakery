@@ -974,15 +974,15 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
         {/* Action Buttons - Sticky at bottom */}
         <div className="sticky bottom-0 bg-white border-t p-4 flex gap-3 justify-end flex-shrink-0">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleAdd} className="bg-[#a87437] hover:bg-[#8f652f]">
-            Add to Cart - ₱{(() => {
-              const total = calculateTotalPrice();
-              return isNaN(total) ? '0.00' : total.toFixed(2);
-            })()}
-          </Button>
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleAdd} className="bg-[#a87437] hover:bg-[#8f652f]">
+              Add to Cart - ₱{(() => {
+                const total = calculateTotalPrice();
+                return isNaN(total) ? '0.00' : total.toFixed(2);
+              })()}
+            </Button>
         </div>
       </div>
     </div>

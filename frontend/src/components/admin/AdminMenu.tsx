@@ -57,7 +57,8 @@ const AdminMenu: React.FC = () => {
     try {
       setLoading(true);
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/menu`, { credentials: 'omit' });
+      // Use endpoint that includes ingredients
+      const response = await fetch(`${API_URL}/api/menu/with-ingredients`, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
         // Ensure proper type conversion for numeric fields
@@ -66,12 +67,42 @@ const AdminMenu: React.FC = () => {
           base_price: Number(item.base_price),
           is_available: Boolean(item.is_available),
           visible_in_pos: Boolean(item.visible_in_pos),
-          visible_in_customer_menu: Boolean(item.visible_in_customer_menu)
+          visible_in_customer_menu: Boolean(item.visible_in_customer_menu),
+          // Ensure ingredients array is properly formatted
+          ingredients: (item.ingredients || []).map((ing: any) => ({
+            ingredient_id: ing.ingredient_id,
+            id: ing.ingredient_id, // For compatibility
+            base_quantity: ing.base_quantity || ing.required_display_amount || 0,
+            base_unit: ing.base_unit || ing.recipe_unit || '',
+            amount: ing.base_quantity || ing.required_display_amount || 0,
+            unit: ing.base_unit || ing.recipe_unit || '',
+            is_optional: ing.is_optional || false,
+            extra_price_per_unit: ing.extra_price_per_unit || 0
+          }))
         }));
         setMenuItems(processedItems);
+        console.log('✅ AdminMenu - Loaded menu items with ingredients:', processedItems.length);
       }
     } catch (error) {
       console.error('Failed to load menu items:', error);
+      // Fallback to regular endpoint if with-ingredients fails
+      try {
+        const fallbackResponse = await fetch(`${API_URL}/api/menu`, { credentials: 'omit' });
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData.success) {
+          const processedItems = fallbackData.menuItems.map((item: any) => ({
+            ...item,
+            base_price: Number(item.base_price),
+            is_available: Boolean(item.is_available),
+            visible_in_pos: Boolean(item.visible_in_pos),
+            visible_in_customer_menu: Boolean(item.visible_in_customer_menu),
+            ingredients: [] // Empty if endpoint doesn't provide them
+          }));
+          setMenuItems(processedItems);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback endpoint also failed:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
