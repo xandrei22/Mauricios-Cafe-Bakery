@@ -49,7 +49,6 @@ import StaffDashboard from "./components/staff/StaffDashboard";
 import StaffInventory from "./components/staff/StaffInventory";
 import StaffOrders from "./components/staff/StaffOrders";
 import StaffLoyalty from "./components/staff/StaffLoyalty";
-import StaffRewardProcessing from "./components/staff/StaffRewardProcessing";
 import StaffSales from "./components/staff/StaffSales";
 import StaffActivityLogs from "./components/staff/StaffActivityLogs";
 import StaffSettings from "./components/staff/StaffSettings";
@@ -158,7 +157,6 @@ function App() {
           <Route path="orders" element={<StaffOrders />} />
           <Route path="pos" element={<POSPage />} />
           <Route path="loyalty" element={<StaffLoyalty />} />
-          <Route path="reward-processing" element={<StaffRewardProcessing />} />
           <Route path="sales" element={<StaffSales />} />
           <Route path="activity-logs" element={<StaffActivityLogs />} />
           <Route path="settings" element={<StaffSettings />} />

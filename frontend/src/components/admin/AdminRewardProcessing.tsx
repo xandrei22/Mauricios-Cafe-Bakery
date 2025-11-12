@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import axiosInstance from '../../utils/axiosInstance';
-import { getApiUrl } from '../../utils/apiConfig';
 
 interface ClaimedReward {
   id: number;
@@ -117,7 +116,6 @@ const CountdownTimer: React.FC<{ expiryDate: string }> = ({ expiryDate }) => {
 };
 
 const AdminRewardProcessing: React.FC = () => {
-  const API_URL = getApiUrl();
   const [claimedRewards, setClaimedRewards] = useState<ClaimedReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,8 +138,10 @@ const AdminRewardProcessing: React.FC = () => {
       if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
       if (activeTab === 'cancelled') params.set('status', 'cancelled');
       if (activeTab === 'expired') params.set('status', 'expired');
-      const url = `${API_URL}/api/admin/loyalty/redemptions?${params.toString()}`;
+      // axiosInstance already has baseURL configured, so use relative path
+      const url = `/api/admin/loyalty/redemptions?${params.toString()}`;
       console.log('📋 Admin: Fetching redemptions from:', url);
+      console.log('📋 Admin: axiosInstance baseURL:', axiosInstance.defaults.baseURL);
       const response = await axiosInstance.get(url);
       console.log('📋 Admin: Received response:', response.data);
       if (response.data.success) {
@@ -173,15 +173,33 @@ const AdminRewardProcessing: React.FC = () => {
       }
     } catch (err: any) {
       console.error('❌ Admin: Error fetching claimed rewards:', err);
-      setError(err.response?.data?.error || err.message || 'An unexpected error occurred');
+      console.error('❌ Admin: Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        url: '/api/admin/loyalty/redemptions'
+      });
+      
+      // Provide more specific error messages
+      if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+      } else if (err.response?.status === 403) {
+        setError('Access denied. Admin privileges required.');
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('Failed to fetch redemptions. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [activeTab, API_URL]);
+  }, [activeTab]);
 
   const fetchLoyaltyStats = useCallback(async () => {
     try {
-      const response = await axiosInstance.get(`${API_URL}/api/admin/loyalty/statistics`);
+      const response = await axiosInstance.get('/api/admin/loyalty/statistics');
       if (response.data.success) {
         setStats(response.data.stats);
       } else {
@@ -214,7 +232,7 @@ const AdminRewardProcessing: React.FC = () => {
     setSearchResult(null);
 
     try {
-      const response = await axiosInstance.get(`${API_URL}/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`);
+      const response = await axiosInstance.get(`/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`);
 
       if (response.data.success) {
         // Normalize the redemption data to match ClaimedReward interface
@@ -255,7 +273,7 @@ const AdminRewardProcessing: React.FC = () => {
 
     setProcessingRewardId(rewardId);
     try {
-      const response = await axiosInstance.put(`${API_URL}/api/admin/loyalty/redemptions/${rewardId}/status`, {
+      const response = await axiosInstance.put(`/api/admin/loyalty/redemptions/${rewardId}/status`, {
         status: status === 'processed' ? 'completed' : 'cancelled',
         notes: status === 'processed' ? (redemptionProof.trim() || 'Processed by admin') : 'Cancelled by admin',
       });
@@ -291,11 +309,11 @@ const AdminRewardProcessing: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !loading) {
     return (
       <div className="text-center p-4 text-red-600">
         <AlertCircle className="h-10 w-10 mx-auto mb-2" />
-        <p>Error: {error}</p>
+        <p className="mb-2">Error: {error}</p>
         <Button onClick={fetchClaimedRewards} className="mt-4">
           <RefreshCw className="w-4 h-4 mr-2" /> Retry
         </Button>
