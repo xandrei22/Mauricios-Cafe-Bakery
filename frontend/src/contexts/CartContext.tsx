@@ -247,9 +247,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     // CRITICAL: Remove localStorage COMPLETELY (not just set to '[]')
     // This is the key fix - completely remove the key, don't just set it to empty
     localStorage.removeItem('cart');
+    // Maintain legacy keys used by older customer builds
+    localStorage.removeItem('customerCart');
+    localStorage.removeItem('customer_cart');
     
     // Clear ALL other cart-related localStorage keys
-    const cartKeys = ['guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
+    const cartKeys = ['guest-cart', 'pos-cart', 'customer-cart', 'customerCart', 'customer_cart', 'menu-cart'];
     cartKeys.forEach(key => {
       localStorage.removeItem(key);
       console.log('Removed cart key:', key);
