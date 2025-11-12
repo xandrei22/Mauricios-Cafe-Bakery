@@ -36,22 +36,69 @@ async function ensureEventColumns() {
     
     if (missingColumns.length > 0) {
         console.log('⚠️ Missing columns detected, running migration...');
+        console.log('📋 Missing columns:', missingColumns.join(', '));
         try {
             // Try to run the migration automatically
             const ensureSchema = require('../scripts/ensureEventsTableSchema');
-            await ensureSchema();
+            const migrationSuccess = await ensureSchema();
+            
+            if (!migrationSuccess) {
+                throw new Error('Migration function returned false');
+            }
+            
             // Clear cache to force re-check
             columnCache = null;
+            
+            // Wait a bit for database to update
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
             // Re-check columns
             const newColumns = await getEventTableColumns();
             const stillMissing = requiredColumns.filter(col => !newColumns.includes(col.toLowerCase()));
             if (stillMissing.length > 0) {
+                console.error('❌ Still missing columns after migration:', stillMissing);
                 throw new Error(`Migration failed. Missing columns: ${stillMissing.join(', ')}`);
             }
             console.log('✅ Migration completed successfully');
         } catch (migrationError) {
             console.error('❌ Automatic migration failed:', migrationError);
-            throw new Error(`Database schema error: Missing columns (${missingColumns.join(', ')}). Please run: node scripts/fix-events-table.js`);
+            console.error('❌ Migration error details:', migrationError.message);
+            // Try one more time with direct SQL
+            try {
+                console.log('🔄 Attempting direct SQL migration...');
+                const connection = await pool.getConnection();
+                for (const colName of missingColumns) {
+                    const colDef = {
+                        'customer_id': 'INT NULL',
+                        'customer_name': 'VARCHAR(255) NULL',
+                        'contact_name': 'VARCHAR(255) NULL',
+                        'contact_number': 'VARCHAR(20) NULL',
+                        'event_start_time': 'TIME NULL',
+                        'event_end_time': 'TIME NULL',
+                        'address': 'TEXT NULL',
+                        'event_type': 'VARCHAR(100) NULL',
+                        'notes': 'TEXT NULL',
+                        'cups': 'INT NULL'
+                    }[colName];
+                    
+                    if (colDef) {
+                        try {
+                            await connection.query(`ALTER TABLE events ADD COLUMN ${colName} ${colDef}`);
+                            console.log(`✅ Direct SQL: Added column ${colName}`);
+                        } catch (err) {
+                            if (err.code !== 'ER_DUP_FIELDNAME') {
+                                throw err;
+                            }
+                        }
+                    }
+                }
+                connection.release();
+                columnCache = null;
+                console.log('✅ Direct SQL migration completed');
+            } catch (directError) {
+                console.error('❌ Direct SQL migration also failed:', directError);
+                throw new Error(`Database schema error: Missing columns (${missingColumns.join(', ')}). Please run: node scripts/fix-events-table.js`);
+            }
         }
     }
 }

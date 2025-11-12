@@ -2366,8 +2366,14 @@ router.post('/loyalty/customers/:customerId/adjust', authenticateJWT, async(req,
 });
 
 // NEW: Get all loyalty reward redemptions (admin only) - requires authentication
-router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
+router.get('/loyalty/redemptions', async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { page = 1, limit = 20, status, customerId, rewardId } = req.query;
         const pageNum = parseInt(page) || 1;
         const limitNum = parseInt(limit) || 20;
@@ -2550,8 +2556,14 @@ router.get('/loyalty/redemptions/:redemptionId', authenticateJWT, async(req, res
 });
 
 // NEW: Search redemption by claim code (admin only) - requires authentication
-router.get('/loyalty/redemptions/search/:claimCode', authenticateJWT, async(req, res) => {
+router.get('/loyalty/redemptions/search/:claimCode', async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { claimCode } = req.params;
 
         // Get redemption by claim code
@@ -2593,8 +2605,14 @@ router.get('/loyalty/redemptions/search/:claimCode', authenticateJWT, async(req,
 });
 
 // NEW: Update redemption status (admin only) - requires authentication
-router.put('/loyalty/redemptions/:redemptionId/status', authenticateJWT, async(req, res) => {
+router.put('/loyalty/redemptions/:redemptionId/status', async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { redemptionId } = req.params;
         const { status, notes } = req.body;
 
@@ -2607,12 +2625,8 @@ router.put('/loyalty/redemptions/:redemptionId/status', authenticateJWT, async(r
             });
         }
 
-        // Verify admin from JWT user (authenticateJWT middleware)
-        if (!req.user || req.user.role !== 'admin') {
-            return res.status(403).json({ success: false, error: 'Unauthorized - Admin access required' });
-        }
-        
-        const adminId = req.user.id;
+        // Get admin ID from JWT user or session
+        const adminId = req.user?.id || (req.session && req.session.adminUser && req.session.adminUser.id) || (req.session && req.session.admin && req.session.admin.id) || null;
 
         // Get current redemption
         const [redemptions] = await db.query(`
@@ -3995,12 +4009,14 @@ router.post('/dashboard/create-sample-data', async(req, res) => {
 });
 
 // Create event sales record
-router.post('/event-sales', async (req, res) => {
+router.post('/event-sales', authenticateJWT, async (req, res) => {
     try {
+        console.log('📝 Creating event sales record with data:', req.body);
         const { event_id, amount, payment_method, status, amount_paid, amount_to_be_paid } = req.body;
 
         // Validate required fields
         if (!event_id || !amount || !payment_method || !status) {
+            console.error('❌ Missing required fields:', { event_id, amount, payment_method, status });
             return res.status(400).json({
                 success: false,
                 error: 'Missing required fields: event_id, amount, payment_method, status'
@@ -4008,7 +4024,9 @@ router.post('/event-sales', async (req, res) => {
         }
 
         // Validate amount
-        if (amount <= 0) {
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) {
+            console.error('❌ Invalid amount:', amount);
             return res.status(400).json({
                 success: false,
                 error: 'Amount must be greater than 0'
@@ -4018,6 +4036,7 @@ router.post('/event-sales', async (req, res) => {
         // Validate status
         const validStatuses = ['not_paid', 'downpayment', 'fully_paid'];
         if (!validStatuses.includes(status)) {
+            console.error('❌ Invalid status:', status);
             return res.status(400).json({
                 success: false,
                 error: 'Invalid status. Must be one of: not_paid, downpayment, fully_paid'
@@ -4027,11 +4046,25 @@ router.post('/event-sales', async (req, res) => {
         // Check if event exists
         const [eventCheck] = await db.query('SELECT id FROM events WHERE id = ?', [event_id]);
         if (eventCheck.length === 0) {
+            console.error('❌ Event not found:', event_id);
             return res.status(404).json({
                 success: false,
                 error: 'Event not found'
             });
         }
+
+        // Calculate amounts
+        const amountPaid = parseFloat(amount_paid) || 0;
+        const amountToBePaid = parseFloat(amount_to_be_paid) || amountNum;
+
+        console.log('💾 Inserting event sales record:', {
+            event_id,
+            amount: amountNum,
+            payment_method,
+            status,
+            amount_paid: amountPaid,
+            amount_to_be_paid: amountToBePaid
+        });
 
         // Insert event sales record
         const [result] = await db.query(`
@@ -4039,12 +4072,14 @@ router.post('/event-sales', async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
         `, [
             event_id,
-            parseFloat(amount),
+            amountNum,
             payment_method,
             status,
-            parseFloat(amount_paid) || 0,
-            parseFloat(amount_to_be_paid) || parseFloat(amount)
+            amountPaid,
+            amountToBePaid
         ]);
+
+        console.log('✅ Event sales record created successfully:', result.insertId);
 
         res.json({
             success: true,
@@ -4052,19 +4087,26 @@ router.post('/event-sales', async (req, res) => {
             data: {
                 id: result.insertId,
                 event_id,
-                amount: parseFloat(amount),
+                amount: amountNum,
                 payment_method,
                 status,
-                amount_paid: parseFloat(amount_paid) || 0,
-                amount_to_be_paid: parseFloat(amount_to_be_paid) || parseFloat(amount)
+                amount_paid: amountPaid,
+                amount_to_be_paid: amountToBePaid
             }
         });
 
     } catch (error) {
-        console.error('Error creating event sales record:', error);
+        console.error('❌ Error creating event sales record:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage
+        });
         res.status(500).json({
             success: false,
-            error: 'Failed to create event sales record'
+            error: 'Failed to create event sales record: ' + (error.message || 'Unknown error'),
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });
@@ -5427,8 +5469,8 @@ router.get('/sales/download', async(req, res) => {
 
         let salesData;
         try {
-            const [result] = await db.query(query, queryParams);
-            salesData = result || [];
+            const result = await db.query(query, queryParams);
+            salesData = result[0] || [];
         } catch (queryError) {
             console.error('Database query error:', queryError);
             throw new Error('Failed to fetch sales data: ' + queryError.message);
@@ -5547,8 +5589,11 @@ router.get('/sales/download', async(req, res) => {
 
         console.log(`Generated admin Excel file with ${buffer.length} bytes`);
 
-        // Set response headers before sending
-        const filename = `admin-sales-report-${period}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        // Set response headers before sending (match staff format)
+        const dateSuffix = startDate && endDate 
+            ? `${startDate}-to-${endDate}` 
+            : period;
+        const filename = `admin-sales-report-${dateSuffix}-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Length', buffer.length);
