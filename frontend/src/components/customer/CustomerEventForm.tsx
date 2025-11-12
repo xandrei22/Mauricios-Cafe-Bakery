@@ -329,10 +329,19 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         }, 1000);
       } else {
         console.error('❌ Submission failed:', data);
-        const errorMessage = data.message || data.error || 'Please try again.';
+        let errorMessage = data.message || data.error?.message || data.error || 'Please try again.';
+        
+        // Show more detailed error in development
+        if (import.meta.env.DEV && data.error) {
+          console.error('Full error object:', data.error);
+          if (data.error.hint) {
+            errorMessage += ` (${data.error.hint})`;
+          }
+        }
+        
         toast.error('Submission failed', { 
           description: errorMessage,
-          duration: 5000
+          duration: 7000
         });
       }
     } catch (err: any) {

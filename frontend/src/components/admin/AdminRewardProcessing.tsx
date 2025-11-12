@@ -132,14 +132,20 @@ const AdminRewardProcessing: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Prefer admin redemptions API (supports filtering and consistent fields)
-      const params = new URLSearchParams();
-      if (activeTab === 'pending') params.set('status', 'pending');
-      if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
-      if (activeTab === 'cancelled') params.set('status', 'cancelled');
-      if (activeTab === 'expired') params.set('status', 'expired');
-      // axiosInstance already has baseURL configured, so use relative path
-      const url = `/api/admin/loyalty/redemptions?${params.toString()}`;
+      // Use staff endpoints which support both staff and admin authentication
+      // For pending tab, use the pending endpoint; for others, fetch all and filter client-side
+      let url = '';
+      if (activeTab === 'pending') {
+        url = '/api/staff/reward-redemptions/pending';
+      } else {
+        // For other tabs, we'll fetch all and filter client-side
+        // Since staff endpoint doesn't support status filtering, we'll use admin endpoint as fallback
+        const params = new URLSearchParams();
+        if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
+        if (activeTab === 'cancelled') params.set('status', 'cancelled');
+        if (activeTab === 'expired') params.set('status', 'expired');
+        url = `/api/admin/loyalty/redemptions?${params.toString()}`;
+      }
       console.log('📋 Admin: Fetching redemptions from:', url);
       console.log('📋 Admin: axiosInstance baseURL:', axiosInstance.defaults.baseURL);
       console.log('📋 Admin: Full URL will be:', `${axiosInstance.defaults.baseURL}${url}`);
@@ -151,7 +157,9 @@ const AdminRewardProcessing: React.FC = () => {
       
       if (response.data && response.data.success) {
         // Normalize fields so the table renders regardless of source names
-        const normalized: ClaimedReward[] = (response.data.redemptions || []).map((r: any) => ({
+        // Handle both staff endpoint format (redemptions array) and admin endpoint format
+        const redemptionsData = response.data.redemptions || [];
+        const normalized: ClaimedReward[] = redemptionsData.map((r: any) => ({
           id: r.id,
           customer_id: r.customer_id,
           customer_name: r.customer_name,
@@ -159,8 +167,8 @@ const AdminRewardProcessing: React.FC = () => {
           reward_id: r.reward_id,
           reward_name: r.reward_name,
           reward_type: r.reward_type,
-          description: r.reward_description,
-          points_cost: r.points_required ?? r.points_cost,
+          description: r.reward_description || r.description || '',
+          points_cost: r.points_required ?? r.points_redeemed ?? r.points_cost,
           points_required: r.points_required,
           redemption_date: r.redemption_date ?? r.created_at ?? null,
           expires_at: r.expires_at,
@@ -226,7 +234,26 @@ const AdminRewardProcessing: React.FC = () => {
     try {
       // Calculate stats from redemptions data instead of separate endpoint
       // This avoids needing a separate statistics endpoint
-      const response = await axiosInstance.get('/api/admin/loyalty/redemptions?limit=1000');
+      // Try admin endpoint first, fallback to fetching pending from staff endpoint
+      let response;
+      try {
+        response = await axiosInstance.get('/api/admin/loyalty/redemptions?limit=1000');
+      } catch (err) {
+        // If admin endpoint fails, fetch pending from staff endpoint
+        response = await axiosInstance.get('/api/staff/reward-redemptions/pending');
+        // For stats, we'll just use pending count if admin endpoint fails
+        if (response.data.success && response.data.redemptions) {
+          const redemptions = response.data.redemptions;
+          const stats = {
+            totalClaimed: redemptions.length,
+            pendingProcessing: redemptions.length,
+            processedToday: 0,
+            expiredToday: 0
+          };
+          setStats(stats);
+          return;
+        }
+      }
       if (response.data.success && response.data.redemptions) {
         const redemptions = response.data.redemptions;
         const stats = {
@@ -279,27 +306,30 @@ const AdminRewardProcessing: React.FC = () => {
     setSearchResult(null);
 
     try {
-      const response = await axiosInstance.get(`/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`);
+      // Use staff endpoint which supports both staff and admin
+      const response = await axiosInstance.get(`/api/staff/reward-redemptions/search/${claimCode.toUpperCase()}`);
 
       if (response.data.success) {
         // Normalize the redemption data to match ClaimedReward interface
+        const r = response.data.redemption;
         const normalized: ClaimedReward = {
-          id: response.data.redemption.id,
-          customer_id: response.data.redemption.customer_id,
-          customer_name: response.data.redemption.customer_name,
-          customer_email: response.data.redemption.customer_email,
-          reward_id: response.data.redemption.reward_id,
-          reward_name: response.data.redemption.reward_name,
-          reward_type: response.data.redemption.reward_type,
-          description: response.data.redemption.reward_description || '',
-          points_cost: response.data.redemption.points_required || response.data.redemption.points_redeemed,
-          points_required: response.data.redemption.points_required,
-          redemption_date: response.data.redemption.redemption_date || response.data.redemption.created_at || null,
-          expires_at: response.data.redemption.expires_at,
-          status: response.data.redemption.status,
-          staff_id: response.data.redemption.staff_id || null,
-          redemption_proof: response.data.redemption.redemption_proof || null,
-          order_id: response.data.redemption.order_id || null,
+          id: r.id,
+          customer_id: r.customer_id,
+          customer_name: r.customer_name,
+          customer_email: r.customer_email,
+          reward_id: r.reward_id,
+          reward_name: r.reward_name,
+          reward_type: r.reward_type,
+          description: r.reward_description || r.description || '',
+          points_cost: r.points_required || r.points_redeemed,
+          points_required: r.points_required,
+          redemption_date: r.redemption_date || r.created_at || null,
+          expires_at: r.expires_at,
+          status: r.status,
+          staff_id: r.staff_id || null,
+          redemption_proof: r.redemption_proof || null,
+          order_id: r.order_id || null,
+          claim_code: r.claim_code || null,
         };
         setSearchResult(normalized);
       } else {
@@ -320,13 +350,12 @@ const AdminRewardProcessing: React.FC = () => {
 
     setProcessingRewardId(rewardId);
     try {
-      const response = await axiosInstance.put(`/api/admin/loyalty/redemptions/${rewardId}/status`, {
-        status: status === 'processed' ? 'completed' : 'cancelled',
-        notes: status === 'processed' ? (redemptionProof.trim() || 'Processed by admin') : 'Cancelled by admin',
-      });
+      // Use staff endpoint which supports both staff and admin
+      const action = status === 'processed' ? 'complete' : 'cancel';
+      const response = await axiosInstance.post(`/api/staff/reward-redemptions/${rewardId}/${action}`);
 
       if (response.data.success) {
-        Swal.fire('Success', `Reward ${status} successfully!`, 'success');
+        Swal.fire('Success', `Reward ${status === 'processed' ? 'processed' : 'cancelled'} successfully!`, 'success');
         setRedemptionProof('');
         setSearchResult(null);
         setClaimCode('');
