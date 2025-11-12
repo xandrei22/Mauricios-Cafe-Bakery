@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="w-full max-w-5xl space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-10 xl:px-12 pt-4">
+      <div className="w-full max-w-5xl space-y-4 sm:space-y-6 px-6 sm:px-8 lg:px-16 xl:px-20 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -384,9 +384,9 @@ const CustomerMenu: React.FC = () => {
         </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-row gap-3 items-center flex-wrap">
-        {/* Search Input - Full width on mobile, flex-1 on larger screens */}
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-row flex-wrap items-center gap-3 justify-end w-full">
+        {/* Search Input - Full width on mobile, fixed width on larger screens */}
+        <div className="relative w-full sm:w-96 md:w-[28rem]">
           <Input
             placeholder="Search menu items..."
             value={searchTerm}
