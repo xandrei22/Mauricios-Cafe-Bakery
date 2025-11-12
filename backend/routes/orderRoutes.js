@@ -176,10 +176,13 @@ router.post('/', async(req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Create order - Admin POS orders should go to payment verification
-            const isImmediatePay = paymentMethod === 'cash' || paymentMethod === 'gcash' || paymentMethod === 'paymaya';
-            const orderStatus = isImmediatePay ? 'pending_verification' : 'pending';
-            const paymentStatus = isImmediatePay ? 'pending' : 'pending';
+            // Create order - All orders start with pending payment status
+            // Flow: Order placed → Pending Payments → (if verified) Preparing → (if cancelled) Cancelled Orders
+            // For digital payments (gcash/paymaya), customer will upload receipt → pending_verification
+            // For cash, staff will verify → pending
+            const isDigitalPayment = paymentMethod === 'gcash' || paymentMethod === 'paymaya';
+            const orderStatus = 'pending'; // All new orders start as pending
+            const paymentStatus = isDigitalPayment ? 'pending_verification' : 'pending'; // Digital payments need receipt verification
 
             console.log('🔧 Creating order with data:', {
                 orderId,
@@ -372,15 +375,17 @@ router.get('/', async(req, res) => {
         // Include orders with pending payment status even if order status is different
         // Also include cancelled orders for the cancelled orders tab
         if (!status) {
+            // Include orders that:
+            // 1. Have active statuses (pending, preparing, ready, etc.)
+            // 2. OR have pending/pending_verification payment status (regardless of order status, except completed+paid)
+            // 3. OR are cancelled
+            // This ensures ALL orders needing payment verification are shown
             sql += ` AND (
                 status IN (?, ?, ?, ?, ?, ?, ?) 
                 OR COALESCE(payment_status, 'pending') IN (?, ?)
             )`;
-            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
-            // Don't exclude completed orders if they have pending payment - they might need verification
-            // Only exclude completed orders that are fully paid
             sql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
-            params.push('completed', 'paid');
+            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification', 'completed', 'paid');
         } else if (status) {
             sql += ' AND status = ?';
             params.push(status);
@@ -399,8 +404,9 @@ router.get('/', async(req, res) => {
         sql += ' ORDER BY queue_position ASC, order_time ASC';
 
         // Add pagination (only if limit is specified and reasonable)
-        const limitNum = parseInt(limit);
-        if (limitNum > 0 && limitNum <= 1000) {
+        // For POS dashboard, we need to see all active orders, so increase default limit
+        const limitNum = parseInt(limit) || 500; // Increased default to 500 to show all active orders
+        if (limitNum > 0 && limitNum <= 2000) { // Increased max limit to 2000
             const offset = (parseInt(page) - 1) * limitNum;
             sql += ' LIMIT ? OFFSET ?';
             params.push(limitNum, offset);
@@ -485,10 +491,12 @@ router.get('/', async(req, res) => {
 
         // Match the same WHERE conditions as the main query
         if (!status) {
-            countSql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR COALESCE(payment_status, \'pending\') IN (?, ?))';
-            countParams.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
+            countSql += ` AND (
+                status IN (?, ?, ?, ?, ?, ?, ?) 
+                OR COALESCE(payment_status, 'pending') IN (?, ?)
+            )`;
             countSql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
-            countParams.push('completed', 'paid');
+            countParams.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification', 'completed', 'paid');
         } else if (status) {
             countSql += ' AND status = ?';
             countParams.push(status);
