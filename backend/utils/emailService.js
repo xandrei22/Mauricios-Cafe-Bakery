@@ -5,66 +5,83 @@ require('dotenv').config();
 console.log('🔍 Checking email configuration...');
 console.log('BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? '✓ Set' : '✗ Missing');
 console.log('BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? '✓ Set' : '✗ Missing');
+console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
+console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
 
 // Create a transporter using Brevo (formerly Sendinblue)
 let transporter = null;
+let emailProvider = null; // Track which provider we're using
 
-// Check if Brevo SMTP credentials are available
-if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
-    console.log('✅ Brevo SMTP credentials found, creating transporter...');
-    transporter = nodemailer.createTransport({
-        host: 'smtp-relay.brevo.com',
-        port: 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: process.env.BREVO_SMTP_USER,
-            pass: process.env.BREVO_SMTP_PASS
-        },
-        connectionTimeout: 60000, // 60 seconds (increased)
-        greetingTimeout: 60000, // 60 seconds (increased)
-        socketTimeout: 60000, // 60 seconds (increased)
-        debug: true, // Enable debug logging
-        logger: false // Disable verbose logging
-    });
-    console.log('✅ Using Brevo (formerly Sendinblue) SMTP');
-    console.log('🔧 Connection timeouts: 60 seconds');
+// Initialize transporter function
+async function initializeTransporter() {
+    // Check if Brevo SMTP credentials are available
+    if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
+        console.log('✅ Brevo SMTP credentials found, creating transporter...');
+        console.log('🔍 BREVO_SMTP_USER format check:', process.env.BREVO_SMTP_USER);
+        // Validate BREVO_SMTP_USER format (should contain @)
+        if (!process.env.BREVO_SMTP_USER.includes('@')) {
+            console.warn('⚠️ WARNING: BREVO_SMTP_USER appears to be missing @ symbol');
+            console.warn('⚠️ Expected format: username@smtp-brevo.com');
+            console.warn('⚠️ Current value:', process.env.BREVO_SMTP_USER);
+        }
+        transporter = nodemailer.createTransport({
+            host: 'smtp-relay.brevo.com',
+            port: 587,
+            secure: false, // true for 465, false for other ports
+            auth: {
+                user: process.env.BREVO_SMTP_USER,
+                pass: process.env.BREVO_SMTP_PASS
+            },
+            connectionTimeout: 60000, // 60 seconds (increased)
+            greetingTimeout: 60000, // 60 seconds (increased)
+            socketTimeout: 60000, // 60 seconds (increased)
+            debug: true, // Enable debug to see connection details
+            logger: true // Enable verbose logging for troubleshooting
+        });
+        emailProvider = 'brevo';
+        console.log('✅ Using Brevo (formerly Sendinblue) SMTP');
+        console.log('🔧 Connection timeouts: 60 seconds');
 
-    // Verify transporter configuration
-    transporter.verify(function(error, success) {
-        if (error) {
-            console.error('❌ Brevo SMTP configuration error:', error);
+        // Verify transporter configuration
+        try {
+            await transporter.verify();
+            console.log('✅ Brevo SMTP server is ready to send messages');
+        } catch (error) {
+            console.error('❌ Brevo SMTP configuration error:', error.message);
             console.error('❌ Error details:', {
                 code: error.code,
                 command: error.command,
                 response: error.response,
                 responseCode: error.responseCode
             });
-            console.log('⚠️ Email service may not work - check Brevo SMTP credentials');
-            console.log('⚠️ Setting transporter to null - emails will be skipped');
+            console.log('⚠️ Brevo verification failed, trying Gmail fallback...');
             transporter = null;
-        } else {
-            console.log('✅ Brevo SMTP server is ready to send messages');
+            emailProvider = null;
         }
-    });
-} else if (process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
-    // Fallback to Gmail if Brevo not configured
-    console.log('✅ Using Gmail as fallback...');
-    console.log('EMAIL_USER:', process.env.EMAIL_USER ? '✓ Set' : '✗ Missing');
-    console.log('EMAIL_PASSWORD:', process.env.EMAIL_PASSWORD ? '✓ Set' : '✗ Missing');
-    console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? '✓ Set' : '✗ Missing');
+    }
 
-    transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS
-        }
-    });
+    // Fallback to Gmail if Brevo not configured or failed
+    if (!transporter && process.env.EMAIL_USER && (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS)) {
+        console.log('✅ Using Gmail as fallback...');
+        const gmailPass = process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS;
+        // Remove spaces from Gmail App Password if present
+        const cleanPass = gmailPass ? gmailPass.replace(/\s/g, '') : gmailPass;
 
-    // Verify transporter configuration
-    transporter.verify(function(error, success) {
-        if (error) {
-            console.error('❌ Gmail SMTP configuration error:', error);
+        transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: cleanPass
+            }
+        });
+        emailProvider = 'gmail';
+
+        // Verify transporter configuration
+        try {
+            await transporter.verify();
+            console.log('✅ Gmail SMTP server is ready to send messages');
+        } catch (error) {
+            console.error('❌ Gmail SMTP configuration error:', error.message);
             console.error('❌ Error details:', {
                 code: error.code,
                 command: error.command,
@@ -74,18 +91,30 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
             console.log('⚠️ Email service disabled - check Gmail credentials');
             console.log('⚠️ Make sure you are using an App Password, not your regular Gmail password');
             transporter = null;
-        } else {
-            console.log('✅ Gmail SMTP server is ready to send messages');
+            emailProvider = null;
         }
-    });
-} else {
-    console.log('❌ Email service disabled - no credentials found');
-    console.log('🔍 Checked for: BREVO_SMTP_USER, BREVO_SMTP_PASS, EMAIL_USER, EMAIL_PASSWORD, EMAIL_PASS');
+    }
+
+    if (!transporter) {
+        console.log('❌ Email service disabled - no working credentials found');
+        console.log('🔍 Checked for: BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD/EMAIL_PASS');
+    }
 }
+
+// Initialize transporter on module load
+initializeTransporter().catch(err => {
+    console.error('❌ Error initializing email transporter:', err);
+});
 
 // Function to send welcome email
 const sendWelcomeEmail = async(email, fullName) => {
     try {
+        // Re-initialize transporter if it's null
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.log('Email service not available - skipping welcome email to:', email);
             return;
@@ -93,8 +122,17 @@ const sendWelcomeEmail = async(email, fullName) => {
 
         console.log('Attempting to send welcome email to:', email);
 
-        // Determine FROM address - use Brevo user if available, otherwise EMAIL_USER
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        // For Brevo, use a verified sender email (not the SMTP user)
+        // For Gmail, use the EMAIL_USER
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            // Brevo requires a verified sender email - try to extract from SMTP user or use a default
+            // The SMTP user is typically like "username@smtp-brevo.com", but we need a real email
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
 
         const mailOptions = {
             from: fromAddress,
@@ -184,6 +222,12 @@ const sendWelcomeEmail = async(email, fullName) => {
 // Function to send reset password email
 const sendResetPasswordEmail = async(email, fullName, resetLink) => {
     try {
+        // Re-initialize transporter if it's null
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.error('❌ Email service not available - transporter is null');
             console.error('❌ Skipping password reset email to:', email);
@@ -191,8 +235,13 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
             throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
-        // Determine FROM address
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
 
         const mailOptions = {
             from: fromAddress,
@@ -241,6 +290,12 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
  */
 async function sendLowStockAlert(to, items) {
     try {
+        // Re-initialize transporter if it's null
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.error('❌ Email service not available - transporter is null');
             console.error('❌ Skipping low stock alert to:', to);
@@ -249,7 +304,13 @@ async function sendLowStockAlert(to, items) {
         }
 
         const itemList = items.map(item => `${item.name} (${item.quantity} ${item.unit})`).join('<br>');
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
         const mailOptions = {
             from: fromAddress,
             to,
@@ -271,6 +332,12 @@ async function sendLowStockAlert(to, items) {
  */
 async function sendEventStatusEmail(to, status, event) {
     try {
+        // Re-initialize transporter if it's null
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.log('Email service not available - skipping event status email');
             return;
@@ -286,7 +353,13 @@ async function sendEventStatusEmail(to, status, event) {
             ${status === 'accepted' ? '<p><b>You will be contacted for further details regarding your event.</b></p>' : ''}
             <p>Thank you for choosing our Coffee Shop!</p>
         `;
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
         await transporter.sendMail({
             from: fromAddress,
             to,
@@ -307,6 +380,12 @@ async function sendEventStatusEmail(to, status, event) {
  */
 async function sendEmail(options) {
     try {
+        // Re-initialize transporter if it's null (in case verification failed initially)
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.error('❌ Email service not available - transporter is null');
             console.error('❌ Skipping email to:', options.to);
@@ -314,7 +393,13 @@ async function sendEmail(options) {
             throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
         const mailOptions = {
             from: fromAddress,
             to: options.to,
@@ -353,6 +438,12 @@ async function sendEmail(options) {
 // Function to send email verification
 const sendVerificationEmail = async(email, fullName, verificationUrl) => {
     try {
+        // Re-initialize transporter if it's null
+        if (!transporter) {
+            console.log('⚠️ Transporter is null, attempting to re-initialize...');
+            await initializeTransporter();
+        }
+
         if (!transporter) {
             console.error('❌ Email service not available - transporter is null');
             console.error('❌ Skipping verification email to:', email);
@@ -362,8 +453,13 @@ const sendVerificationEmail = async(email, fullName, verificationUrl) => {
 
         console.log('Attempting to send verification email to:', email);
 
-        // Determine FROM address
-        const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        // Determine FROM address - use verified sender email
+        let fromAddress;
+        if (emailProvider === 'brevo') {
+            fromAddress = process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        } else {
+            fromAddress = process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
+        }
 
         const mailOptions = {
             from: fromAddress,
