@@ -1,13 +1,16 @@
 const pool = require('../config/db');
 
 // Create a new event
-async function createEvent({ customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups }) {
+async function createEvent({ customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups }) {
     try {
         console.log('Attempting to insert event into database:', {
             customer_id,
             customer_name,
+            contact_name,
             contact_number,
             event_date,
+            event_start_time,
+            event_end_time,
             address,
             event_type,
             notes,
@@ -15,7 +18,7 @@ async function createEvent({ customer_id, customer_name, contact_number, event_d
         });
 
         const [result] = await pool.query(
-            `INSERT INTO events (customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`, [customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups]
+            `INSERT INTO events (customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`, [customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups]
         );
 
         console.log('Database insertion result:', result);

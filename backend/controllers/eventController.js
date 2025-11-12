@@ -51,6 +51,19 @@ async function createEvent(req, res) {
             console.log('❌ Validation failed - missing event_date');
             return res.status(400).json({ success: false, message: 'Event date is required.' });
         }
+        if (!event_start_time) {
+            console.log('❌ Validation failed - missing event_start_time');
+            return res.status(400).json({ success: false, message: 'Event start time is required.' });
+        }
+        if (!event_end_time) {
+            console.log('❌ Validation failed - missing event_end_time');
+            return res.status(400).json({ success: false, message: 'Event end time is required.' });
+        }
+        // Validate that end time is after start time
+        if (event_end_time <= event_start_time) {
+            console.log('❌ Validation failed - end time must be after start time');
+            return res.status(400).json({ success: false, message: 'Event end time must be after start time.' });
+        }
         if (!address) {
             console.log('❌ Validation failed - missing address');
             return res.status(400).json({ success: false, message: 'Address is required.' });
@@ -100,8 +113,11 @@ async function createEvent(req, res) {
             eventId = await eventModel.createEvent({ 
                 customer_id, 
                 customer_name, 
+                contact_name,
                 contact_number: cleanedContactNumber, // Use cleaned contact number
                 event_date, 
+                event_start_time,
+                event_end_time,
                 address, 
                 event_type, 
                 notes, 
