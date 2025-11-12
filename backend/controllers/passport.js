@@ -28,23 +28,31 @@ module.exports = (passport, db) => {
     });
 
     // Only configure Google OAuth if credentials are provided
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-        const callbackURL = process.env.GOOGLE_CALLBACK_URL;
+    const rawClientId = process.env.GOOGLE_CLIENT_ID || '';
+    const rawClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+    const rawCallbackUrl = process.env.GOOGLE_CALLBACK_URL || '';
 
+    const clientID = rawClientId.trim();
+    const clientSecret = rawClientSecret.trim();
+    const callbackURL = rawCallbackUrl.trim();
+
+    if (clientID && clientSecret) {
         if (!callbackURL) {
             console.error('❌ GOOGLE_CALLBACK_URL is not set! Google OAuth will not work properly.');
             console.error('Please set GOOGLE_CALLBACK_URL in your environment variables.');
         } else {
             console.log('✅ Google OAuth configured:', {
-                clientID: process.env.GOOGLE_CLIENT_ID ? `${process.env.GOOGLE_CLIENT_ID.substring(0, 20)}...` : 'Missing',
+                clientID: clientID ? `${clientID.substring(0, 20)}...` : 'Missing',
+                clientIDLength: clientID.length,
+                clientSecretLength: clientSecret.length,
                 callbackURL: callbackURL
             });
         }
 
         passport.use(new GoogleStrategy({
-                clientID: process.env.GOOGLE_CLIENT_ID,
-                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                callbackURL: callbackURL
+                clientID,
+                clientSecret,
+                callbackURL
             },
             async(accessToken, refreshToken, profile, done) => {
                 try {

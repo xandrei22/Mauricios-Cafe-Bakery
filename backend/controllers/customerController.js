@@ -281,9 +281,23 @@ async function resetPassword(req, res) {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ message: 'Token and new password are required' });
     try {
+        console.log('🔑 Reset password request received');
+        console.log('🔑 Token length:', token ? token.length : 'missing');
+        console.log('🔑 Token (first 20 chars):', token ? token.substring(0, 20) + '...' : 'missing');
+        
         // Find customer by token and check expiry
         const [customers] = await db.query('SELECT * FROM customers WHERE reset_password_token = ? AND reset_password_expires > NOW()', [token]);
+        
+        console.log('🔑 Found customers with token:', customers.length);
+        
         if (customers.length === 0) {
+            // Check if token exists but expired
+            const [expiredCustomers] = await db.query('SELECT * FROM customers WHERE reset_password_token = ?', [token]);
+            if (expiredCustomers.length > 0) {
+                console.log('🔑 Token found but expired');
+                return res.status(400).json({ message: 'This reset link has expired. Please request a new password reset.' });
+            }
+            console.log('🔑 Token not found in database');
             return res.status(400).json({ message: 'Invalid or expired token' });
         }
         const customer = customers[0];

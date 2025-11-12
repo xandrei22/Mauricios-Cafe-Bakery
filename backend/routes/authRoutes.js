@@ -38,27 +38,32 @@ router.post('/customer/resend-verification', customerController.resendVerificati
 router.get('/auth/google', (req, res, next) => {
     try {
         const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
+        const clientID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+        const callbackURL = (process.env.GOOGLE_CALLBACK_URL || '').trim();
 
         // Check if Google OAuth is configured
-        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        if (!clientID || !clientSecret) {
             console.error('❌ Google OAuth not configured - missing credentials');
-            console.error('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing');
-            console.error('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ Set' : '✗ Missing');
-            console.error('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '✗ Missing');
+            console.error('GOOGLE_CLIENT_ID:', clientID ? `✓ Set (length ${clientID.length})` : '✗ Missing');
+            console.error('GOOGLE_CLIENT_SECRET:', clientSecret ? `✓ Set (length ${clientSecret.length})` : '✗ Missing');
+            console.error('GOOGLE_CALLBACK_URL:', callbackURL || '✗ Missing');
             return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
         }
 
         // Validate callback URL is set
-        if (!process.env.GOOGLE_CALLBACK_URL) {
+        if (!callbackURL) {
             console.error('❌ GOOGLE_CALLBACK_URL is not set!');
             return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
         }
 
         console.log('🔍 Google OAuth initialization:', {
-            hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-            hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: process.env.GOOGLE_CALLBACK_URL,
-            frontendBase: frontendBase
+            hasClientId: !!clientID,
+            clientIdLength: clientID.length,
+            hasClientSecret: !!clientSecret,
+            clientSecretLength: clientSecret.length,
+            callbackURL,
+            frontendBase
         });
 
         const { redirect, table } = req.query;
@@ -111,18 +116,21 @@ router.get('/auth/google', (req, res, next) => {
 router.get('/auth/google/callback', async(req, res, next) => {
     try {
         const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
+        const clientID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+        const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+        const callbackURL = (process.env.GOOGLE_CALLBACK_URL || '').trim();
 
         // Check if Google OAuth is configured
-        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        if (!clientID || !clientSecret) {
             console.error('❌ Google OAuth not configured - missing credentials');
-            console.error('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing');
-            console.error('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✓ Set' : '✗ Missing');
-            console.error('GOOGLE_CALLBACK_URL:', process.env.GOOGLE_CALLBACK_URL || '✗ Missing');
+            console.error('GOOGLE_CLIENT_ID:', clientID ? `✓ Set (length ${clientID.length})` : '✗ Missing');
+            console.error('GOOGLE_CLIENT_SECRET:', clientSecret ? `✓ Set (length ${clientSecret.length})` : '✗ Missing');
+            console.error('GOOGLE_CALLBACK_URL:', callbackURL || '✗ Missing');
             return res.redirect(`${frontendBase}/login?error=GOOGLE_AUTH_NOT_CONFIGURED`);
         }
 
         console.log('🔍 Google OAuth callback received');
-        console.log('🔍 Callback URL:', process.env.GOOGLE_CALLBACK_URL);
+        console.log('🔍 Callback URL:', callbackURL);
         console.log('🔍 Query params:', req.query);
 
         // Check for OAuth errors from Google (e.g., user denied access, invalid client)
