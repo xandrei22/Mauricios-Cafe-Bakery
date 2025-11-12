@@ -13,6 +13,7 @@ interface DashboardData {
   ordersThisMonth: number;
   currentOrder: {
     id: string;
+    orderNumber?: string;
     status: string;
     items: Array<{ name: string; quantity: number; price: number }>;
     total: number;
@@ -420,7 +421,7 @@ export default function CustomerDasboard() {
                   <Monitor className="h-8 w-8 text-[#a87437]" />
                 </div>
                 <span className="text-2xl font-bold text-[#6B5B5B] mb-1">
-                  {dashboardData?.currentOrder ? dashboardData.currentOrder.id.substring(0, 6) : 'None'}
+                  {dashboardData?.currentOrder ? (dashboardData.currentOrder.orderNumber || dashboardData.currentOrder.id.substring(0, 6)) : 'None'}
                 </span>
                 <span className="text-sm text-gray-500 mb-1">Current Order</span>
                 <span className={`text-xs ${getStatusColor(dashboardData?.currentOrder?.status || 'none')}`}>

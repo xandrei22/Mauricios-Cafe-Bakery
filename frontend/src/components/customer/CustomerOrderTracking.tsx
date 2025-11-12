@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Download
 } from 'lucide-react';
-import { downloadReceipt } from '../../utils/receiptGenerator';
 import { encodeId } from '../../utils/idObfuscation';
 
 interface OrderItem {
@@ -200,6 +199,40 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
     return `${Math.floor(diffInMinutes / 1440)} days ago`;
   };
 
+  const downloadReceipt = async (orderId: string) => {
+    try {
+      // Generate and download JPEG receipt from backend
+      const receiptUrl = `${API_URL}/api/receipts/download-jpeg/${orderId}`;
+      
+      // Fetch the receipt to ensure it's generated
+      const response = await fetch(receiptUrl, {
+        method: 'GET',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate receipt');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipt_${orderId}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      alert(error instanceof Error ? error.message : 'Error downloading receipt. Please try again.');
+    }
+  };
+
   // Get short order code - use order_number if available, otherwise fallback to formatted order_id
   const getShortOrderCode = (order: Order | null | undefined): string => {
     if (!order) return 'N/A';
@@ -358,32 +391,11 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
                   </div>
                 )}
 
-                {/* Download Receipt Button */}
-                {(order.status === 'completed' || order.status === 'ready') && (
+                {/* Download Receipt Button - Only shown after payment is verified */}
+                {order.payment_status === 'paid' && (order.status === 'completed' || order.status === 'ready') && (
                   <div className="pt-4 border-t border-gray-100">
                     <Button
-                      onClick={() => {
-                        const orderForReceipt = {
-                          orderId: order.order_id,
-                          customerName: order.customer_name,
-                          status: order.status,
-                          paymentStatus: order.payment_status,
-                          paymentMethod: order.payment_method,
-                          orderTime: order.order_time,
-                          estimatedReadyTime: order.completed_time || order.order_time,
-                          items: order.items.map(item => ({
-                            name: item.name,
-                            quantity: item.quantity,
-                            price: item.price,
-                            customizations: item.customizations,
-                            notes: item.notes
-                          })),
-                          totalPrice: order.total_price,
-                          tableNumber: null,
-                          customerEmail: customerEmail
-                        };
-                        downloadReceipt(orderForReceipt);
-                      }}
+                      onClick={() => downloadReceipt(order.order_id)}
                       variant="outline"
                       className="w-full flex items-center justify-center gap-2 border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
                     >

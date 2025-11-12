@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io, Socket } from 'socket.io-client';
-import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare } from 'lucide-react';
+import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare, Download } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
 import { encodeId } from '../../utils/idObfuscation';
@@ -10,9 +10,11 @@ const CLIENT_PROFANITY_WORDS: string[] = [
   // Minimal built-in list for client-side UX only; server enforces full list
   'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
   'damn', 'dick', 'fuck', 'fucking', 'motherfucker', 'piss', 'prick',
-  'shit', 'slut', 'twat', 'whore',
+  'shit', 'slut', 'twat', 'whore', 'pakyu', 'putangina mo', "bobo", "bobo ka"
   // Add some Spanish/Tagalog commonly encountered words
-  'puta', 'putangina', 'gago', 'ulol', 'punyeta'
+  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo'
+  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo ka mo'
+  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo ka mo'
 ];
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -545,6 +547,41 @@ const CustomerOrders: React.FC = () => {
   const formatPrice = (price: string | number) => {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
     return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
+  };
+
+  const downloadReceipt = async (orderId: string) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      // Generate and download JPEG receipt from backend
+      const receiptUrl = `${API_URL}/api/receipts/download-jpeg/${orderId}`;
+      
+      // Fetch the receipt to ensure it's generated
+      const response = await fetch(receiptUrl, {
+        method: 'GET',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate receipt');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipt_${orderId}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading receipt:', error);
+      alert(error instanceof Error ? error.message : 'Error downloading receipt. Please try again.');
+    }
   };
 
   // Get short order code - use order_number if available, otherwise fallback to formatted order_id
@@ -1264,6 +1301,10 @@ const CustomerOrders: React.FC = () => {
                           </div>
                           <div>
                             <p className="font-bold text-gray-900">Order ID: {(() => {
+                              // Use order_number if available (5-character code), otherwise encode the order_id
+                              if (order.order_number) {
+                                return order.order_number;
+                              }
                               const raw = String(order.order_id || '');
                               // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
                               try {
@@ -1357,28 +1398,44 @@ const CustomerOrders: React.FC = () => {
                           <span className="text-lg font-bold text-amber-600">₱{formatPrice(order.total_price)}</span>
                         </div>
                         
-                        {/* Feedback Button for Completed Orders */}
-                        {order.status === 'completed' && !ordersWithFeedback.has(order.order_id) && (
-                          <div className="flex justify-end">
+                        {/* Download Receipt and Feedback Buttons */}
+                        <div className="flex justify-end gap-2">
+                          {/* Download Receipt Button - Only shown after payment is verified */}
+                          {order.payment_status === 'paid' && (order.status === 'completed' || order.status === 'ready') && (
                             <button
-                              onClick={() => handleFeedbackClick(order)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadReceipt(order.order_id);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-[#a87437] text-white rounded-lg hover:bg-[#8f652f] transition-colors border border-[#a87437]"
+                            >
+                              <Download className="w-4 h-4" />
+                              Download Receipt
+                            </button>
+                          )}
+                          
+                          {/* Feedback Button for Completed Orders */}
+                          {order.status === 'completed' && !ordersWithFeedback.has(order.order_id) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFeedbackClick(order);
+                              }}
                               className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
                             >
                               <Star className="w-4 h-4" />
                               Leave Feedback
                             </button>
-                          </div>
-                        )}
-                        
-                        {/* Feedback Submitted Indicator */}
-                        {order.status === 'completed' && ordersWithFeedback.has(order.order_id) && (
-                          <div className="flex justify-end">
+                          )}
+                          
+                          {/* Feedback Submitted Indicator */}
+                          {order.status === 'completed' && ordersWithFeedback.has(order.order_id) && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg">
                               <Star className="w-4 h-4 fill-current" />
                               Feedback Submitted
                             </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1659,6 +1716,21 @@ const CustomerOrders: React.FC = () => {
                   <span className="text-2xl font-bold text-amber-600">₱{formatPrice(selectedOrderForDetails.total_price)}</span>
                 </div>
               </div>
+
+              {/* Download Receipt Button - Only shown after payment is verified */}
+              {selectedOrderForDetails.payment_status === 'paid' && (selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready') && (
+                <div className="p-6 border-t border-gray-100">
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => downloadReceipt(selectedOrderForDetails.order_id)}
+                      className="flex items-center gap-2 px-6 py-3 bg-[#a87437] text-white rounded-lg hover:bg-[#8f652f] transition-colors font-medium border border-[#a87437]"
+                    >
+                      <Download className="w-5 h-5" />
+                      Download Receipt
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Feedback Button for Completed Orders */}
               {selectedOrderForDetails.status === 'completed' && !ordersWithFeedback.has(selectedOrderForDetails.order_id) && (

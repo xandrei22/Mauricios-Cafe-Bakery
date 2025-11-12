@@ -93,24 +93,43 @@ const GuestOrderTracking: React.FC = () => {
 
   const downloadReceipt = async (orderId: string) => {
     try {
-      // Download JPEG receipt for guests
-      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/download-jpeg/${orderId}`;
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      // Generate and download JPEG receipt from backend
+      const receiptUrl = `${API_URL}/api/receipts/download-jpeg/${orderId}`;
+      
+      // Fetch the receipt to ensure it's generated
+      const response = await fetch(receiptUrl, {
+        method: 'GET',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to generate receipt');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = receiptUrl;
+      link.href = url;
       link.download = `receipt_${orderId}.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading receipt:', error);
-      alert('Error downloading receipt. Please try again.');
+      alert(error instanceof Error ? error.message : 'Error downloading receipt. Please try again.');
     }
   };
 
   const fetchOrder = async (rawOrEncodedId: string) => {
     // Accept both encoded and raw; decode if possible
     const decoded = decodeId(rawOrEncodedId) || rawOrEncodedId;
-    if (!orderId) {
+    if (!rawOrEncodedId || !rawOrEncodedId.trim()) {
       setError('Please enter your order ID');
       return;
     }
@@ -351,7 +370,8 @@ const GuestOrderTracking: React.FC = () => {
                         {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                       </span>
                     </Badge>
-                    {(order.paymentStatus === 'paid' || order.status === 'completed' || order.status === 'ready') && (
+                    {/* Download Receipt Button - Only shown after payment is verified */}
+                    {order.paymentStatus === 'paid' && (order.status === 'completed' || order.status === 'ready') && (
                       <Button
                         onClick={() => downloadReceipt(order.orderId)}
                         variant="outline"

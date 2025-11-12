@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="w-full max-w-6xl mx-auto mt-6 space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8">
+      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-6 max-w-6xl mx-auto">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -759,7 +759,9 @@ const CustomerMenu: React.FC = () => {
               if (result.success) {
                 clearCart();
                 closeCartModal();
-                alert(`Order placed successfully! Order ID: ${result.orderId}`);
+                // Show 5-character order code if available
+                const displayOrderId = result.orderNumber || result.orderId;
+                alert(`Order placed successfully! Order ID: ${displayOrderId}`);
                 
                 // Trigger a custom event to refresh orders data without page reload
                 setTimeout(() => {

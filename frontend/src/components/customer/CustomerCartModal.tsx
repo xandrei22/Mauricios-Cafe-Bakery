@@ -393,7 +393,7 @@ export default function CustomerCartModal({
                   </div>
 
                   {/* Order Summary */}
-                  <div className="border-t pt-4">
+                  <div className="border-t pt-4 pb-6">
                     <h3 className="font-semibold text-lg mb-3 text-gray-800">Order Summary</h3>
                     <div className="space-y-2 mb-3">
                       {cart.map((item, index) => (

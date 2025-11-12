@@ -477,7 +477,10 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     customizationOptions.forEach((opt) => {
       const label = (opt.label || '').toLowerCase();
       if (label && tokens.some((t) => label.includes(t))) {
-        matchedOptionIds.push(opt.id);
+        const category = (opt.category || '').toLowerCase();
+        if (!category.includes('milk') && !category.includes('sweetener')) {
+          matchedOptionIds.push(opt.id);
+        }
       }
     });
 
@@ -521,10 +524,20 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     const newCustomizations = { ...customizations } as { [key: string]: { selected: boolean; quantity: number } };
     combination.customizations.forEach((customization) => {
       const option = customizationOptions.find((opt) => (opt.label || '').toLowerCase() === customization.toLowerCase());
-      if (option) {
-        const defaultQty = option.defaultQuantity || 1;
-        newCustomizations[option.id] = { selected: true, quantity: Math.max(defaultQty, 1) };
+      if (!option) {
+        return;
       }
+      const category = (option.category || '').toLowerCase();
+      if (category.includes('milk')) {
+        setMilk(option.label);
+        return;
+      }
+      if (category.includes('sweetener')) {
+        setSweetener(option.label);
+        return;
+      }
+      const defaultQty = option.defaultQuantity || 1;
+      newCustomizations[option.id] = { selected: true, quantity: Math.max(defaultQty, 1) };
     });
     setCustomizations(newCustomizations);
     setShowAISuggestions(false);
