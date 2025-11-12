@@ -125,20 +125,28 @@ const AdminDashboard: React.FC = () => {
   // Fetch staff performance data
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
+      console.log(`🔍 Fetching staff performance data for period: ${period}`);
       // Use axiosInstance which automatically adds Authorization header
       const response = await axiosInstance.get(`/api/admin/dashboard/staff-performance?period=${period}`);
       
       if (response.status === 200) {
         const data = response.data;
-        console.log('Admin staff performance data received:', data);
+        console.log('✅ Admin staff performance data received:', data);
+        console.log('📊 staff_performance array:', data.staff_performance);
+        console.log('📊 staff_performance length:', data.staff_performance?.length);
         setStaffPerformanceData(data);
         
         // Process data for chart
         if (data.staff_performance && Array.isArray(data.staff_performance) && data.staff_performance.length > 0) {
           const labels = data.staff_performance.map((staff: any) => staff.staff_name || 'Unknown Staff');
-          const salesData = data.staff_performance.map((staff: any) => Number(staff.total_sales) || 0);
+          const salesData = data.staff_performance.map((staff: any) => {
+            const sales = Number(staff.total_sales) || 0;
+            console.log(`💰 Staff: ${staff.staff_name}, Total Sales: ${staff.total_sales} (parsed: ${sales})`);
+            return sales;
+          });
           
-          console.log('Admin staff performance chart data:', { labels, salesData });
+          console.log('📈 Admin staff performance chart data:', { labels, salesData });
+          console.log('🔢 Sales data check - has positive values:', salesData.some((val: number) => val > 0));
           
           // Ensure we have valid data before setting chart data
           if (labels.length > 0 && salesData.length > 0 && salesData.some((val: number) => val > 0)) {
@@ -159,7 +167,7 @@ const AdminDashboard: React.FC = () => {
               }
             }));
           } else {
-            console.log('No valid sales data, setting empty state');
+            console.warn('⚠️ No valid sales data - labels:', labels.length, 'salesData:', salesData.length, 'hasPositive:', salesData.some((val: number) => val > 0));
             // Set empty chart data
             setChartData(prev => ({
               ...prev,
@@ -170,7 +178,7 @@ const AdminDashboard: React.FC = () => {
             }));
           }
         } else {
-          console.log('No staff performance data found or invalid format');
+          console.warn('⚠️ No staff performance data found or invalid format - staff_performance:', data.staff_performance);
           // Set empty chart data
           setChartData(prev => ({
             ...prev,
@@ -191,8 +199,9 @@ const AdminDashboard: React.FC = () => {
           }
         }));
       }
-    } catch (error) {
-      console.error('Error fetching staff performance data:', error);
+    } catch (error: any) {
+      console.error('❌ Error fetching staff performance data:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
       // Set empty chart data on error
       setChartData(prev => ({
         ...prev,
