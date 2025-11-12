@@ -469,7 +469,7 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardContent className="p-6 text-center">
             <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
@@ -536,31 +536,29 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl mx-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {items.map((item) => (
-                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[380px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
-                        <CardContent className="p-0 flex flex-col h-full">
-                          {/* Image - With padding from card edges */}
-                          <div className="h-32 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-2">
+                      <Card key={item.id} className="bg-white border-2 border-gray-200 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col overflow-hidden">
+                        <CardContent className="p-4 flex flex-col h-full">
+                          {/* Image - Centered at top */}
+                          <div className="w-full h-48 mb-4 flex items-center justify-center overflow-hidden rounded-lg bg-gray-50 flex-shrink-0">
                             {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
-                              <div className="w-full h-full overflow-hidden">
-                                <img
-                                  src={item.image_url}
-                                  alt={item.name}
-                                  className="w-full h-full object-contain"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const fallback = target.parentElement?.nextElementSibling as HTMLElement;
-                                    if (fallback) {
-                                      fallback.classList.remove('hidden');
-                                    }
-                                  }}
-                                />
-                              </div>
+                              <img
+                                src={item.image_url}
+                                alt={item.name}
+                                className="w-full h-full object-contain"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const fallback = target.parentElement?.nextElementSibling as HTMLElement;
+                                  if (fallback) {
+                                    fallback.classList.remove('hidden');
+                                  }
+                                }}
+                              />
                             ) : null}
-                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
+                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
                               <div className="text-center">
                                 <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-sm border-2 border-gray-200">
                                   <span className="text-2xl">🍽️</span>
@@ -571,33 +569,31 @@ const CustomerMenu: React.FC = () => {
                           </div>
                           
                           {/* Content */}
-                          <div className="p-3 flex-1 flex flex-col min-h-0">
-                            <h3 className="text-base font-semibold text-[#3f3532] mb-1 line-clamp-2">
+                          <div className="flex-1 flex flex-col">
+                            <h3 className="text-lg font-semibold text-[#3f3532] mb-2 line-clamp-2">
                               {item.name}
                             </h3>
-                            {item.category && (
-                              <p className="text-xs text-gray-500 mb-1">{item.category}</p>
+                            {item.description && (
+                              <p className="text-sm text-gray-600 mb-3 line-clamp-2 flex-shrink-0">
+                                {item.description}
+                              </p>
                             )}
-                            <p className="text-gray-600 text-xs mb-2 line-clamp-2">
-                              {item.description}
-                            </p>
                             
                             {/* Price */}
-                            <div className="mb-2">
-                              <span className="text-lg font-bold text-[#a87437]">
+                            <div className="mb-4">
+                              <span className="text-xl font-bold text-[#a87437]">
                                 ₱{Number(item.price || 0).toFixed(2)}
                               </span>
                             </div>
                             
-                            {/* Action Buttons */}
-                            <div className="flex flex-col gap-2 mt-auto pt-1">
+                            {/* Action Buttons - Stacked vertically */}
+                            <div className="flex flex-col gap-2 mt-auto">
                               {item.allow_customization && (
                                 <Button
                                   onClick={() => setCustomizationModal({ isOpen: true, item: item })}
                                   disabled={!hasValidTableAccess || item.is_available === false}
-                                  size="sm"
                                   variant="outline"
-                                  className="w-full text-xs border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
+                                  className="w-full border-2 border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white font-medium"
                                 >
                                   Customize
                                 </Button>
@@ -605,8 +601,7 @@ const CustomerMenu: React.FC = () => {
                               <Button
                                 onClick={() => handleAddToCart(item)}
                                 disabled={!hasValidTableAccess || item.is_available === false}
-                                size="sm"
-                                className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white text-xs"
+                                className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white font-medium"
                               >
                                 Add to Cart
                               </Button>
