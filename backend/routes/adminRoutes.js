@@ -2366,7 +2366,9 @@ router.post('/loyalty/customers/:customerId/adjust', authenticateJWT, async(req,
 router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
     try {
         const { page = 1, limit = 20, status, customerId, rewardId } = req.query;
-        const offset = (page - 1) * limit;
+        const pageNum = parseInt(page) || 1;
+        const limitNum = parseInt(limit) || 20;
+        const offset = (pageNum - 1) * limitNum;
 
         let whereClause = 'WHERE 1=1';
         const params = [];
@@ -2395,10 +2397,22 @@ router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
         
         console.log(`📊 Admin redemptions count query: ${whereClause}, params:`, params, `total: ${countResult[0].total}`);
 
-        // Get redemptions with full details
+        // Get redemptions with full details (simplified like staff route)
+        // Using same pattern as staff route for consistency
         const [redemptions] = await db.query(`
             SELECT 
-                lrr.*,
+                lrr.id,
+                lrr.customer_id,
+                lrr.reward_id,
+                lrr.claim_code,
+                lrr.points_redeemed,
+                lrr.redemption_date,
+                lrr.status,
+                lrr.expires_at,
+                lrr.order_id,
+                lrr.staff_id,
+                lrr.created_at,
+                lrr.updated_at,
                 c.full_name as customer_name,
                 c.email as customer_email,
                 c.phone as customer_phone,
@@ -2410,14 +2424,14 @@ router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
                 o.total_amount as order_amount,
                 o.status as order_status
             FROM loyalty_reward_redemptions lrr
-            JOIN customers c ON lrr.customer_id = c.id
-            JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
+            INNER JOIN customers c ON lrr.customer_id = c.id
+            INNER JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
             LEFT JOIN users u ON lrr.staff_id = u.id
-            LEFT JOIN orders o ON lrr.order_id = o.order_id
+            LEFT JOIN orders o ON lrr.order_id = o.order_id AND lrr.order_id IS NOT NULL
             ${whereClause}
-            ORDER BY lrr.redemption_date DESC
+            ORDER BY COALESCE(lrr.redemption_date, lrr.created_at, lrr.updated_at) DESC
             LIMIT ? OFFSET ?
-        `, [...params, parseInt(limit), offset]);
+        `, [...params, limitNum, offset]);
 
         console.log(`📋 Admin redemptions query: status=${status || 'all'}, found ${redemptions.length} redemptions`);
         if (redemptions.length > 0) {
@@ -2431,17 +2445,22 @@ router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
 
         res.json({
             success: true,
-            redemptions,
+            redemptions: redemptions || [],
             pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total: countResult[0].total,
-                totalPages: Math.ceil(countResult[0].total / limit)
+                page: pageNum,
+                limit: limitNum,
+                total: countResult[0]?.total || 0,
+                totalPages: Math.ceil((countResult[0]?.total || 0) / limitNum)
             }
         });
     } catch (error) {
         console.error('Error fetching loyalty redemptions:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch redemptions' });
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch redemptions',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 

@@ -108,11 +108,42 @@ async function createEvent(req, res) {
         console.log('✅ Validation passed, creating event in database...');
         console.log('📝 Using cleaned contact number:', cleanedContactNumber);
         
+        // Security: Ensure customer_id matches authenticated user (if provided)
+        // If customer_id is provided, it must match the authenticated user's ID
+        // If not provided or doesn't match, use authenticated user's ID
+        let finalCustomerId = customer_id;
+        let finalCustomerName = customer_name;
+        
+        if (req.user) {
+            console.log('🔐 Authenticated user:', {
+                id: req.user.id,
+                email: req.user.email,
+                role: req.user.role
+            });
+            
+            // If user is a customer, use their ID from JWT
+            if (req.user.role === 'customer') {
+                if (customer_id && customer_id !== req.user.id) {
+                    console.warn('⚠️ Security: customer_id mismatch. Using authenticated user ID instead.');
+                }
+                finalCustomerId = req.user.id;
+                // Use authenticated user's name if customer_name doesn't match
+                if (!finalCustomerName || finalCustomerName !== req.user.name) {
+                    finalCustomerName = req.user.name || req.user.email || customer_name;
+                }
+            }
+        }
+        
+        console.log('📝 Final event data:', {
+            customer_id: finalCustomerId,
+            customer_name: finalCustomerName
+        });
+        
         let eventId;
         try {
             eventId = await eventModel.createEvent({ 
-                customer_id, 
-                customer_name, 
+                customer_id: finalCustomerId, 
+                customer_name: finalCustomerName, 
                 contact_name,
                 contact_number: cleanedContactNumber, // Use cleaned contact number
                 event_date, 
@@ -210,6 +241,11 @@ async function createEvent(req, res) {
 // Admin: Get all events
 async function getAllEvents(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const events = await eventModel.getAllEvents();
         res.json({ success: true, events });
     } catch (err) {
@@ -221,6 +257,14 @@ async function getAllEvents(req, res) {
 async function getEventsByCustomer(req, res) {
     try {
         const { customer_id } = req.params;
+        
+        // Security: Ensure customer can only view their own events
+        if (req.user && req.user.role === 'customer') {
+            if (req.user.id !== parseInt(customer_id)) {
+                return res.status(403).json({ success: false, message: 'Access denied. You can only view your own events.' });
+            }
+        }
+        
         const events = await eventModel.getEventsByCustomer(customer_id);
         res.json({ success: true, events });
     } catch (err) {
@@ -231,6 +275,11 @@ async function getEventsByCustomer(req, res) {
 // Admin: Accept event
 async function acceptEvent(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const { id } = req.params;
         const updated = await eventModel.updateEventStatus(id, 'accepted');
         if (!updated) return res.status(404).json({ success: false, message: 'Event not found.' });
@@ -318,6 +367,11 @@ async function acceptEvent(req, res) {
 // Admin: Reject event
 async function rejectEvent(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const { id } = req.params;
         const updated = await eventModel.updateEventStatus(id, 'rejected');
         if (!updated) return res.status(404).json({ success: false, message: 'Event not found.' });
