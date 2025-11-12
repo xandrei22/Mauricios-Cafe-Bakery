@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
-import { CustomerNavbar } from '../ui/CustomerNavbar';
 
 const CustomerResetPassword: React.FC = () => {
   const { token: urlToken } = useParams<{ token: string }>();
   const [searchParams] = useSearchParams();
   const queryToken = searchParams.get('token');
   // Support both URL parameter and query parameter for token
-  // Decode the token in case it's URL-encoded (Gmail sometimes encodes links)
+  // Safely decode the token in case it's URL-encoded (Gmail sometimes encodes links)
   const rawToken = urlToken || queryToken;
-  const token = rawToken ? decodeURIComponent(rawToken) : null;
+  const token = rawToken ? (() => {
+    try {
+      // Try to decode, but if it fails, use the original
+      return decodeURIComponent(rawToken);
+    } catch (e) {
+      return rawToken;
+    }
+  })() : null;
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,11 +25,12 @@ const CustomerResetPassword: React.FC = () => {
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
 
-  // Check if token is missing and log for debugging
+  // Check if token is missing and validate it
   useEffect(() => {
     console.log('Reset Password - URL Token:', urlToken);
     console.log('Reset Password - Query Token:', queryToken);
     console.log('Reset Password - Final Token:', token);
+    console.log('Reset Password - Full URL:', window.location.href);
     
     if (!token) {
       setStatus('error');
@@ -83,7 +90,9 @@ const CustomerResetPassword: React.FC = () => {
     }
     
     try {
-      console.log('Submitting reset password with token:', token ? 'Token present' : 'Token missing');
+      console.log('Submitting reset password with token:', token ? `Token present (length: ${token.length})` : 'Token missing');
+      console.log('Token value (first 10 chars):', token ? token.substring(0, 10) + '...' : 'N/A');
+      
       const res = await fetch('/api/customer/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +107,14 @@ const CustomerResetPassword: React.FC = () => {
         setTimeout(() => navigate('/customer-login'), 2000);
       } else {
         setStatus('error');
-        setMessage(data.message || 'Failed to reset password.');
+        // Provide more helpful error message
+        if (data.message && data.message.includes('expired')) {
+          setMessage('This reset link has expired. Please request a new password reset.');
+        } else if (data.message && data.message.includes('Invalid')) {
+          setMessage('This reset link is invalid. Please request a new password reset.');
+        } else {
+          setMessage(data.message || 'Failed to reset password.');
+        }
       }
     } catch (err) {
       console.error('Reset password error:', err);
@@ -108,9 +124,7 @@ const CustomerResetPassword: React.FC = () => {
   };
 
   return (
-    <>
-      <CustomerNavbar />
-      <div className="min-h-screen flex items-center justify-center bg-[#f8ede3] pt-12 sm:pt-16 p-3">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8ede3] p-3">
         <div className="bg-white p-3 sm:p-6 lg:p-8 rounded-xl shadow-md w-full max-w-md">
           <h2 className="text-2xl sm:text-3xl font-light text-[#6B5B5B] mb-2 text-center">Reset Password</h2>
           <p className="text-sm text-gray-600 text-center mb-4">Enter your new password below.</p>
@@ -185,7 +199,6 @@ const CustomerResetPassword: React.FC = () => {
           </div>
         </div>
       </div>
-    </>
   );
 };
 

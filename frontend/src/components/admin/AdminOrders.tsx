@@ -237,13 +237,30 @@ const AdminOrders: React.FC = () => {
       const response = await axiosInstance.get('/api/staff/orders');
       const data = response.data;
 
+      let ordersList: Order[] = [];
       if (data && data.success && Array.isArray(data.orders)) {
-        setOrders(transformOrdersResponse(data.orders));
+        ordersList = transformOrdersResponse(data.orders);
       } else if (data && Array.isArray(data.orders)) {
-        setOrders(transformOrdersResponse(data.orders));
-      } else {
-        setOrders([]);
+        ordersList = transformOrdersResponse(data.orders);
       }
+      
+      setOrders(ordersList);
+      
+      // Debug logging
+      console.log('📋 AdminOrders - Fetched orders:', ordersList.length);
+      console.log('📋 AdminOrders - Orders by status:', {
+        pending: ordersList.filter(o => o.status === 'pending').length,
+        pending_verification: ordersList.filter(o => o.status === 'pending_verification').length,
+        preparing: ordersList.filter(o => o.status === 'preparing').length,
+        ready: ordersList.filter(o => o.status === 'ready').length,
+        cancelled: ordersList.filter(o => o.status === 'cancelled').length,
+        completed: ordersList.filter(o => o.status === 'completed').length
+      });
+      console.log('📋 AdminOrders - Orders by payment status:', {
+        pending: ordersList.filter(o => o.paymentStatus === 'pending').length,
+        pending_verification: ordersList.filter(o => o.paymentStatus === 'pending_verification').length,
+        paid: ordersList.filter(o => o.paymentStatus === 'paid').length
+      });
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       if (error?.response?.status === 401) {
@@ -335,31 +352,32 @@ const AdminOrders: React.FC = () => {
   const readyStatuses = ['ready'];
 
   const preparingOrders = filteredOrders.filter(order => {
-    const status = order.status;
-    const pay = order.paymentStatus;
+    const status = String(order.status || '').toLowerCase();
+    const pay = String(order.paymentStatus || '').toLowerCase();
     
     // Exclude cancelled, completed, and ready orders
     if (status === 'cancelled' || status === 'completed' || status === 'ready') return false;
     
-    // Include preparing orders
+    // Include preparing orders (regardless of payment status - they're already verified)
     if (status === 'preparing') return true;
     
     // Include confirmed and processing orders
-    if (preparingStatuses.includes(String(status))) return true;
+    if (preparingStatuses.includes(status)) return true;
     
-    // Treat paid+pending as preparing so staff can work it (match StaffOrders logic)
-    if (pay === 'paid' && status === 'pending') return true;
+    // Include orders that are paid and in pending/pending_verification status (should move to preparing)
+    // These are orders that were verified but status hasn't been updated yet
+    if (pay === 'paid' && (status === 'pending' || status === 'pending_verification')) return true;
     
-    // Also include paid orders that are pending_verification
-    if (status === 'pending_verification' && pay === 'paid') return true;
-    
-    console.log('Preparing filter check:', { 
-      orderId: order.orderId, 
-      status: order.status, 
-      paymentStatus: order.paymentStatus,
-      shouldShow: false,
-      preparingStatuses 
-    });
+    // Debug log for orders that don't match
+    if (status !== 'cancelled' && status !== 'completed' && status !== 'ready') {
+      console.log('Preparing filter - excluded order:', { 
+        orderId: order.orderId, 
+        status: order.status, 
+        paymentStatus: order.paymentStatus,
+        pay,
+        preparingStatuses 
+      });
+    }
     return false;
   }).map((order, index) => ({
     ...order,
@@ -522,14 +540,21 @@ const AdminOrders: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{
               filteredOrders.filter(o => {
-                const s = String(o.status);
+                const s = String(o.status || '').toLowerCase();
+                const pay = String(o.paymentStatus || '').toLowerCase();
+                // Include all active orders (not cancelled, not completed)
+                // This includes orders with pending payment that need verification
                 return (
-                  s === 'pending' ||
-                  s === 'pending_verification' ||
-                  s === 'confirmed' ||
-                  s === 'preparing' ||
-                  s === 'processing' ||
-                  s === 'ready'
+                  s !== 'cancelled' &&
+                  s !== 'completed' &&
+                  (s === 'pending' ||
+                   s === 'pending_verification' ||
+                   s === 'confirmed' ||
+                   s === 'preparing' ||
+                   s === 'processing' ||
+                   s === 'ready' ||
+                   pay === 'pending' ||
+                   pay === 'pending_verification')
                 );
               }).length
             }</div>

@@ -10,6 +10,7 @@ import {
 import SimplePOS from './SimplePOS';
 import PaymentProcessor from './PaymentProcessor';
 import { io, Socket } from 'socket.io-client';
+import axiosInstance from '../../utils/axiosInstance';
 
 interface Order {
   id: string;
@@ -166,46 +167,71 @@ const POSDashboard: React.FC = () => {
   }, []);
 
   const fetchOrders = async () => {
-    try {
-      // Use role-appropriate endpoint
-      const endpoint = isAdminRoute ? '/api/orders' : '/api/staff/orders';
-      const response = await fetch(endpoint, { credentials: 'omit' });
-      const data = await response.json();
-      if (data.success) {
-        console.log('📋 Fetched orders:', data.orders.length, 'orders');
-        const normalized: Order[] = (data.orders || []).map((o: any) => ({
-          id: String(o.orderId || o.id || o.order_id || ''),
-          orderId: String(o.orderId || o.id || o.order_id || ''),
-          customerName: o.customerName || o.customer_name || 'Customer',
-          tableNumber: Number(o.tableNumber ?? o.table_number ?? 0),
-          items: o.items || [],
-          totalPrice: Number(o.totalPrice ?? o.total_price ?? 0),
-          status: String(o.status || 'pending') as Order['status'],
-          paymentStatus: String(o.paymentStatus ?? o.payment_status ?? (o.receiptPath || o.receipt_path ? 'pending_verification' : 'pending')) as Order['paymentStatus'],
-          paymentMethod: String(o.paymentMethod ?? o.payment_method ?? ''),
-          orderTime: o.orderTime || o.order_time || new Date().toISOString(),
-          notes: o.notes || undefined,
-          placedBy: o.placedBy || 'customer',
-          receiptPath: o.receiptPath || o.receipt_path,
-          cancelledBy: o.cancelledBy || o.cancelled_by,
-          cancellationReason: o.cancellationReason || o.cancellation_reason,
-          cancelledAt: o.cancelledAt || o.cancelled_at,
-        }));
-        console.log('📋 Orders with pending_verification:', normalized.filter(o => o.paymentStatus === 'pending_verification'));
-        console.log('📋 All orders statuses:', normalized.map(o => ({ orderId: o.orderId, status: o.status, paymentStatus: o.paymentStatus })));
-        setOrders(normalized);
+    const endpoints = isAdminRoute
+      ? ['/api/orders', '/api/staff/orders']
+      : ['/api/staff/orders', '/api/orders'];
+
+    for (const endpoint of endpoints) {
+      try {
+        console.log('📡 POSDashboard fetchOrders -> requesting', endpoint);
+        const response = await axiosInstance.get(endpoint, {
+          params: { limit: 500 }
+        });
+        const data = response.data || {};
+        if (data && data.success && Array.isArray(data.orders)) {
+          console.log('📋 POSDashboard - Orders fetched from', endpoint, 'count:', data.orders.length);
+          const normalized: Order[] = (data.orders || []).map((o: any) => ({
+            id: String(o.orderId || o.id || o.order_id || ''),
+            orderId: String(o.orderId || o.id || o.order_id || ''),
+            customerName: o.customerName || o.customer_name || 'Customer',
+            tableNumber: Number(o.tableNumber ?? o.table_number ?? 0),
+            items: o.items || [],
+            totalPrice: Number(o.totalPrice ?? o.total_price ?? 0),
+            status: String(o.status || 'pending') as Order['status'],
+            paymentStatus: String(
+              o.paymentStatus ??
+              o.payment_status ??
+              (o.receiptPath || o.receipt_path ? 'pending_verification' : 'pending')
+            ) as Order['paymentStatus'],
+            paymentMethod: String(o.paymentMethod ?? o.payment_method ?? ''),
+            orderTime: o.orderTime || o.order_time || new Date().toISOString(),
+            notes: o.notes || undefined,
+            placedBy: o.placedBy || 'customer',
+            receiptPath: o.receiptPath || o.receipt_path,
+            cancelledBy: o.cancelledBy || o.cancelled_by,
+            cancellationReason: o.cancellationReason || o.cancellation_reason,
+            cancelledAt: o.cancelledAt || o.cancelled_at,
+          }));
+
+          const pendingPaymentCount = normalized.filter(o => {
+            const paymentStatus = String(o.paymentStatus || '').toLowerCase();
+            return paymentStatus === 'pending' || paymentStatus === 'pending_verification';
+          }).length;
+          console.log('📋 POSDashboard - Orders with pending payment:', pendingPaymentCount);
+          console.log('📋 POSDashboard - Status breakdown:', normalized.reduce((acc: Record<string, number>, order) => {
+            const key = String(order.status || '').toLowerCase();
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {}));
+
+          setOrders(normalized);
+          return; // Success, stop trying other endpoints
+        }
+      } catch (error) {
+        console.error(`❌ POSDashboard fetchOrders error for ${endpoint}:`, error);
       }
-    } catch (error) {
-      console.error('Error fetching orders:', error);
     }
+
+    // If we get here, all endpoints failed
+    setOrders([]);
   };
 
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/orders/stats`, { credentials: 'omit' });
-      const data = await response.json();
-      if (data.success) {
+      const response = await axiosInstance.get('/api/orders/stats');
+      const data = response.data || {};
+      if (data.success && data.stats) {
         setStats({
           totalOrders: data.stats.totalOrders || 0,
           pendingOrders: data.stats.pendingOrders || 0,
