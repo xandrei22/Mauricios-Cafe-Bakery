@@ -3,8 +3,9 @@ const db = require('../config/db');
 class NotificationThrottlingService {
     constructor() {
         this.CRITICAL_INTERVAL_HOURS = 24; // 1 day for critical items
-        this.LOW_STOCK_INTERVAL_DAYS = 3; // 3 days for low stock items
-        this.NOTIFICATION_TIME = '08:00:00'; // 8:00 AM
+        this.LOW_STOCK_INTERVAL_HOURS = 24; // 1 day (24 hours) for low stock items - daily
+        this.NOTIFICATION_START_HOUR = 7; // 7:00 AM
+        this.NOTIFICATION_END_HOUR = 9; // 9:00 AM
     }
 
     /**
@@ -37,9 +38,9 @@ class NotificationThrottlingService {
                     const hoursDiff = (now - lastSentAt) / (1000 * 60 * 60);
                     return hoursDiff >= this.CRITICAL_INTERVAL_HOURS;
                 } else if (notificationType === 'low_stock_low') {
-                    // For low stock items, check if 3 days have passed
-                    const daysDiff = (now - lastSentAt) / (1000 * 60 * 60 * 24);
-                    return daysDiff >= this.LOW_STOCK_INTERVAL_DAYS;
+                    // For low stock items, check if 24 hours have passed (daily)
+                    const hoursDiff = (now - lastSentAt) / (1000 * 60 * 60);
+                    return hoursDiff >= this.LOW_STOCK_INTERVAL_HOURS;
                 }
 
                 return false;
@@ -78,26 +79,30 @@ class NotificationThrottlingService {
     }
 
     /**
-     * Check if it's the right time to send notifications (8:00 AM)
-     * @returns {boolean} - true if it's 8:00 AM
+     * Check if it's within the notification time window (7:00 AM - 9:00 AM)
+     * @returns {boolean} - true if it's between 7 AM and 9 AM
      */
     isNotificationTime() {
         const now = new Date();
-        const currentTime = now.toTimeString().split(' ')[0]; // Get HH:MM:SS
-        return currentTime.startsWith(this.NOTIFICATION_TIME);
+        const currentHour = now.getHours();
+        return currentHour >= this.NOTIFICATION_START_HOUR && currentHour < this.NOTIFICATION_END_HOUR;
     }
 
     /**
-     * Get time until next notification window (8:00 AM)
-     * @returns {number} - milliseconds until next 8:00 AM
+     * Get time until next notification window (7:00 AM)
+     * @returns {number} - milliseconds until next 7:00 AM
      */
     getTimeUntilNextNotification() {
         const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(8, 0, 0, 0); // Set to 8:00 AM tomorrow
+        const nextWindow = new Date(now);
         
-        return tomorrow.getTime() - now.getTime();
+        // If we're past 9 AM today, set to 7 AM tomorrow
+        if (now.getHours() >= this.NOTIFICATION_END_HOUR) {
+            nextWindow.setDate(nextWindow.getDate() + 1);
+        }
+        nextWindow.setHours(this.NOTIFICATION_START_HOUR, 0, 0, 0); // Set to 7:00 AM
+        
+        return nextWindow.getTime() - now.getTime();
     }
 
     /**
@@ -106,12 +111,12 @@ class NotificationThrottlingService {
      * @returns {Promise<boolean>} - true if notification should be sent
      */
     async shouldSendNotification(notificationType) {
-        // Check if it's the right time (8:00 AM)
+        // Check if it's within the notification window (7:00 AM - 9:00 AM)
         if (!this.isNotificationTime()) {
             return false;
         }
 
-        // Check throttling rules
+        // Check throttling rules (must be at least 24 hours since last send)
         return await this.canSendNotification(notificationType);
     }
 
@@ -140,7 +145,7 @@ class NotificationThrottlingService {
                         daysSinceLastSent: row.days_since_last_sent,
                         canSend: row.notification_type === 'low_stock_critical' 
                             ? row.hours_since_last_sent >= this.CRITICAL_INTERVAL_HOURS
-                            : row.days_since_last_sent >= this.LOW_STOCK_INTERVAL_DAYS
+                            : row.hours_since_last_sent >= this.LOW_STOCK_INTERVAL_HOURS
                     };
                 });
 
