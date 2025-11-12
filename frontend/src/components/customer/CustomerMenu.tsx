@@ -471,29 +471,29 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
-            <div className="text-sm text-gray-600">Total Items</div>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gray-700 mb-1">{totalItems}</div>
+            <div className="text-xs text-gray-600">Total Items</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-gray-700 mb-2">{availableItems}</div>
-            <div className="text-sm text-gray-600">Available Items</div>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gray-700 mb-1">{availableItems}</div>
+            <div className="text-xs text-gray-600">Available Items</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-gray-700 mb-2">{popularItems}</div>
-            <div className="text-sm text-gray-600">Popular</div>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gray-700 mb-1">{popularItems}</div>
+            <div className="text-xs text-gray-600">Popular</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-6 text-center">
-            <div className="text-3xl font-bold text-gray-700 mb-2">{totalCategories}</div>
-            <div className="text-sm text-gray-600">Categories</div>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gray-700 mb-1">{totalCategories}</div>
+            <div className="text-xs text-gray-600">Categories</div>
           </CardContent>
         </Card>
       </div>
@@ -538,7 +538,7 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
                     {items.map((item) => (
                       <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
