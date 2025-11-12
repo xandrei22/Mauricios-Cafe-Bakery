@@ -536,7 +536,7 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-2xl mx-auto">
                     {items.map((item) => (
                       <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[380px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
