@@ -291,22 +291,29 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       });
       
       console.log('📥 Response status:', res.status);
-      console.log('📥 Response headers:', res.headers);
+      console.log('📥 Response ok:', res.ok);
       
-      // Check if response is JSON
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await res.text();
-        console.error('❌ Non-JSON response:', text);
-        toast('Submission failed', { description: 'Server returned an invalid response. Please try again.' });
+      // Get response as text first to handle both JSON and non-JSON
+      const responseText = await res.text();
+      console.log('📥 Raw response text:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('📥 Parsed response data:', data);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response as JSON:', parseError);
+        console.error('❌ Response text was:', responseText);
+        toast.error('Server error', { 
+          description: `Server returned an invalid response: ${responseText.substring(0, 100)}`,
+          duration: 7000
+        });
         setLoading(false);
+        setIsSubmitting(false);
         return;
       }
       
-      const data = await res.json();
-      console.log('📥 Response data:', data);
-      
-      if (res.ok && data.success) {
+      if (res.status >= 200 && res.status < 300 && data.success) {
         console.log('✅ Event request submitted successfully! Event ID:', data.eventId);
         toast.success('Event request submitted!', { 
           description: 'Your event request has been sent to the admin. You will be notified once it is reviewed.',
