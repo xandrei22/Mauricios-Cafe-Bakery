@@ -380,7 +380,7 @@ export default function CustomerDasboard() {
           {/* Welcome Header */}
           <div className="w-full px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4 bg-[#f5f5f5]">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
-              <span className="text-black">Hi {user?.name || 'Customer'}! Welcome to </span>
+              <span className="text-black">Welcome to </span>
               <span className="text-[#a87437]">Mauricio's Cafe and Bakery</span>
             </h1>
             <p className="text-base sm:text-lg text-black">
