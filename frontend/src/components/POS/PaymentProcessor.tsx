@@ -44,22 +44,55 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const pendingOrders = orders.filter(order => {
     // Include orders with pending payment status regardless of order status
     // This ensures admin/staff placed orders with pending payment appear here
-    const hasPendingPayment = order.paymentStatus === 'pending' || order.paymentStatus === 'pending_verification';
+    const paymentStatus = (order.paymentStatus || '').toLowerCase();
+    const hasPendingPayment = paymentStatus === 'pending' || paymentStatus === 'pending_verification';
     const isNotCancelled = order.status !== 'cancelled';
     const isNotCompleted = order.status !== 'completed';
-    // Removed isNotPreparing and isNotReady filters - orders can have pending payment even if preparing/ready
-    const include = hasPendingPayment && isNotCancelled && isNotCompleted;
-    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, placedBy=${order.placedBy}, includeInPending=${include}`);
+    
+    // Also include orders that are paid but still in pending/preparing status (might need review)
+    // This helps catch orders that were marked as paid but shouldn't have been
+    const isPaidButPending = paymentStatus === 'paid' && (order.status === 'pending' || order.status === 'preparing');
+    
+    const include = (hasPendingPayment || isPaidButPending) && isNotCancelled && isNotCompleted;
+    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, placedBy=${order.placedBy}, includeInPending=${include}, isPaidButPending=${isPaidButPending}`);
     return include;
   });
   
   // Debug logging
   React.useEffect(() => {
     console.log('🔍 PaymentProcessor - All orders received:', orders.length);
-    console.log('🔍 PaymentProcessor - All orders details:', orders.map(o => ({ orderId: o.orderId, status: o.status, paymentStatus: o.paymentStatus })));
-    console.log('🔍 PaymentProcessor - Orders with pending payment:', orders.filter(o => o.paymentStatus === 'pending' || o.paymentStatus === 'pending_verification'));
+    console.log('🔍 PaymentProcessor - All orders details:', orders.map(o => ({ 
+      orderId: o.orderId, 
+      status: o.status, 
+      paymentStatus: o.paymentStatus,
+      paymentMethod: o.paymentMethod,
+      placedBy: o.placedBy
+    })));
+    
+    const ordersWithPendingPayment = orders.filter(o => {
+      const ps = (o.paymentStatus || '').toLowerCase();
+      return ps === 'pending' || ps === 'pending_verification';
+    });
+    console.log('🔍 PaymentProcessor - Orders with pending payment:', ordersWithPendingPayment.length);
+    console.log('🔍 PaymentProcessor - Orders with pending payment details:', ordersWithPendingPayment);
+    
+    const ordersWithPaidStatus = orders.filter(o => {
+      const ps = (o.paymentStatus || '').toLowerCase();
+      return ps === 'paid';
+    });
+    console.log('🔍 PaymentProcessor - Orders with paid status:', ordersWithPaidStatus.length);
+    console.log('🔍 PaymentProcessor - Orders with paid status details:', ordersWithPaidStatus.map(o => ({
+      orderId: o.orderId,
+      status: o.status,
+      paymentStatus: o.paymentStatus
+    })));
+    
     console.log('🔍 PaymentProcessor - Pending orders after filter:', pendingOrders.length);
-    console.log('🔍 PaymentProcessor - Pending orders details:', pendingOrders.map(o => ({ orderId: o.orderId, paymentStatus: o.paymentStatus, status: o.status })));
+    console.log('🔍 PaymentProcessor - Pending orders details:', pendingOrders.map(o => ({ 
+      orderId: o.orderId, 
+      paymentStatus: o.paymentStatus, 
+      status: o.status 
+    })));
   }, [orders, pendingOrders]);
   
   const cancelledOrders = orders.filter(order => order.status === 'cancelled');
@@ -300,7 +333,10 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                         {order.paymentStatus === 'pending_verification' && (
                           <span className="text-orange-600 font-medium">Awaiting verification</span>
                         )}
-                        {order.paymentStatus === 'paid' && order.status === 'pending' && (
+                        {order.paymentStatus === 'pending' && (
+                          <span className="text-yellow-600 font-medium">Payment pending</span>
+                        )}
+                        {order.paymentStatus === 'paid' && (order.status === 'pending' || order.status === 'preparing') && (
                           <span className="text-blue-600 font-medium">✓ Payment verified - Ready for preparation</span>
                         )}
                       </div>

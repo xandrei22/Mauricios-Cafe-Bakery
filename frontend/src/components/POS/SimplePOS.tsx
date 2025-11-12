@@ -781,7 +781,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 															{/* Actions */}
 															<div className="flex flex-col gap-1">
-																{item.allow_customization && (
+																{item.allow_customization && !['Sandwiches', 'Rice Meals', 'Foods', 'Food', 'Meals'].some(cat => item.category?.toLowerCase() === cat.toLowerCase()) && (
 																	<Button
 																	size="sm"
 																	variant="outline"
@@ -790,8 +790,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 																	className="text-xs border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 h-7"
 																	title="Customize Item"
 																>
-																	<Settings className="w-3 h-3 mr-1" />
-																	<span className="hidden sm:inline">Customize</span>
+																	Customize
 																</Button>
 																)}
 																<Button
@@ -886,10 +885,9 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 																		
 																		{/* Actions */}
 																		<div className="ml-3 flex items-center gap-2">
-																			{item.allow_customization && (
+																			{item.allow_customization && !['Sandwiches', 'Rice Meals', 'Foods', 'Food', 'Meals'].some(cat => item.category?.toLowerCase() === cat.toLowerCase()) && (
 																				<Button size="sm" variant="outline" onClick={() => openCustomizeModal(item)} disabled={!item.is_available} className="text-xs border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 h-8" title="Customize Item">
-																					<Settings className="w-3 h-3 mr-1" />
-																					<span className="hidden sm:inline">Customize</span>
+																					Customize
 																				</Button>
 																			)}
 																			<Button size="sm" variant="default" onClick={() => addToCart(item, 1)} disabled={!item.is_available} className="text-xs bg-[#a87437] hover:bg-[#a87437]/90 text-white h-8">
@@ -918,8 +916,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					<div className="w-full lg:w-[30rem] xl:w-[32rem] 2xl:w-[36rem] min-w-0 p-2 sm:p-3 lg:p-4 flex-shrink-0 lg:sticky lg:top-0 lg:overflow-hidden">
 				{/* Customer Information */}
 				<Card className="mb-2 bg-white border shadow-lg">
-					<CardHeader className="pt-0 pb-0 px-3 -mt-3">
-						<CardTitle className="text-sm text-[#3f3532] -mb-4">Customer Information</CardTitle>
+					<CardHeader className="pt-0 pb-0 px-3 -mt-3 overflow-visible">
+						<CardTitle className="text-sm text-[#3f3532] -mb-4 overflow-visible whitespace-nowrap">Customer Information</CardTitle>
 					</CardHeader>
 					<CardContent className="px-3 pb-0 pt-0 -mb-2">
 						<div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
