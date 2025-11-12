@@ -53,7 +53,14 @@ class NotificationService {
 
             // Send real-time notification if Socket.IO is available
             if (this.io) {
+                // Emit to all clients
                 this.io.emit('new-notification', notification[0]);
+                
+                // Also emit specifically to admin room if notification is for admins
+                if (userType === 'admin' || (!userId && userType === 'admin')) {
+                    console.log('📡 Emitting notification to admin-room:', notification[0].id);
+                    this.io.to('admin-room').emit('new-notification', notification[0]);
+                }
             }
 
             // Send email notification if enabled
@@ -445,22 +452,28 @@ class NotificationService {
      * Create notification for event request
      */
     async notifyEventRequest(eventData) {
-        const notification = await this.createNotification({
-            type: 'event_request',
-            title: 'New Event Request',
-            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
-            data: {
-                eventId: eventData.id,
-                eventDate: eventData.event_date,
-                cups: eventData.cups,
-                customerName: eventData.customer_name,
-                contactNumber: eventData.contact_number
-            },
-            userType: 'admin',
-            priority: 'high'
-        });
-
-        return notification;
+        console.log('📢 Creating event request notification:', eventData);
+        try {
+            const notification = await this.createNotification({
+                type: 'event_request',
+                title: 'New Event Request',
+                message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
+                data: {
+                    eventId: eventData.id,
+                    eventDate: eventData.event_date,
+                    cups: eventData.cups,
+                    customerName: eventData.customer_name,
+                    contactNumber: eventData.contact_number
+                },
+                userType: 'admin',
+                priority: 'high'
+            });
+            console.log('✅ Event request notification created:', notification.id);
+            return notification;
+        } catch (error) {
+            console.error('❌ Error creating event request notification:', error);
+            throw error;
+        }
     }
 
     /**

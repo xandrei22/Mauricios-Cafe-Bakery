@@ -329,7 +329,7 @@ router.get('/dashboard/ingredients', authenticateJWT, async(req, res) => {
         `);
 
         const ingredientCounts = new Map();
-        
+
         // Cache menu item ingredients to avoid repeated queries
         const menuItemIngredientsCache = new Map();
 
@@ -348,7 +348,7 @@ router.get('/dashboard/ingredients', authenticateJWT, async(req, res) => {
                 if (menuItemId) {
                     // Check cache first
                     let ingredients = menuItemIngredientsCache.get(menuItemId);
-                    
+
                     if (!ingredients) {
                         // Get ingredients for this menu item
                         const [ingredientRows] = await db.query(`
@@ -359,7 +359,7 @@ router.get('/dashboard/ingredients', authenticateJWT, async(req, res) => {
                             JOIN ingredients i ON mii.ingredient_id = i.id
                             WHERE mii.menu_item_id = ?
                         `, [menuItemId]);
-                        
+
                         ingredients = ingredientRows;
                         menuItemIngredientsCache.set(menuItemId, ingredients);
                     }
@@ -384,11 +384,11 @@ router.get('/dashboard/ingredients', authenticateJWT, async(req, res) => {
 
             labels = sorted.map(([name]) => name);
             data = sorted.map(([, amount]) => amount);
-            
+
             // Enhanced logging for verification
             console.log(`[Admin Dashboard] Processed ${orders.length} paid orders`);
             console.log(`[Admin Dashboard] Found ${ingredientCounts.size} unique ingredients`);
-            console.log('[Admin Dashboard] Top 6 most used ingredients:', 
+            console.log('[Admin Dashboard] Top 6 most used ingredients:',
                 sorted.map(([name, amount]) => `${name}: ${amount.toFixed(2)}`).join(', '));
         } else {
             console.warn('[Admin Dashboard] No ingredient usage data found, using fallback');
@@ -2512,6 +2512,49 @@ router.get('/loyalty/redemptions/:redemptionId', authenticateJWT, async(req, res
     } catch (error) {
         console.error('Error fetching redemption details:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch redemption details' });
+    }
+});
+
+// NEW: Search redemption by claim code (admin only) - requires authentication
+router.get('/loyalty/redemptions/search/:claimCode', authenticateJWT, async(req, res) => {
+    try {
+        const { claimCode } = req.params;
+
+        // Get redemption by claim code
+        const [redemptions] = await db.query(`
+            SELECT 
+                lrr.*,
+                c.full_name as customer_name,
+                c.email as customer_email,
+                c.phone as customer_phone,
+                c.loyalty_points as current_points,
+                lr.name as reward_name,
+                lr.reward_type,
+                lr.description as reward_description,
+                lr.points_required,
+                u.full_name as staff_name,
+                o.total_amount as order_amount,
+                o.status as order_status,
+                o.order_time as order_date
+            FROM loyalty_reward_redemptions lrr
+            JOIN customers c ON lrr.customer_id = c.id
+            JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
+            LEFT JOIN users u ON lrr.staff_id = u.id
+            LEFT JOIN orders o ON lrr.order_id = o.order_id
+            WHERE lrr.claim_code = ?
+        `, [claimCode]);
+
+        if (redemptions.length === 0) {
+            return res.status(404).json({ success: false, error: 'Redemption not found' });
+        }
+
+        res.json({
+            success: true,
+            redemption: redemptions[0]
+        });
+    } catch (error) {
+        console.error('Error searching redemption by claim code:', error);
+        res.status(500).json({ success: false, error: 'Failed to search redemption' });
     }
 });
 

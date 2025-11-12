@@ -2408,8 +2408,20 @@ router.get('/sales/download', async(req, res) => {
 
         const { format = 'excel', period = 'month', startDate, endDate, status, payment_method, customer } = req.query;
 
-        // Simple test first - just get basic data
-        const [salesData] = await db.query(`
+        // Check if XLSX is available
+        let XLSX;
+        try {
+            XLSX = require('xlsx');
+        } catch (xlsxError) {
+            console.error('XLSX library not found:', xlsxError);
+            return res.status(500).json({
+                success: false,
+                error: 'Excel library not installed. Please install xlsx package: npm install xlsx'
+            });
+        }
+
+        // Build query with filters
+        let query = `
             SELECT 
                 order_id,
                 customer_name,
@@ -2420,68 +2432,189 @@ router.get('/sales/download', async(req, res) => {
                 items
             FROM orders 
             WHERE payment_status = 'paid'
-            ORDER BY order_time DESC
-            LIMIT 100
-        `);
+        `;
+        const queryParams = [];
 
-        console.log(`Found ${salesData.length} orders for export`);
+        // Add date filters if provided
+        if (startDate) {
+            query += ' AND DATE(order_time) >= ?';
+            queryParams.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(order_time) <= ?';
+            queryParams.push(endDate);
+        }
+        if (status && status !== 'all') {
+            query += ' AND status = ?';
+            queryParams.push(status);
+        }
+        if (payment_method && payment_method !== 'all') {
+            query += ' AND payment_method = ?';
+            queryParams.push(payment_method);
+        }
+        if (customer && customer.trim() !== '') {
+            query += ' AND customer_name LIKE ?';
+            queryParams.push(`%${customer.trim()}%`);
+        }
 
-        // Generate Excel file
-        const XLSX = require('xlsx');
+        query += ' ORDER BY order_time DESC LIMIT 1000';
+
+        let salesData;
+        try {
+            const result = await db.query(query, queryParams);
+            salesData = result[0] || [];
+        } catch (queryError) {
+            console.error('Database query error:', queryError);
+            throw new Error('Failed to fetch sales data: ' + queryError.message);
+        }
+
+        console.log(`Found ${salesData.length} orders for staff export`);
+
+        if (!salesData || salesData.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No sales data found for the selected period'
+            });
+        }
 
         // Create workbook
-        const workbook = XLSX.utils.book_new();
+        let workbook;
+        try {
+            workbook = XLSX.utils.book_new();
+        } catch (bookError) {
+            console.error('Error creating workbook:', bookError);
+            throw new Error('Failed to create Excel workbook: ' + bookError.message);
+        }
 
         // Summary sheet
+        const totalRevenue = salesData.reduce((sum, order) => {
+            const price = parseFloat(order.total_price) || 0;
+            return sum + price;
+        }, 0);
+
         const summaryData = {
-            'Report Period': period,
+            'Report Period': period || 'All Time',
             'Start Date': startDate || 'N/A',
             'End Date': endDate || 'N/A',
             'Total Orders': salesData.length,
-            'Total Revenue': `₱${salesData.reduce((sum, order) => sum + parseFloat(order.total_price), 0).toFixed(2)}`,
+            'Total Revenue': `₱${totalRevenue.toFixed(2)}`,
             'Generated On': new Date().toLocaleString()
         };
 
-        const summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        let summarySheet;
+        try {
+            summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        } catch (sheetError) {
+            console.error('Error creating summary sheet:', sheetError);
+            throw new Error('Failed to create summary sheet: ' + sheetError.message);
+        }
 
-        // Transactions sheet
-        const transactionsData = salesData.map(transaction => ({
-            'Order ID': transaction.order_id,
-            'Customer Name': transaction.customer_name,
-            'Amount': `₱${parseFloat(transaction.total_price).toFixed(2)}`,
-            'Status': transaction.status,
-            'Payment Method': transaction.payment_method,
-            'Order Date': new Date(transaction.order_time).toLocaleDateString(),
-            'Order Time': new Date(transaction.order_time).toLocaleTimeString(),
-            'Items Count': JSON.parse(transaction.items || '[]').length
-        }));
+        // Transactions sheet - handle potential null/undefined values
+        const transactionsData = salesData.map(transaction => {
+            let itemsCount = 0;
+            try {
+                const items = JSON.parse(transaction.items || '[]');
+                itemsCount = Array.isArray(items) ? items.length : 0;
+            } catch (e) {
+                console.warn('Error parsing items for order:', transaction.order_id, e);
+            }
 
-        const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+            let orderDate = 'N/A';
+            let orderTime = 'N/A';
+            try {
+                if (transaction.order_time) {
+                    const date = new Date(transaction.order_time);
+                    if (!isNaN(date.getTime())) {
+                        orderDate = date.toLocaleDateString();
+                        orderTime = date.toLocaleTimeString();
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing date for order:', transaction.order_id, e);
+            }
+
+            return {
+                'Order ID': transaction.order_id || 'N/A',
+                'Customer Name': transaction.customer_name || 'N/A',
+                'Amount': `₱${(parseFloat(transaction.total_price) || 0).toFixed(2)}`,
+                'Status': transaction.status || 'N/A',
+                'Payment Method': transaction.payment_method || 'N/A',
+                'Order Date': orderDate,
+                'Order Time': orderTime,
+                'Items Count': itemsCount
+            };
+        });
+
+        let transactionsSheet;
+        try {
+            transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+        } catch (sheetError) {
+            console.error('Error creating transactions sheet:', sheetError);
+            throw new Error('Failed to create transactions sheet: ' + sheetError.message);
+        }
 
         // Add sheets to workbook
-        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-        XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        try {
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+            XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        } catch (appendError) {
+            console.error('Error appending sheets:', appendError);
+            throw new Error('Failed to append sheets to workbook: ' + appendError.message);
+        }
 
-        // Generate buffer
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        // Generate buffer with error handling
+        let buffer;
+        try {
+            buffer = XLSX.write(workbook, { 
+                type: 'buffer', 
+                bookType: 'xlsx',
+                compression: true
+            });
+        } catch (writeError) {
+            console.error('XLSX.write error:', writeError);
+            throw new Error('Failed to generate Excel buffer: ' + writeError.message);
+        }
 
-        console.log(`Generated Excel file with ${buffer.length} bytes`);
+        if (!buffer || buffer.length === 0) {
+            throw new Error('Generated Excel buffer is empty');
+        }
 
-        // Set response headers
-        const filename = `staff-sales-report-${period}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        console.log(`Generated staff Excel file with ${buffer.length} bytes`);
+
+        // Set response headers before sending
+        const dateSuffix = startDate && endDate 
+            ? `${startDate}-to-${endDate}` 
+            : period;
+        const filename = `staff-sales-report-${dateSuffix}-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache');
 
         // Send file
-        res.send(buffer);
+        try {
+            res.send(buffer);
+        } catch (sendError) {
+            console.error('Error sending buffer:', sendError);
+            throw new Error('Failed to send Excel file: ' + sendError.message);
+        }
 
     } catch (error) {
         console.error('Error generating staff sales download:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
+        
+        // Check if response has already been sent
+        if (res.headersSent) {
+            console.error('Response already sent, cannot send error response');
+            return;
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to generate sales report: ' + error.message
+            error: 'Failed to generate sales report: ' + (error.message || 'Unknown error'),
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });

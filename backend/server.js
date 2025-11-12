@@ -322,6 +322,42 @@ app.set('io', io);
 const notificationService = require('./services/notificationService');
 notificationService.setupSocketConnection(io);
 
+// Socket.IO connection handlers
+io.on('connection', (socket) => {
+    console.log('✅ Socket.IO client connected:', socket.id);
+
+    // Handle admin room join
+    socket.on('join-admin-room', () => {
+        socket.join('admin-room');
+        console.log(`✅ Socket ${socket.id} joined admin-room`);
+    });
+
+    // Handle staff room join
+    socket.on('join-staff-room', () => {
+        socket.join('staff-room');
+        console.log(`✅ Socket ${socket.id} joined staff-room`);
+    });
+
+    // Handle customer room join
+    socket.on('join-customer-room', (data) => {
+        if (data && data.customerEmail) {
+            const roomName = `customer-${data.customerEmail}`;
+            socket.join(roomName);
+            console.log(`✅ Socket ${socket.id} joined ${roomName}`);
+        }
+    });
+
+    // Handle disconnect
+    socket.on('disconnect', () => {
+        console.log('❌ Socket.IO client disconnected:', socket.id);
+    });
+
+    // Handle errors
+    socket.on('error', (error) => {
+        console.error('❌ Socket.IO error:', error);
+    });
+});
+
 // -------------------
 // 404 handler
 // -------------------

@@ -44,6 +44,8 @@ async function createEvent(req, res) {
         // Emit real-time update for new event
         const io = req.app.get('io');
         if (io) {
+            console.log('📡 Emitting event-updated to admin-room for new event:', eventId);
+            
             // Notify admin room specifically
             io.to('admin-room').emit('event-updated', {
                 type: 'event_created',
@@ -54,7 +56,9 @@ async function createEvent(req, res) {
                 cups,
                 timestamp: new Date()
             });
+            
             // Also emit new-notification event for admins
+            console.log('📡 Emitting new-notification to admin-room for new event:', eventId);
             io.to('admin-room').emit('new-notification', {
                 notification_type: 'event_request',
                 title: 'New Event Request',
@@ -62,6 +66,7 @@ async function createEvent(req, res) {
                 priority: 'high',
                 timestamp: new Date()
             });
+            
             // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_created',
@@ -72,6 +77,10 @@ async function createEvent(req, res) {
                 cups,
                 timestamp: new Date()
             });
+            
+            console.log('✅ Socket.IO events emitted successfully');
+        } else {
+            console.error('❌ Socket.IO instance not available');
         }
 
         res.status(201).json({ success: true, eventId });
