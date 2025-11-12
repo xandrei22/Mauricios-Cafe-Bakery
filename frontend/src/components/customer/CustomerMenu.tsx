@@ -346,11 +346,9 @@ const CustomerMenu: React.FC = () => {
       <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Menu</h1>
-              <p className="text-sm sm:text-base text-gray-600 mt-1">Explore our delicious selection of coffee and beverages</p>
-            </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Menu</h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Explore our delicious selection of coffee and beverages</p>
           </div>
           
           {/* Table Number Display */}
@@ -471,7 +469,7 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardContent className="p-6 text-center">
             <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
