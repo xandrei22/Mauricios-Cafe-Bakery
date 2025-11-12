@@ -157,11 +157,27 @@ async function createEvent(req, res) {
             console.log('✅ Event created successfully with ID:', eventId);
         } catch (dbError) {
             console.error('❌ Database error creating event:', dbError);
+            console.error('❌ Database error code:', dbError.code);
+            console.error('❌ Database error message:', dbError.message);
             console.error('❌ Database error stack:', dbError.stack);
+            
+            // Provide more helpful error message
+            let errorMessage = 'Failed to create event. Please try again later.';
+            if (process.env.NODE_ENV === 'development') {
+                errorMessage = dbError.message || errorMessage;
+                if (dbError.code === 'ER_BAD_FIELD_ERROR') {
+                    errorMessage = `Database schema error: ${dbError.message}. Please run the migration script to fix the events table.`;
+                }
+            }
+            
             return res.status(500).json({ 
                 success: false, 
-                message: 'Failed to create event. Please try again later.',
-                error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+                message: errorMessage,
+                error: process.env.NODE_ENV === 'development' ? {
+                    code: dbError.code,
+                    message: dbError.message,
+                    sqlState: dbError.sqlState
+                } : undefined
             });
         }
 
