@@ -2740,9 +2740,52 @@ router.get('/transactions/sales', async(req, res) => {
 });
 
 // Staff reward redemption endpoints (for Reward Processing UI)
-router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
+// Support both JWT and session authentication
+// Use authenticateJWT as optional middleware - it will set req.user if JWT is present
+// Then check for session as fallback
+
+// Optional JWT middleware - doesn't fail if no token, but sets req.user if token is valid
+const optionalJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // No JWT token, continue to check session
+        return next();
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+        return next();
+    }
+    
+    // Try to verify JWT token
+    const jwt = require('jsonwebtoken');
+    const secret = process.env.JWT_SECRET || 'change-me-in-prod';
     try {
-        // Permissive for development: allow even without session
+        const decoded = jwt.verify(token, secret);
+        req.user = {
+            id: decoded.id,
+            username: decoded.username,
+            email: decoded.email,
+            name: decoded.name || decoded.fullName || decoded.username,
+            fullName: decoded.fullName || decoded.name || decoded.username,
+            role: decoded.role
+        };
+        console.log('✅ JWT authentication successful for staff reward processing');
+    } catch (err) {
+        // JWT verification failed, but continue to check session
+        console.log('⚠️ JWT verification failed, will check session:', err.message);
+    }
+    next();
+};
+
+router.get('/reward-redemptions/search/:claimCode', optionalJWT, async(req, res) => {
+    try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { claimCode } = req.params;
         const [rows] = await db.query(`
             SELECT 
@@ -2773,8 +2816,14 @@ router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
     }
 });
 
-router.get('/reward-redemptions/pending', async(req, res) => {
+router.get('/reward-redemptions/pending', optionalJWT, async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         // First, check total pending count for debugging
         const [countResult] = await db.query(`
             SELECT COUNT(*) as total FROM loyalty_reward_redemptions WHERE status = 'pending'
@@ -2819,10 +2868,17 @@ router.get('/reward-redemptions/pending', async(req, res) => {
     }
 });
 
-router.post('/reward-redemptions/:redemptionId/:action', async(req, res) => {
+router.post('/reward-redemptions/:redemptionId/:action', optionalJWT, async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { redemptionId, action } = req.params;
-        const staffId = (req.session && req.session.staffUser && req.session.staffUser.id) || (req.session && req.session.adminUser && req.session.adminUser.id) || null;
+        // Get staff/admin ID from JWT user or session
+        const staffId = req.user?.id || (req.session && req.session.staffUser && req.session.staffUser.id) || (req.session && req.session.adminUser && req.session.adminUser.id) || null;
         if (!['complete', 'cancel'].includes(action)) {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
