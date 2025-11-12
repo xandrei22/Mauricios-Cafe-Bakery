@@ -305,17 +305,19 @@ router.get('/dashboard/sales', async(req, res) => {
 // Staff dashboard: most used ingredients
 router.get('/dashboard/ingredients', async(req, res) => {
     try {
-        // First try to get real ingredient usage from orders
+        // Get ALL paid orders to calculate accurate ingredient usage
+        // Removed LIMIT to ensure we get all data, not just last 200 orders
         const [orders] = await db.query(`
             SELECT items
             FROM orders
             WHERE payment_status = 'paid'
-                AND order_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             ORDER BY order_time DESC
-            LIMIT 200
         `);
 
         const ingredientCounts = new Map();
+        
+        // Cache menu item ingredients to avoid repeated queries
+        const menuItemIngredientsCache = new Map();
 
         for (const row of orders) {
             let parsed = [];
@@ -330,15 +332,23 @@ router.get('/dashboard/ingredients', async(req, res) => {
                 const quantity = Number(item && item.quantity ? item.quantity : 1);
 
                 if (menuItemId) {
-                    // Get ingredients for this menu item
-                    const [ingredients] = await db.query(`
-            SELECT 
-                            i.name,
-                            mii.required_actual_amount
-                        FROM menu_item_ingredients mii
-                        JOIN ingredients i ON mii.ingredient_id = i.id
-                        WHERE mii.menu_item_id = ?
-                    `, [menuItemId]);
+                    // Check cache first
+                    let ingredients = menuItemIngredientsCache.get(menuItemId);
+                    
+                    if (!ingredients) {
+                        // Get ingredients for this menu item
+                        const [ingredientRows] = await db.query(`
+                            SELECT 
+                                i.name,
+                                mii.required_actual_amount
+                            FROM menu_item_ingredients mii
+                            JOIN ingredients i ON mii.ingredient_id = i.id
+                            WHERE mii.menu_item_id = ?
+                        `, [menuItemId]);
+                        
+                        ingredients = ingredientRows;
+                        menuItemIngredientsCache.set(menuItemId, ingredients);
+                    }
 
                     for (const ingredient of ingredients) {
                         const totalAmount = parseFloat(ingredient.required_actual_amount || 0) * quantity;
@@ -360,14 +370,21 @@ router.get('/dashboard/ingredients', async(req, res) => {
 
             labels = sorted.map(([name]) => name);
             data = sorted.map(([, amount]) => amount);
+            
+            // Enhanced logging for verification
+            console.log(`[Staff Dashboard] Processed ${orders.length} paid orders`);
+            console.log(`[Staff Dashboard] Found ${ingredientCounts.size} unique ingredients`);
+            console.log('[Staff Dashboard] Top 6 most used ingredients:', 
+                sorted.map(([name, amount]) => `${name}: ${amount.toFixed(2)}`).join(', '));
         } else {
+            console.warn('[Staff Dashboard] No ingredient usage data found, using fallback');
             // Fallback to available ingredients with random usage
             const [ingredients] = await db.query(`
                 SELECT name FROM ingredients 
                 WHERE is_available = TRUE 
                 ORDER BY name 
-            LIMIT 6
-        `);
+                LIMIT 6
+            `);
 
             if (ingredients.length > 0) {
                 labels = ingredients.map(ing => ing.name);
@@ -379,7 +396,7 @@ router.get('/dashboard/ingredients', async(req, res) => {
             }
         }
 
-        console.log('Staff ingredients chart data:', { labels, data });
+        console.log('[Staff Dashboard] Ingredients chart data:', { labels, data });
 
         res.json({
             success: true,

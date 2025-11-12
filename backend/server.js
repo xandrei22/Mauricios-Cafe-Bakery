@@ -318,6 +318,10 @@ const io = socketIo(server, {
 });
 app.set('io', io);
 
+// Initialize notification service with Socket.IO
+const notificationService = require('./services/notificationService');
+notificationService.setupSocketConnection(io);
+
 // -------------------
 // 404 handler
 // -------------------

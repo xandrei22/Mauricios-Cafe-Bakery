@@ -44,6 +44,7 @@ async function createEvent(req, res) {
         // Emit real-time update for new event
         const io = req.app.get('io');
         if (io) {
+            // Notify admin room specifically
             io.to('admin-room').emit('event-updated', {
                 type: 'event_created',
                 eventId,
@@ -53,6 +54,15 @@ async function createEvent(req, res) {
                 cups,
                 timestamp: new Date()
             });
+            // Also emit new-notification event for admins
+            io.to('admin-room').emit('new-notification', {
+                notification_type: 'event_request',
+                title: 'New Event Request',
+                message: `New event request for ${event_date} - ${cups} cups from ${customer_name}`,
+                priority: 'high',
+                timestamp: new Date()
+            });
+            // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_created',
                 eventId,
@@ -115,9 +125,26 @@ async function acceptEvent(req, res) {
             await emailService.sendEventStatusEmail(customerEmail, 'accepted', event);
         }
 
+        // Create notification for customer
+        if (event.customer_id) {
+            try {
+                await notificationService.notifyEventStatusUpdate({
+                    eventId: id,
+                    customerId: event.customer_id,
+                    status: 'accepted',
+                    eventDate: event.event_date,
+                    eventType: event.event_type,
+                    customerName: event.customer_name
+                });
+            } catch (notificationError) {
+                console.error('Failed to create event acceptance notification:', notificationError);
+            }
+        }
+
         // Emit real-time update for event acceptance
         const io = req.app.get('io');
         if (io) {
+            // Notify admin room
             io.to('admin-room').emit('event-updated', {
                 type: 'event_accepted',
                 eventId: id,
@@ -125,6 +152,17 @@ async function acceptEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Notify customer if they have a socket connection (using email)
+            if (customerEmail) {
+                io.to(`customer-${customerEmail}`).emit('event-updated', {
+                    type: 'event_accepted',
+                    eventId: id,
+                    customer_name: event.customer_name,
+                    event_type: event.event_type,
+                    timestamp: new Date()
+                });
+            }
+            // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_accepted',
                 eventId: id,
@@ -132,10 +170,21 @@ async function acceptEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Emit new notification event for customer (broadcast, will be filtered by user_id on frontend)
+            if (event.customer_id) {
+                io.emit('new-notification', {
+                    user_id: event.customer_id,
+                    user_type: 'customer',
+                    notification_type: 'event_request',
+                    title: 'Event Request Accepted',
+                    message: `Your event request for ${event.event_date} has been accepted! You will be contacted for further details.`
+                });
+            }
         }
 
         res.json({ success: true, message: 'Event accepted. Customer notified.' });
     } catch (err) {
+        console.error('Error accepting event:', err);
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 }
@@ -163,9 +212,26 @@ async function rejectEvent(req, res) {
             await emailService.sendEventStatusEmail(customerEmail, 'rejected', event);
         }
 
+        // Create notification for customer
+        if (event.customer_id) {
+            try {
+                await notificationService.notifyEventStatusUpdate({
+                    eventId: id,
+                    customerId: event.customer_id,
+                    status: 'rejected',
+                    eventDate: event.event_date,
+                    eventType: event.event_type,
+                    customerName: event.customer_name
+                });
+            } catch (notificationError) {
+                console.error('Failed to create event rejection notification:', notificationError);
+            }
+        }
+
         // Emit real-time update for event rejection
         const io = req.app.get('io');
         if (io) {
+            // Notify admin room
             io.to('admin-room').emit('event-updated', {
                 type: 'event_rejected',
                 eventId: id,
@@ -173,6 +239,17 @@ async function rejectEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Notify customer if they have a socket connection (using email)
+            if (customerEmail) {
+                io.to(`customer-${customerEmail}`).emit('event-updated', {
+                    type: 'event_rejected',
+                    eventId: id,
+                    customer_name: event.customer_name,
+                    event_type: event.event_type,
+                    timestamp: new Date()
+                });
+            }
+            // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_rejected',
                 eventId: id,
@@ -180,10 +257,21 @@ async function rejectEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Emit new notification event for customer (broadcast, will be filtered by user_id on frontend)
+            if (event.customer_id) {
+                io.emit('new-notification', {
+                    user_id: event.customer_id,
+                    user_type: 'customer',
+                    notification_type: 'event_request',
+                    title: 'Event Request Rejected',
+                    message: `Your event request for ${event.event_date} has been rejected. Please contact us for more information.`
+                });
+            }
         }
 
         res.json({ success: true, message: 'Event rejected. Customer notified.' });
     } catch (err) {
+        console.error('Error rejecting event:', err);
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 }

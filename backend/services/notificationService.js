@@ -448,7 +448,7 @@ class NotificationService {
         const notification = await this.createNotification({
             type: 'event_request',
             title: 'New Event Request',
-            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups`,
+            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
             data: {
                 eventId: eventData.id,
                 eventDate: eventData.event_date,
@@ -457,7 +457,37 @@ class NotificationService {
                 contactNumber: eventData.contact_number
             },
             userType: 'admin',
-            priority: 'medium'
+            priority: 'high'
+        });
+
+        return notification;
+    }
+
+    /**
+     * Create notification for event status update (accepted/rejected)
+     */
+    async notifyEventStatusUpdate(eventData) {
+        const { eventId, customerId, status, eventDate, eventType, customerName } = eventData;
+        
+        const statusText = status === 'accepted' ? 'Accepted' : 'Rejected';
+        const statusMessage = status === 'accepted' 
+            ? `Your event request for ${eventDate} has been accepted! You will be contacted for further details.`
+            : `Your event request for ${eventDate} has been rejected. Please contact us for more information.`;
+
+        const notification = await this.createNotification({
+            type: 'event_request',
+            title: `Event Request ${statusText}`,
+            message: statusMessage,
+            data: {
+                eventId: eventId,
+                eventDate: eventDate,
+                eventType: eventType,
+                status: status,
+                customerName: customerName
+            },
+            userId: customerId,
+            userType: 'customer',
+            priority: status === 'accepted' ? 'high' : 'medium'
         });
 
         return notification;
