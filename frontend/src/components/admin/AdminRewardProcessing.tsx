@@ -29,6 +29,9 @@ import {
   ClipboardCheck,
   XCircle,
   CircleDotDashed,
+  Search,
+  User,
+  Coins,
   // CircleDot
 } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -50,6 +53,7 @@ interface ClaimedReward {
   staff_id: number | null;
   redemption_proof: string | null;
   order_id: number | null;
+  claim_code?: string; // claim code for redemption
 }
 
 // Removed unused LoyaltySettings interface
@@ -121,6 +125,10 @@ const AdminRewardProcessing: React.FC = () => {
   const [redemptionProof, setRedemptionProof] = useState<string>('');
   const [activeTab, setActiveTab] = useState('pending');
   const [stats, setStats] = useState<LoyaltyStats | null>(null);
+  const [claimCode, setClaimCode] = useState('');
+  const [searchResult, setSearchResult] = useState<ClaimedReward | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const fetchClaimedRewards = useCallback(async () => {
     setLoading(true);
@@ -162,6 +170,7 @@ const AdminRewardProcessing: React.FC = () => {
           staff_id: r.staff_id ?? null,
           redemption_proof: r.redemption_proof ?? null,
           order_id: r.order_id ?? null,
+          claim_code: r.claim_code ?? null,
         }));
         setClaimedRewards(normalized);
       } else {
@@ -206,6 +215,62 @@ const AdminRewardProcessing: React.FC = () => {
     setStaffId(storedStaffId ? parseInt(storedStaffId) : (user?.id || 9)); // Fallback to 9 if user.id is not available
   }, [fetchClaimedRewards, fetchLoyaltyStats, user?.id]);
 
+  const searchByClaimCode = async () => {
+    if (!claimCode.trim()) {
+      setSearchError('Please enter a claim code');
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Normalize the redemption data to match ClaimedReward interface
+          const normalized: ClaimedReward = {
+            id: data.redemption.id,
+            customer_id: data.redemption.customer_id,
+            customer_name: data.redemption.customer_name,
+            customer_email: data.redemption.customer_email,
+            reward_id: data.redemption.reward_id,
+            reward_name: data.redemption.reward_name,
+            reward_type: data.redemption.reward_type,
+            description: data.redemption.reward_description || '',
+            points_cost: data.redemption.points_required || data.redemption.points_redeemed,
+            points_required: data.redemption.points_required,
+            redemption_date: data.redemption.redemption_date || data.redemption.created_at || null,
+            expires_at: data.redemption.expires_at,
+            status: data.redemption.status,
+            staff_id: data.redemption.staff_id || null,
+            redemption_proof: data.redemption.redemption_proof || null,
+            order_id: data.redemption.order_id || null,
+          };
+          setSearchResult(normalized);
+        } else {
+          setSearchError(data.error || 'Redemption not found');
+        }
+      } else {
+        const errorData = await response.json();
+        setSearchError(errorData.error || 'Failed to search redemption');
+      }
+    } catch (error) {
+      setSearchError('Failed to search redemption');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   const processReward = async (rewardId: number, status: 'processed' | 'cancelled') => {
     if (!staffId) {
       Swal.fire('Error', 'Staff ID not available. Please log in as staff.', 'error');
@@ -241,6 +306,8 @@ const AdminRewardProcessing: React.FC = () => {
 
       Swal.fire('Success', `Reward ${status} successfully!`, 'success');
       setRedemptionProof('');
+      setSearchResult(null);
+      setClaimCode('');
       fetchClaimedRewards(); // Refresh the list
       fetchLoyaltyStats(); // Refresh stats
     } catch (err: any) {
@@ -287,9 +354,148 @@ const AdminRewardProcessing: React.FC = () => {
     );
   }
 
+  const isExpired = (expiresAt: string) => {
+    return new Date(expiresAt) < new Date();
+  };
+
   return (
     <div className="p-6 bg-white min-h-screen">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Reward Processing</h1>
+
+      {/* Search by Code Section */}
+      <Card className="mb-6 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="w-5 h-5" />
+            Search by Code
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Enter claim code (e.g., ABC12345)"
+                value={claimCode}
+                onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+                className="text-lg font-mono tracking-wider h-12 px-4"
+                onKeyPress={(e) => e.key === 'Enter' && searchByClaimCode()}
+              />
+            </div>
+            <Button 
+              onClick={searchByClaimCode}
+              disabled={searchLoading || !claimCode.trim()}
+              className="bg-[#a87437] hover:bg-[#a87437]/90 text-white h-12 px-8"
+            >
+              <Search className="w-5 h-5 mr-2" />
+              {searchLoading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+
+          {searchError && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-800">
+              <AlertCircle className="w-5 h-5" />
+              <span>{searchError}</span>
+              <button onClick={() => setSearchError(null)} className="ml-auto text-red-600 hover:text-red-800">
+                ×
+              </button>
+            </div>
+          )}
+
+          {searchResult && (
+            <Card className="mt-4 border-2 border-[#a87437]/20 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between text-xl">
+                  <span className="text-[#6B5B5B]">Redemption Found</span>
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    searchResult.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    searchResult.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    searchResult.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {searchResult.status.toUpperCase()}
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-3 text-lg">Customer Information</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm">{searchResult.customer_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">{searchResult.customer_email}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-3 text-lg">Reward Details</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium">{searchResult.reward_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm">{searchResult.points_cost} points</span>
+                      </div>
+                      <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                        Code: {claimCode}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-6">
+                  <div className="flex items-center justify-between text-sm text-gray-600 mb-6">
+                    <span>Redemption Date: {searchResult.redemption_date ? new Date(searchResult.redemption_date).toLocaleString() : 'N/A'}</span>
+                    <span className={isExpired(searchResult.expires_at) ? 'text-red-600' : 'text-green-600'}>
+                      Expires: {new Date(searchResult.expires_at).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {searchResult.status === 'pending' && !isExpired(searchResult.expires_at) && (
+                    <div className="flex gap-4">
+                      <Input
+                        placeholder="Redemption Proof (e.g., Staff Name)"
+                        value={redemptionProof}
+                        onChange={(e) => setRedemptionProof(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        onClick={() => processReward(searchResult.id, 'processed')}
+                        className="bg-[#a87437] hover:bg-[#a87437]/90 text-white px-6 py-3"
+                        disabled={processingRewardId === searchResult.id || !redemptionProof.trim()}
+                      >
+                        <CheckCircle className="w-5 h-5 mr-2" />
+                        Complete Redemption
+                      </Button>
+                      <Button
+                        onClick={() => processReward(searchResult.id, 'cancelled')}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 px-6 py-3"
+                        disabled={processingRewardId === searchResult.id}
+                      >
+                        <XCircle className="w-5 h-5 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+
+                  {isExpired(searchResult.expires_at) && (
+                    <div className="text-center py-4 text-red-600 font-medium">
+                      This redemption has expired and cannot be processed.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -355,6 +561,7 @@ const AdminRewardProcessing: React.FC = () => {
                     <TableHead>Customer</TableHead>
                     <TableHead>Reward</TableHead>
                     <TableHead>Points Cost</TableHead>
+                    <TableHead>Claim Code</TableHead>
                     <TableHead>Claimed At</TableHead>
                     <TableHead>Expires In</TableHead>
                     <TableHead>Order ID</TableHead>
@@ -373,6 +580,11 @@ const AdminRewardProcessing: React.FC = () => {
                         <div className="text-sm text-gray-500">{reward.description}</div>
                       </TableCell>
                       <TableCell className="font-medium">{reward.points_cost}</TableCell>
+                      <TableCell>
+                        <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded text-center">
+                          {reward.claim_code || 'N/A'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-1 text-sm">
                           <Calendar className="w-4 h-4 text-gray-500" />

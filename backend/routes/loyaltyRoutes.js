@@ -289,11 +289,15 @@ router.post('/redeem-reward', async(req, res) => {
         // Create reward redemption record with 20-minute expiration
         const expirationTime = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes from now
 
+        // Handle NULL order_id - allow NULL for redemptions without an order
+        // Note: The database should allow NULL for order_id (see fix-redemption-order-id-null.sql)
+        const effectiveOrderId = orderId || null;
+
         const [redemptionResult] = await db.query(`
             INSERT INTO loyalty_reward_redemptions 
             (customer_id, reward_id, order_id, points_redeemed, redemption_proof, staff_id, status, expires_at, claim_code) 
             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-        `, [customerId, rewardId, orderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
+        `, [customerId, rewardId, effectiveOrderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
 
         const redemptionId = redemptionResult.insertId;
 

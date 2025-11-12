@@ -84,17 +84,56 @@ const AdminEvents: React.FC = () => {
     setSocket(newSocket);
 
     // Join admin room for real-time updates
-    newSocket.emit('join-admin-room');
+    const joinAdminRoom = () => {
+      console.log('📡 AdminEvents: Joining admin-room');
+      newSocket.emit('join-admin-room');
+    };
+
+    // Join room on connect
+    newSocket.on('connect', () => {
+      console.log('✅ AdminEvents: Socket connected');
+      joinAdminRoom();
+    });
+
+    // Join room immediately if already connected
+    if (newSocket.connected) {
+      joinAdminRoom();
+    }
 
     // Listen for real-time updates
     newSocket.on('event-updated', (data) => {
-      console.log('Event updated in AdminEvents:', data);
-      fetchEvents();
+      console.log('📡 AdminEvents: Event updated received:', data);
+      if (data.type === 'event_created') {
+        console.log('🆕 New event created, refreshing events list');
+        fetchEvents();
+      } else {
+        fetchEvents();
+      }
+    });
+
+    // Listen for new notifications
+    newSocket.on('new-notification', (notification) => {
+      console.log('📢 AdminEvents: New notification received:', notification);
+      if (notification.notification_type === 'event_request') {
+        console.log('🆕 New event request notification, refreshing events list');
+        fetchEvents();
+      }
+    });
+
+    // Handle connection errors
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ AdminEvents: Socket connection error:', error);
+    });
+
+    // Handle disconnection
+    newSocket.on('disconnect', () => {
+      console.log('❌ AdminEvents: Socket disconnected');
     });
 
     fetchEvents();
 
     return () => {
+      console.log('🧹 AdminEvents: Cleaning up socket connection');
       newSocket.close();
     };
   }, []);

@@ -245,10 +245,13 @@ const StaffSales: React.FC = () => {
         ...(dateFilter.end && { endDate: dateFilter.end })
       });
 
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const endpoint = `${API_URL}/api/staff/sales/download`;
+      
       console.log('Downloading report with params:', params.toString());
-      console.log('Full URL:', `/api/admin/sales/download?${params}`);
+      console.log('Full URL:', `${endpoint}?${params}`);
 
-      const response = await fetch(`/api/admin/sales/download?${params}`, {
+      const response = await fetch(`${endpoint}?${params}`, {
         credentials: 'omit',
         method: 'GET'
       });
@@ -257,18 +260,50 @@ const StaffSales: React.FC = () => {
       console.log('Download response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Download error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        // Try to get error message from JSON response
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const clonedResponse = response.clone();
+          const errorData = await clonedResponse.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          const errorText = await response.text();
+          errorMessage = errorText || response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
-        const blob = await response.blob();
+      // Check content type from headers
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Check if response is actually an Excel file
+      if (!contentType.includes('spreadsheetml') && !contentType.includes('excel') && !contentType.includes('application/vnd')) {
+        // Not an Excel file - try to read as JSON for error message
+        try {
+          const clonedResponse = response.clone();
+          const errorData = await clonedResponse.json();
+          throw new Error(errorData.error || errorData.message || 'Invalid response format from server');
+        } catch (e) {
+          if (e instanceof Error) {
+            throw e;
+          }
+          throw new Error('Server returned invalid content type. Expected Excel file.');
+        }
+      }
+
+      const blob = await response.blob();
       console.log('Download blob type:', blob.type, 'size:', blob.size);
       
       if (blob.type === 'application/json') {
         const text = await blob.text();
         const errorData = JSON.parse(text);
-        throw new Error(errorData.error || 'Download failed');
+        throw new Error(errorData.error || errorData.message || 'Download failed');
+      }
+      
+      // Verify blob is not empty
+      if (blob.size === 0) {
+        throw new Error('Received empty Excel file');
       }
       
         const url = window.URL.createObjectURL(blob);

@@ -142,11 +142,40 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             });
         }
 
+        // Generate random 5-character order code (letters and numbers)
+        function generateShortOrderCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < 5; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
         // Create the order
         const orderStatusInitial = 'pending';
         const paymentStatusInitial = 'pending';
         const orderIdStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const orderNumberStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        
+        // Generate unique 5-character order code
+        let orderNumberStr;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        while (!isUnique && attempts < maxAttempts) {
+            orderNumberStr = generateShortOrderCode();
+            const [existing] = await db.query(
+                'SELECT id FROM orders WHERE order_number = ?', [orderNumberStr]
+            );
+            if (existing.length === 0) {
+                isUnique = true;
+            }
+            attempts++;
+        }
+        // Fallback if we couldn't generate a unique code
+        if (!isUnique) {
+            orderNumberStr = generateShortOrderCode() + Date.now().toString().slice(-2);
+        }
 
         // Get next queue position for today
         const [queueResult] = await db.query(`
@@ -285,6 +314,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             success: true,
             message: 'Guest order placed successfully',
             orderId: orderId,
+            orderNumber: orderNumberStr,
             status: orderStatus
         });
 

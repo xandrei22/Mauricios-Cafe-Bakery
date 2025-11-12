@@ -5,28 +5,101 @@ const notificationService = require('../services/notificationService');
 // Customer: Create event
 async function createEvent(req, res) {
     try {
-        const { customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups } = req.body;
+        console.log('📥 Event creation request received');
+        console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
+        console.log('📥 Request headers:', req.headers);
+        
+        const { 
+            customer_id, 
+            customer_name, 
+            contact_name,
+            contact_number, 
+            event_date, 
+            event_start_time,
+            event_end_time,
+            address, 
+            event_type, 
+            notes, 
+            cups 
+        } = req.body;
 
         // Add debugging logs
-        console.log('Event submission received:', {
+        console.log('📋 Extracted event data:', {
             customer_id,
             customer_name,
+            contact_name,
             contact_number,
             event_date,
+            event_start_time,
+            event_end_time,
             address,
             event_type,
             notes,
             cups
         });
 
-        if (!customer_name || !contact_number || !event_date || !address || !event_type || !cups) {
-            console.log('Validation failed - missing required fields');
-            return res.status(400).json({ success: false, message: 'All required fields are required.' });
+        // Validate required fields
+        if (!customer_name) {
+            console.log('❌ Validation failed - missing customer_name');
+            return res.status(400).json({ success: false, message: 'Customer name is required.' });
+        }
+        if (!contact_number) {
+            console.log('❌ Validation failed - missing contact_number');
+            return res.status(400).json({ success: false, message: 'Contact number is required.' });
+        }
+        if (!event_date) {
+            console.log('❌ Validation failed - missing event_date');
+            return res.status(400).json({ success: false, message: 'Event date is required.' });
+        }
+        if (!address) {
+            console.log('❌ Validation failed - missing address');
+            return res.status(400).json({ success: false, message: 'Address is required.' });
+        }
+        if (!event_type) {
+            console.log('❌ Validation failed - missing event_type');
+            return res.status(400).json({ success: false, message: 'Event type is required.' });
+        }
+        // Validate cups - must be at least 80
+        const cupsNum = Number(cups);
+        if (!cups || isNaN(cupsNum) || cupsNum < 80) {
+            console.log('❌ Validation failed - invalid cups:', cups);
+            return res.status(400).json({ success: false, message: 'Minimum order is 80 cups. Please enter a valid number.' });
+        }
+        
+        // Validate and clean contact number format (Philippine mobile format)
+        const cleanedContactNumber = String(contact_number || '').replace(/[\s\-\(\)\+]/g, '');
+        const phMobileRegex = /^(09|\+639)\d{9}$/;
+        const phMobileRegexAlt = /^0\d{10}$/;
+        if (!phMobileRegex.test(cleanedContactNumber) && !phMobileRegexAlt.test(cleanedContactNumber)) {
+            console.log('❌ Validation failed - invalid contact number format:', contact_number);
+            return res.status(400).json({ success: false, message: 'Please enter a valid Philippine mobile number (e.g., 09123456789 or 09214733335).' });
         }
 
-        console.log('Creating event in database...');
-        const eventId = await eventModel.createEvent({ customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups });
-        console.log('Event created successfully with ID:', eventId);
+        console.log('✅ Validation passed, creating event in database...');
+        console.log('📝 Using cleaned contact number:', cleanedContactNumber);
+        
+        let eventId;
+        try {
+            eventId = await eventModel.createEvent({ 
+                customer_id, 
+                customer_name, 
+                contact_number: cleanedContactNumber, // Use cleaned contact number
+                event_date, 
+                address, 
+                event_type, 
+                notes, 
+                cups: cupsNum // Ensure it's a number
+            });
+            console.log('✅ Event created successfully with ID:', eventId);
+        } catch (dbError) {
+            console.error('❌ Database error creating event:', dbError);
+            console.error('❌ Database error stack:', dbError.stack);
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Failed to create event. Please try again later.',
+                error: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+            });
+        }
 
         // Create notification for new event request
         try {
@@ -83,10 +156,15 @@ async function createEvent(req, res) {
             console.error('❌ Socket.IO instance not available');
         }
 
-        res.status(201).json({ success: true, eventId });
+        res.status(201).json({ success: true, eventId, message: 'Event request submitted successfully.' });
     } catch (err) {
-        console.error('Error creating event:', err);
-        res.status(500).json({ success: false, message: 'Server error.' });
+        console.error('❌ Error creating event:', err);
+        console.error('❌ Error stack:', err.stack);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error. Please try again later.',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
     }
 }
 
