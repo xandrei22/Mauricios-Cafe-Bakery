@@ -9,12 +9,12 @@ import { CustomerNavbar } from '../ui/CustomerNavbar';
 const GuestOrderSuccess: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const decodedId = decodeId(orderId);
-  // Check if orderId is already a 5-character code (orderNumber) or if it needs decoding
-  // If decodeId returns null and orderId is 5 characters, it's likely an orderNumber
-  const isOrderNumber = !decodedId && orderId && orderId.length === 5 && /^[A-Za-z0-9]{5}$/.test(orderId);
-  const displayOrderId = isOrderNumber ? orderId : (decodedId ? (() => {
-    // Try to encode and format if it's a long ID
-    const raw = String(decodedId);
+  // Use the decoded ID (original order ID) for encoding, or fallback to orderId if decode fails
+  const rawOrderId = decodedId || orderId || '';
+  const shortId = (() => {
+    const raw = String(rawOrderId);
+    if (!raw) return 'Unknown';
+    // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
     try {
       const encoded = encodeId(raw);
       const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
@@ -23,12 +23,11 @@ const GuestOrderSuccess: React.FC = () => {
       const partB = (digits || '00').padStart(2, '0');
       return partA + partB;
     } catch {
+      // Fallback: last 5 non-separator characters
       return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
     }
-  })() : (orderId || 'Unknown'));
-  
-  // For tracking, use orderId as-is (it's either orderNumber or encoded orderId)
-  const trackingId = orderId || '';
+  })();
+  const encodedId = decodedId ? encodeId(decodedId) : (orderId || '');
   const navigate = useNavigate();
 
   return (
@@ -48,7 +47,7 @@ const GuestOrderSuccess: React.FC = () => {
           <CardContent className="space-y-6">
             <div className="text-center">
               <p className="text-lg text-gray-600 mb-2">Your order has been received and is being prepared.</p>
-              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{displayOrderId}</span></p>
+              <p className="text-sm text-gray-500">Order ID: <span className="font-mono font-semibold">{shortId || 'Unknown'}</span></p>
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -65,7 +64,7 @@ const GuestOrderSuccess: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Button
                 variant="outline"
-                onClick={() => navigate(trackingId ? `/guest/order-tracking/${trackingId}` : '/guest/order-tracking')}
+                onClick={() => navigate(encodedId ? `/guest/order-tracking/${encodedId}` : '/guest/order-tracking')}
                 className="flex items-center gap-2"
               >
                 <ShoppingCart className="h-4 w-4" />

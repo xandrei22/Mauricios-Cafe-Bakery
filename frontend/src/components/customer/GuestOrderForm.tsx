@@ -150,9 +150,9 @@ export default function GuestOrderForm({ cartItems, onOrderPlaced, onClose, tabl
 
       console.log('Guest order placed successfully:', result);
       onOrderPlaced(result.orderId);
-      // Navigate with orderNumber (5-character code) if available, otherwise use encoded orderId
-      const trackingId = result.orderNumber || encodeId(result.orderId);
-      navigate(`/guest/order-success/${trackingId}`);
+      // Always use encoded long orderId for tracking to avoid conflicts
+      const encoded = encodeId(result.orderId);
+      navigate(`/guest/order-success/${encoded}`);
       
     } catch (error) {
       console.error('Guest checkout error:', error);

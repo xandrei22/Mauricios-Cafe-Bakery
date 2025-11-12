@@ -330,7 +330,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                           </div>
                         </div>
                         <div className="flex flex-col">
-                          <div className="text-sm font-bold text-gray-900">{toShortId(order.orderId)}</div>
+                          <div className="text-sm font-bold text-gray-900 font-mono">{order.orderId}</div>
                           <span className="text-sm text-gray-500">Click to view details</span>
                         </div>
                       </div>

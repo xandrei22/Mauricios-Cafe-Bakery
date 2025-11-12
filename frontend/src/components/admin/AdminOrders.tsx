@@ -827,7 +827,7 @@ const AdminOrders: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
+                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-mono text-xs">#{order.orderId}</span>
                             <span>•</span>
                             <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                             <span>•</span>

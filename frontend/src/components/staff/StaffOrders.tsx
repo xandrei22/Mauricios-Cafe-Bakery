@@ -41,18 +41,8 @@ const formatOrderId = (value: unknown): string => {
   const raw = String(value).trim();
   if (!raw) return '—';
   
-  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
-  try {
-    const encoded = encodeId(raw);
-    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
-    const digits = encoded.replace(/\D/g, '').slice(-2);
-    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
-    const partB = (digits || '00').padStart(2, '0');
-    return partA + partB;
-  } catch {
-    // Fallback: last 5 non-separator characters
-    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
-  }
+  // Always return the full order ID to avoid conflicts
+  return raw;
 };
 
 const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
@@ -60,7 +50,7 @@ const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
     const rawOrderId = String(order.order_id || order.orderId || order.id || '').trim();
     return {
       orderId: rawOrderId,
-      displayOrderId: formatOrderId(rawOrderId),
+      displayOrderId: rawOrderId, // Use full order ID
       customerName: (order.customer_name || order.customerName || '').toString().trim(),
       tableNumber: order.table_number ?? order.tableNumber,
       items: Array.isArray(order.items)

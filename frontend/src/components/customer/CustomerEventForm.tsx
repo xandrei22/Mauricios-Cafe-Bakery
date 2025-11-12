@@ -41,6 +41,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   const [loading, setLoading] = useState(false);
   const [userEvents, setUserEvents] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get minimum date (tomorrow)
   const getMinDate = () => {
@@ -116,69 +117,113 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   // Validate contact number format (Philippines format)
   const validateContactNumber = (number: string): boolean => {
     // Remove spaces, dashes, and other characters
-    const cleaned = number.replace(/[\s\-\(\)]/g, '');
-    // Check if it's a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)
-    const phMobileRegex = /^(09|\+639)\d{9}$/;
-    // Also allow 11 digits starting with 0
-    const phMobileRegexAlt = /^0\d{10}$/;
-    return phMobileRegex.test(cleaned) || phMobileRegexAlt.test(cleaned);
+    const cleaned = number.replace(/[\s\-\(\)\+]/g, '');
+    // Check if it's a valid Philippine mobile number
+    // Format: 09XXXXXXXXX (11 digits) or 0XXXXXXXXXX (11 digits starting with 0)
+    // Also allow +639XXXXXXXXX format
+    if (cleaned.length < 10 || cleaned.length > 11) {
+      return false;
+    }
+    // Must start with 09 or 0 (for 11 digits) or +639 (for 10 digits after +639)
+    const phMobileRegex = /^(09|0)\d{9}$/; // 11 digits: 09XXXXXXXXX or 0XXXXXXXXXX
+    const phMobileRegexPlus = /^\+639\d{9}$/; // +639XXXXXXXXX format
+    return phMobileRegex.test(cleaned) || phMobileRegexPlus.test(number.replace(/[\s\-\(\)]/g, ''));
   };
 
   // Validate form
   const validateForm = () => {
+    console.log('🔍 Starting form validation...');
+    console.log('🔍 Form values:', {
+      eventDate,
+      eventStartTime,
+      eventEndTime,
+      cups,
+      contactName,
+      contactNumber,
+      address,
+      selectedOccasion,
+      customOccasion
+    });
+
     if (!eventDate) {
+      console.log('❌ Validation failed: Event Date is missing');
       toast('Event Date is required', { description: 'Please select an event date.' });
       return false;
     }
     if (!eventStartTime) {
+      console.log('❌ Validation failed: Event Start Time is missing');
       toast('Event Start Time is required', { description: 'Please select an event start time.' });
       return false;
     }
     if (!eventEndTime) {
+      console.log('❌ Validation failed: Event End Time is missing');
       toast('Event End Time is required', { description: 'Please select an event end time.' });
       return false;
     }
     if (eventEndTime <= eventStartTime) {
+      console.log('❌ Validation failed: End time must be after start time');
       toast('Invalid Time Range', { description: 'End time must be after start time.' });
       return false;
     }
     // Validate cups - must be at least 80
     const cupsNum = Number(cups);
     if (!cups || isNaN(cupsNum) || cupsNum < 80) {
+      console.log('❌ Validation failed: Invalid cups:', cups, 'Number:', cupsNum);
       toast('Invalid Number of Cups', { description: 'Minimum order is 80 cups. Please enter a valid number.' });
       return false;
     }
-    if (!contactName.trim()) {
+    if (!contactName || !contactName.trim()) {
+      console.log('❌ Validation failed: Contact Name is missing');
       toast('Contact Name is required', { description: 'Please enter your contact name.' });
       return false;
     }
     // Validate contact number
-    if (!contactNumber.trim()) {
+    if (!contactNumber || !contactNumber.trim()) {
+      console.log('❌ Validation failed: Contact Number is missing');
       toast('Contact Number is required', { description: 'Please enter your contact number.' });
       return false;
     }
+    const cleanedContact = contactNumber.replace(/[\s\-\(\)\+]/g, '');
+    console.log('🔍 Contact number validation:', {
+      original: contactNumber,
+      cleaned: cleanedContact,
+      length: cleanedContact.length
+    });
     if (!validateContactNumber(contactNumber)) {
-      toast('Invalid Contact Number', { description: 'Please enter a valid Philippine mobile number (e.g., 09123456789 or 09214733335).' });
+      console.log('❌ Validation failed: Invalid contact number format:', contactNumber, 'Cleaned:', cleanedContact);
+      toast('Invalid Contact Number', { 
+        description: `Please enter a valid Philippine mobile number (11 digits: 09XXXXXXXXX or 0XXXXXXXXXX). You entered ${cleanedContact.length} digits.` 
+      });
       return false;
     }
-    if (!address.trim()) {
+    if (!address || !address.trim()) {
+      console.log('❌ Validation failed: Address is missing');
       toast('Address is required', { description: 'Please enter the event address.' });
       return false;
     }
     if (!selectedOccasion) {
+      console.log('❌ Validation failed: Event Type is missing');
       toast('Event Type is required', { description: 'Please select an event type.' });
       return false;
     }
-    if (selectedOccasion === 'other' && !customOccasion.trim()) {
+    if (selectedOccasion === 'other' && (!customOccasion || !customOccasion.trim())) {
+      console.log('❌ Validation failed: Custom Event Type is missing');
       toast('Custom Event Type is required', { description: 'Please specify the custom event type.' });
       return false;
     }
+    console.log('✅ All validations passed!');
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Prevent double submission
+    if (isSubmitting || loading) {
+      console.log('⚠️ Form is already submitting, ignoring duplicate submission');
+      return;
+    }
     
     console.log('🔄 Form submit triggered');
     
@@ -189,6 +234,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     }
     
     console.log('✅ Form validation passed');
+    setIsSubmitting(true);
     setLoading(true);
     
     // Clean contact number before sending (remove spaces, dashes, etc.)
@@ -239,8 +285,11 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       console.log('📥 Response data:', data);
       
       if (res.ok && data.success) {
-        console.log('✅ Event request submitted successfully');
-        toast('Event request submitted!', { description: 'Your event request has been sent to the admin.' });
+        console.log('✅ Event request submitted successfully! Event ID:', data.eventId);
+        toast.success('Event request submitted!', { 
+          description: 'Your event request has been sent to the admin. You will be notified once it is reviewed.',
+          duration: 5000
+        });
         // Reset form
         setEventDate('');
         setEventStartTime('');
@@ -252,11 +301,17 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         setSelectedOccasion('');
         setCustomOccasion('');
         setNotes('');
-        // Refresh user events
-        fetchUserEvents();
+        // Refresh user events after a short delay to ensure backend has processed
+        setTimeout(() => {
+          fetchUserEvents();
+        }, 1000);
       } else {
         console.error('❌ Submission failed:', data);
-        toast('Submission failed', { description: data.message || 'Please try again.' });
+        const errorMessage = data.message || data.error || 'Please try again.';
+        toast.error('Submission failed', { 
+          description: errorMessage,
+          duration: 5000
+        });
       }
     } catch (err: any) {
       console.error('❌ Network error:', err);
@@ -265,11 +320,13 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         stack: err.stack,
         name: err.name
       });
-      toast('Network error', { 
-        description: err.message || 'Failed to connect to server. Please check your connection and try again.' 
+      toast.error('Network error', { 
+        description: err.message || 'Failed to connect to server. Please check your connection and try again.',
+        duration: 5000
       });
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -432,7 +489,9 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               onChange={e => {
                 // Allow numbers, spaces, dashes, parentheses, and + for formatting
                 const value = e.target.value.replace(/[^\d\s\-\(\)\+]/g, '');
-                setContactNumber(value);
+                // Limit to 13 characters to allow for formatting but prevent too long numbers
+                const limitedValue = value.length > 13 ? value.slice(0, 13) : value;
+                setContactNumber(limitedValue);
               }}
               maxLength={13}
               required
@@ -469,13 +528,19 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
           <Button 
             type="submit" 
             className="w-full h-12 bg-[#a87437] hover:bg-[#8f652f] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
-            disabled={loading}
+            disabled={loading || isSubmitting}
             onClick={(e) => {
               console.log('🖱️ Submit button clicked');
-              // Let the form's onSubmit handle it
+              // Prevent default to let form's onSubmit handle it
+              if (!loading && !isSubmitting) {
+                // Form submission will be handled by onSubmit
+              } else {
+                e.preventDefault();
+                console.log('⚠️ Button click ignored - form is submitting');
+              }
             }}
           >
-            {loading ? 'Submitting...' : 'Submit Event Request'}
+            {loading || isSubmitting ? 'Submitting...' : 'Submit Event Request'}
           </Button>
               </form>
             </CardContent>

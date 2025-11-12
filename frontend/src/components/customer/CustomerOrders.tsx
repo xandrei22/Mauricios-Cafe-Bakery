@@ -5,7 +5,6 @@ import { io, Socket } from 'socket.io-client';
 import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare, Download } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
-import { encodeId } from '../../utils/idObfuscation';
 const CLIENT_PROFANITY_WORDS: string[] = [
   // Minimal built-in list for client-side UX only; server enforces full list
   'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
@@ -616,20 +615,11 @@ const CustomerOrders: React.FC = () => {
     }
   };
 
-  // Get short order code - use order_number if available, otherwise fallback to formatted order_id
+  // Get order ID - always use the full order_id for consistency
   const getShortOrderCode = (order: Order | null | undefined): string => {
     if (!order) return 'N/A';
-    // Use order_number (short code) if available, otherwise format from order_id
-    if (order.order_number) {
-      return order.order_number;
-    }
-    // Fallback: format from order_id (for older orders without order_number)
-    const raw = String(order.order_id || '');
-    const letters = raw.replace(/[^A-Za-z]/g, '').slice(0, 3);
-    const digits = raw.replace(/\D/g, '').slice(-2);
-    const partA = (letters || raw.slice(0, 3)).padEnd(3, 'X');
-    const partB = (digits || '00').padStart(2, '0');
-    return partA + partB;
+    // Always return the full order_id to avoid conflicts
+    return order.order_id || 'N/A';
   };
 
   const handleFeedbackClick = (order: Order) => {
@@ -1117,7 +1107,7 @@ const CustomerOrders: React.FC = () => {
                            <Utensils className="w-6 h-6 text-amber-600" />
                          </div>
                          <div>
-                           <p className="font-bold text-gray-900">Order ID: {getShortOrderCode(order)}</p>
+                           <p className="font-bold text-gray-900 font-mono text-sm">Order ID: {getShortOrderCode(order)}</p>
                            <div className="flex items-center space-x-4 mt-1">
                              <div className="flex items-center text-sm text-gray-600">
                                <Calendar className="w-4 h-4 mr-1" />
@@ -1332,25 +1322,7 @@ const CustomerOrders: React.FC = () => {
                             <Utensils className="w-6 h-6 text-amber-600" />
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900">Order ID: {(() => {
-                              // Use order_number if available (5-character code), otherwise encode the order_id
-                              if (order.order_number) {
-                                return order.order_number;
-                              }
-                              const raw = String(order.order_id || '');
-                              // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
-                              try {
-                                const encoded = encodeId(raw);
-                                const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
-                                const digits = encoded.replace(/\D/g, '').slice(-2);
-                                const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
-                                const partB = (digits || '00').padStart(2, '0');
-                                return partA + partB;
-                              } catch {
-                                // Fallback: last 5 non-separator characters
-                                return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
-                              }
-                            })()}</p>
+                            <p className="font-bold text-gray-900 font-mono text-sm">Order ID: {order.order_id || 'N/A'}</p>
                             <div className="flex items-center space-x-4 mt-1">
                               <div className="flex items-center text-sm text-gray-600">
                                 <Calendar className="w-4 h-4 mr-1" />

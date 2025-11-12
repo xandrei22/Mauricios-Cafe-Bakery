@@ -28,9 +28,7 @@ interface Order {
 
 const GuestOrderTracking: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
-  // Check if orderId is a 5-character orderNumber or needs decoding
-  const isOrderNumber = orderId && /^[A-Za-z0-9]{5}$/.test(orderId);
-  const decodedParamId = isOrderNumber ? orderId : (decodeId(orderId) || orderId);
+  const decodedParamId = decodeId(orderId);
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -129,23 +127,19 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   const fetchOrder = async (rawOrEncodedId: string) => {
+    // Accept both encoded and raw; decode if possible, but always use long orderId for tracking
+    const decoded = decodeId(rawOrEncodedId) || rawOrEncodedId;
     if (!rawOrEncodedId || !rawOrEncodedId.trim()) {
       setError('Please enter your order ID');
       return;
     }
-
-    // Check if it's a 5-character orderNumber (alphanumeric, exactly 5 chars)
-    const isOrderNumber = /^[A-Za-z0-9]{5}$/.test(rawOrEncodedId.trim());
-    
-    // If it's a 5-character code, use it directly; otherwise try to decode
-    const orderIdentifier = isOrderNumber ? rawOrEncodedId.trim() : (decodeId(rawOrEncodedId) || rawOrEncodedId);
 
     setLoading(true);
     setError('');
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/guest/order-status/${orderIdentifier}`);
+      const response = await fetch(`${API_URL}/api/guest/order-status/${decoded}`);
       const data = await response.json();
 
       if (data.success) {

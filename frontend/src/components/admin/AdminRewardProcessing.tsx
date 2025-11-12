@@ -141,16 +141,21 @@ const AdminRewardProcessing: React.FC = () => {
       if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
       if (activeTab === 'cancelled') params.set('status', 'cancelled');
       if (activeTab === 'expired') params.set('status', 'expired');
-      const response = await fetch(`/api/admin/loyalty/redemptions?${params.toString()}`, {
+      const url = `/api/admin/loyalty/redemptions?${params.toString()}`;
+      console.log('📋 Admin: Fetching redemptions from:', url);
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ Admin: HTTP error:', response.status, errorData);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
+      console.log('📋 Admin: Received response:', data);
       if (data.success) {
         // Normalize fields so the table renders regardless of source names
         const normalized: ClaimedReward[] = (data.redemptions || []).map((r: any) => ({
@@ -172,12 +177,14 @@ const AdminRewardProcessing: React.FC = () => {
           order_id: r.order_id ?? null,
           claim_code: r.claim_code ?? null,
         }));
+        console.log(`✅ Admin: Found ${normalized.length} redemptions for tab: ${activeTab}`);
         setClaimedRewards(normalized);
       } else {
+        console.error('❌ Admin: API returned success:false', data.error);
         setError(data.error || 'Failed to fetch claimed rewards');
       }
     } catch (err: any) {
-      console.error('Error fetching claimed rewards:', err);
+      console.error('❌ Admin: Error fetching claimed rewards:', err);
       setError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -213,6 +220,12 @@ const AdminRewardProcessing: React.FC = () => {
     // Set staffId from localStorage or default to 9 for testing
     const storedStaffId = localStorage.getItem('staffId');
     setStaffId(storedStaffId ? parseInt(storedStaffId) : (user?.id || 9)); // Fallback to 9 if user.id is not available
+    
+    // Auto-refresh every 10 seconds to catch new redemptions
+    const interval = setInterval(() => {
+      fetchClaimedRewards();
+    }, 10000);
+    return () => clearInterval(interval);
   }, [fetchClaimedRewards, fetchLoyaltyStats, user?.id]);
 
   const searchByClaimCode = async () => {
@@ -318,20 +331,9 @@ const AdminRewardProcessing: React.FC = () => {
     }
   };
 
-  const filteredRewards = claimedRewards.filter((reward) => {
-    const now = new Date();
-    const expiry = new Date(reward.expires_at);
-    if (activeTab === 'pending') {
-      return reward.status === 'pending' && expiry > now;
-    } else if (activeTab === 'processed') {
-      return reward.status === 'completed' || reward.status === 'processed';
-    } else if (activeTab === 'cancelled') {
-      return reward.status === 'cancelled';
-    } else if (activeTab === 'expired') {
-      return reward.status === 'pending' && expiry <= now;
-    }
-    return true;
-  });
+  // Don't filter - the backend already filters by status
+  // Just use the claimedRewards directly since they're already filtered by activeTab
+  const filteredRewards = claimedRewards;
 
   if (loading) {
     return (
@@ -550,7 +552,18 @@ const AdminRewardProcessing: React.FC = () => {
           <TabsTrigger value="expired">Expired</TabsTrigger>
         </TabsList>
         <TabsContent value="pending" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Rewards</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-semibold text-gray-700">Pending Rewards</h2>
+            <Button 
+              onClick={() => fetchClaimedRewards()} 
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </Button>
+          </div>
           {filteredRewards.length === 0 ? (
             <p className="text-gray-500">No pending rewards to process.</p>
           ) : (

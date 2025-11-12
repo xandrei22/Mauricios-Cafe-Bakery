@@ -11,7 +11,8 @@ import {
   Clock,
   User,
   Coins,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 interface RewardRedemption {
@@ -42,20 +43,39 @@ const StaffRewardProcessing: React.FC = () => {
 
   useEffect(() => {
     fetchPendingRedemptions();
+    // Auto-refresh every 10 seconds to catch new redemptions
+    const interval = setInterval(() => {
+      fetchPendingRedemptions();
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchPendingRedemptions = async () => {
     try {
+      console.log('📋 Staff: Fetching pending redemptions from:', `${API_URL}/api/staff/reward-redemptions/pending`);
       const response = await fetch(`${API_URL}/api/staff/reward-redemptions/pending`, {
         credentials: 'omit'
       });
       
       if (response.ok) {
         const data = await response.json();
-        setPendingRedemptions(data.redemptions || []);
+        console.log('📋 Staff: Received redemptions:', data);
+        if (data.success) {
+          const redemptions = data.redemptions || [];
+          console.log(`✅ Staff: Found ${redemptions.length} pending redemptions`);
+          setPendingRedemptions(redemptions);
+        } else {
+          console.error('❌ Staff: API returned success:false', data.error);
+          setPendingRedemptions([]);
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('❌ Staff: Failed to fetch pending redemptions:', response.status, errorData);
+        setPendingRedemptions([]);
       }
     } catch (error) {
-      console.error('Error fetching pending redemptions:', error);
+      console.error('❌ Staff: Error fetching pending redemptions:', error);
+      setPendingRedemptions([]);
     }
   };
 
@@ -70,7 +90,9 @@ const StaffRewardProcessing: React.FC = () => {
     setRedemption(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/search/${claimCode}`, {
+      // Convert to uppercase to match database (claim codes are stored in uppercase)
+      const upperCaseCode = claimCode.toUpperCase();
+      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/search/${upperCaseCode}`, {
         credentials: 'omit'
       });
 
@@ -290,10 +312,23 @@ const StaffRewardProcessing: React.FC = () => {
           {/* Pending Redemptions Tab */}
           {activeTab === 'pending' && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-700">Pending Redemptions</h3>
+                <Button 
+                  onClick={() => fetchPendingRedemptions()} 
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </Button>
+              </div>
               {pendingRedemptions.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Gift className="w-16 h-16 mx-auto mb-6 text-gray-300" />
                   <p className="text-lg">No pending redemptions</p>
+                  <p className="text-sm text-gray-400 mt-2">Customer redemption requests will appear here</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
