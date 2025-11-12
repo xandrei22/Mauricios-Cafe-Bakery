@@ -471,29 +471,29 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-700 mb-1">{totalItems}</div>
-            <div className="text-xs text-gray-600">Total Items</div>
+          <CardContent className="p-6 text-center">
+            <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
+            <div className="text-sm text-gray-600">Total Items</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-700 mb-1">{availableItems}</div>
-            <div className="text-xs text-gray-600">Available Items</div>
+          <CardContent className="p-6 text-center">
+            <div className="text-3xl font-bold text-gray-700 mb-2">{availableItems}</div>
+            <div className="text-sm text-gray-600">Available Items</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-700 mb-1">{popularItems}</div>
-            <div className="text-xs text-gray-600">Popular</div>
+          <CardContent className="p-6 text-center">
+            <div className="text-3xl font-bold text-gray-700 mb-2">{popularItems}</div>
+            <div className="text-sm text-gray-600">Popular</div>
           </CardContent>
         </Card>
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-          <CardContent className="p-4 text-center">
-            <div className="text-2xl font-bold text-gray-700 mb-1">{totalCategories}</div>
-            <div className="text-xs text-gray-600">Categories</div>
+          <CardContent className="p-6 text-center">
+            <div className="text-3xl font-bold text-gray-700 mb-2">{totalCategories}</div>
+            <div className="text-sm text-gray-600">Categories</div>
           </CardContent>
         </Card>
       </div>
@@ -538,12 +538,12 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {items.map((item) => (
-                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
+                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[380px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
                           {/* Image - With padding from card edges */}
-                          <div className="h-40 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-3">
+                          <div className="h-32 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-2">
                             {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
                               <div className="w-full h-full overflow-hidden">
                                 <img
@@ -573,26 +573,26 @@ const CustomerMenu: React.FC = () => {
                           </div>
                           
                           {/* Content */}
-                          <div className="p-4 flex-1 flex flex-col min-h-0">
-                            <h3 className="text-lg font-semibold text-[#3f3532] mb-1 line-clamp-2">
+                          <div className="p-3 flex-1 flex flex-col min-h-0">
+                            <h3 className="text-base font-semibold text-[#3f3532] mb-1 line-clamp-2">
                               {item.name}
                             </h3>
                             {item.category && (
-                              <p className="text-sm text-gray-500 mb-2">{item.category}</p>
+                              <p className="text-xs text-gray-500 mb-1">{item.category}</p>
                             )}
-                            <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                            <p className="text-gray-600 text-xs mb-2 line-clamp-2">
                               {item.description}
                             </p>
                             
                             {/* Price */}
                             <div className="mb-2">
-                              <span className="text-xl font-bold text-[#a87437]">
+                              <span className="text-lg font-bold text-[#a87437]">
                                 ₱{Number(item.price || 0).toFixed(2)}
                               </span>
                             </div>
                             
                             {/* Action Buttons */}
-                            <div className="flex flex-col gap-2 mt-auto pt-2">
+                            <div className="flex flex-col gap-2 mt-auto pt-1">
                               {item.allow_customization && (
                                 <Button
                                   onClick={() => setCustomizationModal({ isOpen: true, item: item })}
