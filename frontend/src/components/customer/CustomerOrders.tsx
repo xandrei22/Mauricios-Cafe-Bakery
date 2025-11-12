@@ -863,7 +863,7 @@ const CustomerOrders: React.FC = () => {
                      <div className="grid grid-cols-2 gap-6 mb-6">
                        <div>
                          <p className="text-sm text-gray-600 mb-1">Order ID</p>
-                         <p className="font-medium text-gray-900">{getShortOrderCode(getCurrentOrder())}</p>
+                         <p className="font-medium text-gray-900 font-mono text-sm">{getShortOrderCode(getCurrentOrder())}</p>
                        </div>
                        <div>
                          <p className="text-sm text-gray-600 mb-1">Queue Position</p>

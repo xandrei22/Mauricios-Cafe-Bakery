@@ -16,7 +16,6 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { customerLogin } from "../../utils/authUtils";
-import { getApiUrl } from "../../utils/apiConfig";
 
 export function LoginForm({
   className,
@@ -168,14 +167,6 @@ export function LoginForm({
     }
   }
 
-  // ✅ CORS-safe Google OAuth redirect (no credentials)
-  const handleGoogleLogin = () => {
-    const baseUrl = getApiUrl();
-    const redirectUrl = `${baseUrl}/api/auth/google${
-      tableFromUrl ? `?table=${encodeURIComponent(tableFromUrl)}` : ""
-    }`;
-    window.location.href = redirectUrl;
-  };
 
   return (
     <div
@@ -262,30 +253,6 @@ export function LoginForm({
                   disabled={loading}
                 >
                   {loading ? "Logging in..." : "Login"}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="w-full border-[#a87437] text-[#a87437] hover:bg-[#f6efe7]"
-                  type="button"
-                  disabled={loading}
-                  onClick={handleGoogleLogin}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 48 48"
-                    className="mr-2 h-4 w-4"
-                  >
-                    <path
-                      fill="#FFC107"
-                      d="M43.611 20.083H42V20H24v8h11.303C33.676 32.658 29.223 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.157 7.961 3.039l5.657-5.657C33.64 6.053 29.083 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20c10.494 0 19.126-7.645 19.126-20 0-1.341-.146-2.651-.415-3.917z"
-                    />
-                    <path
-                      fill="#FF3D00"
-                      d="M6.306 14.691l6.571 4.817C14.57 16.23 18.879 12 24 12..."
-                    />
-                  </svg>
-                  Login with Google
                 </Button>
               </div>
             </div>

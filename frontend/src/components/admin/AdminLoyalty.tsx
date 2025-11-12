@@ -16,7 +16,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import StaffRewardProcessing from '../staff/StaffRewardProcessing';
+import AdminRewardProcessing from './AdminRewardProcessing';
 import Swal from 'sweetalert2';
 import axiosInstance from '../../utils/axiosInstance';
 import { getApiUrl } from '../../utils/apiConfig';
@@ -495,7 +495,7 @@ const AdminLoyalty: React.FC = () => {
 
           {/* Reward Processing Tab */}
           <TabsContent value="processing" className="space-y-6">
-            <StaffRewardProcessing />
+            <AdminRewardProcessing />
           </TabsContent>
         </Tabs>
 

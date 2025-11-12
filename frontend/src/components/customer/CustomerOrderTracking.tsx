@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Download
 } from 'lucide-react';
-import { encodeId } from '../../utils/idObfuscation';
 
 interface OrderItem {
   menu_item_id: number;
@@ -233,26 +232,11 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
     }
   };
 
-  // Get short order code - use order_number if available, otherwise fallback to formatted order_id
+  // Get order ID - always use the full order_id for consistency
   const getShortOrderCode = (order: Order | null | undefined): string => {
     if (!order) return 'N/A';
-    // Use order_number (short code) if available, otherwise format from order_id
-    if (order.order_number) {
-      return order.order_number;
-    }
-    // Fallback: format from order_id using the same 5-character format as PaymentProcessor (3 letters + 2 digits)
-    const raw = String(order.order_id || '');
-    try {
-      const encoded = encodeId(raw);
-      const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
-      const digits = encoded.replace(/\D/g, '').slice(-2);
-      const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
-      const partB = (digits || '00').padStart(2, '0');
-      return partA + partB;
-    } catch {
-      // Fallback: last 5 non-separator characters
-      return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
-    }
+    // Always return the full order_id to avoid conflicts
+    return order.order_id || 'N/A';
   };
 
   if (loading) {
@@ -298,7 +282,7 @@ const CustomerOrderTracking: React.FC<CustomerOrderTrackingProps> = ({ customerE
               <CardHeader className="bg-gray-50">
                 <div className="flex justify-between items-start">
                   <div>
-                    <CardTitle className="text-lg">Order #{getShortOrderCode(order)}</CardTitle>
+                    <CardTitle className="text-lg font-mono text-sm">Order ID: {getShortOrderCode(order)}</CardTitle>
                     <p className="text-sm text-gray-600">
                       Placed {formatTimeAgo(order.order_time)} • {formatDateTime(order.order_time)}
                     </p>

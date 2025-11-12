@@ -20,6 +20,7 @@ const menuItems = [
   { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png" },
   { label: "POS System", path: "/staff/pos", icon: "/images/payment.png" },
   { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png" },
+  { label: "Reward Processing", path: "/staff/reward-processing", icon: "/images/loyalty points.png" },
   { label: "Sales", path: "/staff/sales", icon: "/images/payment.png" },
   { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png" },
 ];

@@ -23,6 +23,7 @@ const StaffNavbar: React.FC = () => {
       '/staff/orders': 'Orders',
       '/staff/pos': 'POS System',
       '/staff/loyalty': 'Loyalty Points',
+      '/staff/reward-processing': 'Reward Processing',
       '/staff/sales': 'Sales',
       '/staff/activity-logs': 'Activity Logs',
       '/staff/settings': 'Settings'
