@@ -113,6 +113,17 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     };
   }, [customer_id, customer_name]);
 
+  // Validate contact number format (Philippines format)
+  const validateContactNumber = (number: string): boolean => {
+    // Remove spaces, dashes, and other characters
+    const cleaned = number.replace(/[\s\-\(\)]/g, '');
+    // Check if it's a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX)
+    const phMobileRegex = /^(09|\+639)\d{9}$/;
+    // Also allow 11 digits starting with 0
+    const phMobileRegexAlt = /^0\d{10}$/;
+    return phMobileRegex.test(cleaned) || phMobileRegexAlt.test(cleaned);
+  };
+
   // Validate form
   const validateForm = () => {
     if (!eventDate) {
@@ -131,16 +142,23 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       toast('Invalid Time Range', { description: 'End time must be after start time.' });
       return false;
     }
-    if (!cups || Number(cups) < 80) {
-      toast('Number of Cups is required', { description: 'Minimum order is 80 cups.' });
+    // Validate cups - must be at least 80
+    const cupsNum = Number(cups);
+    if (!cups || isNaN(cupsNum) || cupsNum < 80) {
+      toast('Invalid Number of Cups', { description: 'Minimum order is 80 cups. Please enter a valid number.' });
       return false;
     }
     if (!contactName.trim()) {
       toast('Contact Name is required', { description: 'Please enter your contact name.' });
       return false;
     }
+    // Validate contact number
     if (!contactNumber.trim()) {
       toast('Contact Number is required', { description: 'Please enter your contact number.' });
+      return false;
+    }
+    if (!validateContactNumber(contactNumber)) {
+      toast('Invalid Contact Number', { description: 'Please enter a valid Philippine mobile number (e.g., 09123456789 or 09214733335).' });
       return false;
     }
     if (!address.trim()) {
@@ -160,18 +178,27 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
+    console.log('🔄 Form submit triggered');
+    
+    // Validate form
     if (!validateForm()) {
+      console.log('❌ Form validation failed');
       return;
     }
     
+    console.log('✅ Form validation passed');
     setLoading(true);
+    
+    // Clean contact number before sending (remove spaces, dashes, etc.)
+    const cleanedContactNumber = contactNumber.replace(/[\s\-\(\)\+]/g, '');
     
     const formData = {
       customer_id,
       customer_name,
       contact_name: contactName,
-      contact_number: contactNumber,
+      contact_number: cleanedContactNumber,
       event_date: eventDate,
       event_start_time: eventStartTime,
       event_end_time: eventEndTime,
@@ -181,21 +208,38 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       cups: Number(cups),
     };
     
-    console.log('Submitting event form with data:', formData);
+    console.log('📤 Submitting event form with data:', formData);
+    console.log('📡 API URL:', `${API_URL}/api/events`);
     
     try {
       const res = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         credentials: 'omit',
         body: JSON.stringify(formData),
       });
       
-      console.log('Response status:', res.status);
+      console.log('📥 Response status:', res.status);
+      console.log('📥 Response headers:', res.headers);
+      
+      // Check if response is JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('❌ Non-JSON response:', text);
+        toast('Submission failed', { description: 'Server returned an invalid response. Please try again.' });
+        setLoading(false);
+        return;
+      }
+      
       const data = await res.json();
-      console.log('Response data:', data);
+      console.log('📥 Response data:', data);
       
       if (res.ok && data.success) {
+        console.log('✅ Event request submitted successfully');
         toast('Event request submitted!', { description: 'Your event request has been sent to the admin.' });
         // Reset form
         setEventDate('');
@@ -211,11 +255,19 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         // Refresh user events
         fetchUserEvents();
       } else {
+        console.error('❌ Submission failed:', data);
         toast('Submission failed', { description: data.message || 'Please try again.' });
       }
-    } catch (err) {
-      console.error('Network error:', err);
-      toast('Network error', { description: 'Please try again.' });
+    } catch (err: any) {
+      console.error('❌ Network error:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
+      toast('Network error', { 
+        description: err.message || 'Failed to connect to server. Please check your connection and try again.' 
+      });
     } finally {
       setLoading(false);
     }
@@ -323,12 +375,22 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 id="cups"
                 type="number"
                 min={80}
+                step={1}
                 value={cups}
-                onChange={e => setCups(e.target.value)}
-                placeholder="Minimum order is 80 cups"
+                onChange={e => {
+                  const value = e.target.value;
+                  // Only allow numbers and ensure minimum is 80
+                  if (value === '' || (Number(value) >= 80)) {
+                    setCups(value);
+                  } else if (Number(value) < 80 && value !== '') {
+                    toast('Minimum 80 cups', { description: 'The minimum order is 80 cups.' });
+                  }
+                }}
+                placeholder="Minimum: 80 cups"
                 required
                 className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />
+              <p className="text-[10px] text-gray-500 mt-0.5 text-center">Minimum order: 80 cups</p>
             </div>
           </div>
           
@@ -365,12 +427,18 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
             <Input
               id="contact-number"
               type="tel"
-              placeholder="e.g., 0921473335"
+              placeholder="e.g., 09123456789 or 09214733335"
               value={contactNumber}
-              onChange={e => setContactNumber(e.target.value)}
+              onChange={e => {
+                // Allow numbers, spaces, dashes, parentheses, and + for formatting
+                const value = e.target.value.replace(/[^\d\s\-\(\)\+]/g, '');
+                setContactNumber(value);
+              }}
+              maxLength={13}
               required
               className="h-12 !border-gray-300 border rounded-xl focus:!border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
+            <p className="text-[10px] text-gray-500 mt-0.5">Format: 09XXXXXXXXX (11 digits)</p>
           </div>
           
           <div>
@@ -400,8 +468,12 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
           
           <Button 
             type="submit" 
-            className="w-full h-12 bg-[#a87437] hover:bg-[#8f652f] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300" 
+            className="w-full h-12 bg-[#a87437] hover:bg-[#8f652f] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
             disabled={loading}
+            onClick={(e) => {
+              console.log('🖱️ Submit button clicked');
+              // Let the form's onSubmit handle it
+            }}
           >
             {loading ? 'Submitting...' : 'Submit Event Request'}
           </Button>

@@ -424,122 +424,15 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               </div>
 
               {/* Payment Options */}
-              <div className="space-y-1">
-                {selectedOrder.paymentStatus === 'paid' && selectedOrder.status === 'pending' ? (
-                  <div className="space-y-2">
-                    <div className="w-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm">
-                      <CheckCircle className="w-4 h-4" />
-                      Payment Verified - Ready for Kitchen Preparation
-                    </div>
-                    {selectedOrder.receiptPath && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => downloadReceipt(selectedOrder.orderId)}
-                          className="flex-1 bg-[#a87437] hover:bg-[#8f652f] text-white font-medium py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download Receipt
-                        </button>
-                        <button
-                          onClick={() => printReceipt(selectedOrder.orderId)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
-                        >
-                          <Printer className="w-4 h-4" />
-                          Print Receipt
-                        </button>
-                      </div>
-                    )}
+              {selectedOrder.status === 'cancelled' ? (
+                // For cancelled orders, only show Close button
+                <div className="space-y-1">
+                  <div className="w-full bg-red-50 border border-red-200 text-red-800 font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm">
+                    <X className="w-4 h-4" />
+                    This order has been cancelled
                   </div>
-                ) : selectedOrder.paymentMethod === 'cash' ? (
                   <button
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
-                    onClick={handleCashPayment}
-                    disabled={processingPayment}
-                  >
-                    <span className="text-lg font-bold">₱</span>
-                    Process Cash Payment
-                  </button>
-                ) : selectedOrder.paymentMethod === 'gcash' || selectedOrder.paymentMethod === 'paymaya' ? (
-                  <>
-                    <div className="flex gap-2">
-                      {/* Show View Receipt button only if order was placed by customer and has a receipt */}
-                      {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
-                        <button
-                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
-                          onClick={() => viewReceipt(selectedOrder.orderId)}
-                          disabled={processingPayment}
-                        >
-                          View {selectedOrder.paymentMethod.toUpperCase()} Receipt
-                        </button>
-                      )}
-
-                      <button
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
-                        onClick={() => setShowReferenceModal(true)}
-                        disabled={processingPayment}
-                      >
-                        Enter Reference Number
-                      </button>
-                    </div>
-
-                  </>
-                ) : (
-                  <>
-                    <div className="flex gap-1">
-                      {/* Show View Receipt button only if order was placed by customer and has a receipt */}
-                      {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
-                        <button
-                          className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
-                          onClick={() => viewReceipt(selectedOrder.orderId)}
-                          disabled={processingPayment}
-                        >
-                          View {selectedOrder.paymentMethod.toUpperCase()} Receipt
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Removed inline verify button to ensure verification is done via the receipt modal */}
-
-                  </>
-                )}
-
-                <div className="flex gap-1">
-                  <button
-                    className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-lg transition-colors text-sm"
-                    onClick={async () => {
-                      if (confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
-                        try {
-                          // Use the staff orders endpoint instead of admin
-                          const res = await axiosInstance.put(`${API_URL}/api/orders/${selectedOrder.orderId}/status`, {
-                            status: 'cancelled',
-                            cancelledBy: staffId,
-                            cancellationReason: 'Cancelled by staff during payment processing',
-                            cancelledAt: new Date().toISOString()
-                          });
-
-                          if (res.status >= 200 && res.status < 300) {
-                            const result = res.data || {};
-                            if (result.success) {
-                              alert('Order cancelled successfully');
-                              onPaymentProcessed(); // Refresh the orders list
-                              setSelectedOrder(null);
-                            } else {
-                              alert(`Failed to cancel order: ${result.error || 'Unknown error'}`);
-                            }
-                          } else {
-                            alert(`Failed to cancel order: HTTP ${res.status}`);
-                          }
-                        } catch (error) {
-                          console.error('Error cancelling order:', error);
-                          alert('Error cancelling order: Network or server error');
-                        }
-                      }
-                    }}
-                  >
-                    Cancel Order
-                  </button>
-                  <button
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-1 px-2 rounded-lg transition-colors text-sm"
+                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-1 px-2 rounded-lg transition-colors text-sm"
                     onClick={() => {
                       setSelectedOrder(null);
                     }}
@@ -547,7 +440,132 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                     Close
                   </button>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  {selectedOrder.paymentStatus === 'paid' && selectedOrder.status === 'pending' ? (
+                    <div className="space-y-2">
+                      <div className="w-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm">
+                        <CheckCircle className="w-4 h-4" />
+                        Payment Verified - Ready for Kitchen Preparation
+                      </div>
+                      {selectedOrder.receiptPath && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => downloadReceipt(selectedOrder.orderId)}
+                            className="flex-1 bg-[#a87437] hover:bg-[#8f652f] text-white font-medium py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Receipt
+                          </button>
+                          <button
+                            onClick={() => printReceipt(selectedOrder.orderId)}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Print Receipt
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : selectedOrder.paymentMethod === 'cash' ? (
+                    <button
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                      onClick={handleCashPayment}
+                      disabled={processingPayment}
+                    >
+                      <span className="text-lg font-bold">₱</span>
+                      Process Cash Payment
+                    </button>
+                  ) : selectedOrder.paymentMethod === 'gcash' || selectedOrder.paymentMethod === 'paymaya' ? (
+                    <>
+                      <div className="flex gap-2">
+                        {/* Show View Receipt button only if order was placed by customer and has a receipt */}
+                        {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
+                          <button
+                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
+                            onClick={() => viewReceipt(selectedOrder.orderId)}
+                            disabled={processingPayment}
+                          >
+                            View {selectedOrder.paymentMethod.toUpperCase()} Receipt
+                          </button>
+                        )}
+
+                        <button
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
+                          onClick={() => setShowReferenceModal(true)}
+                          disabled={processingPayment}
+                        >
+                          Enter Reference Number
+                        </button>
+                      </div>
+
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex gap-1">
+                        {/* Show View Receipt button only if order was placed by customer and has a receipt */}
+                        {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
+                          <button
+                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
+                            onClick={() => viewReceipt(selectedOrder.orderId)}
+                            disabled={processingPayment}
+                          >
+                            View {selectedOrder.paymentMethod.toUpperCase()} Receipt
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Removed inline verify button to ensure verification is done via the receipt modal */}
+
+                    </>
+                  )}
+
+                  <div className="flex gap-1">
+                    <button
+                      className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-lg transition-colors text-sm"
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
+                          try {
+                            // Use the staff orders endpoint instead of admin
+                            const res = await axiosInstance.put(`${API_URL}/api/orders/${selectedOrder.orderId}/status`, {
+                              status: 'cancelled',
+                              cancelledBy: staffId,
+                              cancellationReason: 'Cancelled by staff during payment processing',
+                              cancelledAt: new Date().toISOString()
+                            });
+
+                            if (res.status >= 200 && res.status < 300) {
+                              const result = res.data || {};
+                              if (result.success) {
+                                alert('Order cancelled successfully');
+                                onPaymentProcessed(); // Refresh the orders list
+                                setSelectedOrder(null);
+                              } else {
+                                alert(`Failed to cancel order: ${result.error || 'Unknown error'}`);
+                              }
+                            } else {
+                              alert(`Failed to cancel order: HTTP ${res.status}`);
+                            }
+                          } catch (error) {
+                            console.error('Error cancelling order:', error);
+                            alert('Error cancelling order: Network or server error');
+                          }
+                        }
+                      }}
+                    >
+                      Cancel Order
+                    </button>
+                    <button
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-1 px-2 rounded-lg transition-colors text-sm"
+                      onClick={() => {
+                        setSelectedOrder(null);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-center py-8 text-gray-500">
