@@ -42,19 +42,24 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const pendingOrders = orders.filter(order => {
-    // Include orders with pending payment status regardless of order status
-    // This ensures admin/staff placed orders with pending payment appear here
+    // Pending Payments should ONLY show orders that need payment verification
+    // Flow: Order placed → Pending Payments → (if verified) Preparing → (if cancelled) Cancelled Orders
     const paymentStatus = (order.paymentStatus || '').toLowerCase();
+    const orderStatus = (order.status || '').toLowerCase();
+    
+    // Only include orders with pending payment status (not paid)
     const hasPendingPayment = paymentStatus === 'pending' || paymentStatus === 'pending_verification';
-    const isNotCancelled = order.status !== 'cancelled';
-    const isNotCompleted = order.status !== 'completed';
     
-    // Also include orders that are paid but still in pending/preparing status (might need review)
-    // This helps catch orders that were marked as paid but shouldn't have been
-    const isPaidButPending = paymentStatus === 'paid' && (order.status === 'pending' || order.status === 'preparing');
+    // Exclude cancelled orders (they go to Cancelled Orders tab)
+    const isNotCancelled = orderStatus !== 'cancelled';
     
-    const include = (hasPendingPayment || isPaidButPending) && isNotCancelled && isNotCompleted;
-    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, placedBy=${order.placedBy}, includeInPending=${include}, isPaidButPending=${isPaidButPending}`);
+    // Exclude orders that are already paid (they should be in Preparing/Ready status, not Pending Payments)
+    const isNotPaid = paymentStatus !== 'paid';
+    
+    // Include only orders that have pending payment AND are not cancelled AND are not paid
+    const include = hasPendingPayment && isNotCancelled && isNotPaid;
+    
+    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, includeInPending=${include}`);
     return include;
   });
   
