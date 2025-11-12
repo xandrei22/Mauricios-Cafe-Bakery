@@ -343,7 +343,7 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-6 max-w-6xl mx-auto">
+      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
         {/* Header */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -538,7 +538,7 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {items.map((item) => (
                       <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
