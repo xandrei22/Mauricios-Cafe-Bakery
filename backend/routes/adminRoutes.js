@@ -2114,13 +2114,16 @@ router.get('/loyalty/rewards', authenticateJWT, async(req, res) => {
 // Create new loyalty reward - requires authentication
 router.post('/loyalty/rewards', authenticateJWT, async(req, res) => {
     try {
-        const { name, description, points_required, reward_type, discount_percentage, image_url } = req.body;
+        const { name, description, points_required, reward_type, discount_percentage, image_url, is_active } = req.body;
+
+        // Default is_active to true if not provided, so rewards are visible to customers
+        const activeStatus = is_active !== undefined ? is_active : true;
 
         const [result] = await db.query(`
             INSERT INTO loyalty_rewards 
-            (name, description, points_required, reward_type, discount_percentage, image_url) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [name, description, points_required, reward_type, discount_percentage || null, image_url || null]);
+            (name, description, points_required, reward_type, discount_percentage, image_url, is_active) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [name, description, points_required, reward_type, discount_percentage || null, image_url || null, activeStatus]);
 
         res.json({
             success: true,
@@ -2661,12 +2664,21 @@ router.put('/loyalty/redemptions/:redemptionId/status', authenticateJWT, async(r
                 connection.release();
             }
         } else {
-            // Just update status
-            await db.query(`
-                UPDATE loyalty_reward_redemptions 
-                SET status = ?, notes = ?, updated_at = NOW() 
-                WHERE id = ?
-            `, [status, notes || `Status updated to ${status} by admin`, redemptionId]);
+            // Update status and set staff_id (admin_id) when completing
+            if (status === 'completed') {
+                await db.query(`
+                    UPDATE loyalty_reward_redemptions 
+                    SET status = ?, notes = ?, staff_id = ?, updated_at = NOW() 
+                    WHERE id = ?
+                `, [status, notes || `Completed by admin`, adminId, redemptionId]);
+            } else {
+                // Just update status for other statuses
+                await db.query(`
+                    UPDATE loyalty_reward_redemptions 
+                    SET status = ?, notes = ?, updated_at = NOW() 
+                    WHERE id = ?
+                `, [status, notes || `Status updated to ${status} by admin`, redemptionId]);
+            }
         }
 
         res.json({
@@ -5398,25 +5410,25 @@ router.get('/sales/download', async(req, res) => {
             query += ' AND DATE(order_time) <= ?';
             queryParams.push(endDate);
         }
-        if (status) {
+        if (status && status !== 'all') {
             query += ' AND status = ?';
             queryParams.push(status);
         }
-        if (payment_method) {
+        if (payment_method && payment_method !== 'all') {
             query += ' AND payment_method = ?';
             queryParams.push(payment_method);
         }
-        if (customer) {
+        if (customer && customer.trim() !== '') {
             query += ' AND customer_name LIKE ?';
-            queryParams.push(`%${customer}%`);
+            queryParams.push(`%${customer.trim()}%`);
         }
 
         query += ' ORDER BY order_time DESC LIMIT 1000';
 
         let salesData;
         try {
-            const result = await db.query(query, queryParams);
-            salesData = result[0] || [];
+            const [result] = await db.query(query, queryParams);
+            salesData = result || [];
         } catch (queryError) {
             console.error('Database query error:', queryError);
             throw new Error('Failed to fetch sales data: ' + queryError.message);

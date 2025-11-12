@@ -454,6 +454,8 @@ class NotificationService {
     async notifyEventRequest(eventData) {
         console.log('📢 Creating event request notification:', eventData);
         try {
+            // Create a system-wide notification for all admins (user_id = null, userType = 'admin')
+            // This will be visible to all admins when they query notifications
             const notification = await this.createNotification({
                 type: 'event_request',
                 title: 'New Event Request',
@@ -465,10 +467,45 @@ class NotificationService {
                     customerName: eventData.customer_name,
                     contactNumber: eventData.contact_number
                 },
+                userId: null, // null = system-wide notification for all admins
                 userType: 'admin',
                 priority: 'high'
             });
             console.log('✅ Event request notification created:', notification.id);
+            
+            // Also create individual notifications for each admin to ensure they all receive it
+            try {
+                const [admins] = await db.query(`
+                    SELECT id FROM admins WHERE is_active = 1
+                `);
+                
+                console.log(`📢 Creating individual notifications for ${admins.length} admin(s)`);
+                for (const admin of admins) {
+                    try {
+                        await this.createNotification({
+                            type: 'event_request',
+                            title: 'New Event Request',
+                            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
+                            data: {
+                                eventId: eventData.id,
+                                eventDate: eventData.event_date,
+                                cups: eventData.cups,
+                                customerName: eventData.customer_name,
+                                contactNumber: eventData.contact_number
+                            },
+                            userId: admin.id,
+                            userType: 'admin',
+                            priority: 'high'
+                        });
+                    } catch (err) {
+                        console.error(`⚠️ Failed to create notification for admin ${admin.id}:`, err.message);
+                    }
+                }
+            } catch (err) {
+                console.error('⚠️ Failed to create individual admin notifications (non-critical):', err.message);
+                // Don't fail - the system-wide notification was already created
+            }
+            
             return notification;
         } catch (error) {
             console.error('❌ Error creating event request notification:', error);

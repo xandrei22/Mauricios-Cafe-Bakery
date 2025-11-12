@@ -163,11 +163,20 @@ async function createEvent(req, res) {
             
             // Provide more helpful error message
             let errorMessage = 'Failed to create event. Please try again later.';
-            if (process.env.NODE_ENV === 'development') {
-                errorMessage = dbError.message || errorMessage;
-                if (dbError.code === 'ER_BAD_FIELD_ERROR') {
-                    errorMessage = `Database schema error: ${dbError.message}. Please run the migration script to fix the events table.`;
+            
+            // Check for schema errors
+            if (dbError.code === 'ER_BAD_FIELD_ERROR') {
+                const missingField = dbError.message.match(/Unknown column '([^']+)'/);
+                if (missingField) {
+                    errorMessage = `Database configuration error: The events table is missing required columns. Please contact the administrator.`;
+                    console.error(`❌ Missing column: ${missingField[1]}`);
+                    console.error('💡 Run migration: node scripts/fix-events-table.js');
+                } else {
+                    errorMessage = 'Database configuration error. Please contact the administrator.';
                 }
+            } else if (process.env.NODE_ENV === 'development') {
+                // In development, show more details
+                errorMessage = dbError.message || errorMessage;
             }
             
             return res.status(500).json({ 
@@ -176,7 +185,8 @@ async function createEvent(req, res) {
                 error: process.env.NODE_ENV === 'development' ? {
                     code: dbError.code,
                     message: dbError.message,
-                    sqlState: dbError.sqlState
+                    sqlState: dbError.sqlState,
+                    hint: dbError.code === 'ER_BAD_FIELD_ERROR' ? 'Run: node scripts/fix-events-table.js' : undefined
                 } : undefined
             });
         }

@@ -322,6 +322,26 @@ app.set('io', io);
 const notificationService = require('./services/notificationService');
 notificationService.setupSocketConnection(io);
 
+// -------------------
+// Automatic Database Schema Migration
+// -------------------
+// Ensure events table has required columns on server startup
+const ensureEventsTableSchema = require('./scripts/ensureEventsTableSchema');
+(async () => {
+    try {
+        const success = await ensureEventsTableSchema();
+        if (success) {
+            console.log('✅ Events table schema verified/updated on server startup');
+        } else {
+            console.warn('⚠️ Events table schema check completed with warnings');
+        }
+    } catch (err) {
+        console.error('⚠️ Events table schema check failed (non-critical):', err.message);
+        console.error('⚠️ Event requests may fail until schema is fixed. Run: node scripts/fix-events-table.js');
+        // Don't exit - allow server to start, migration will be attempted on first event creation
+    }
+})();
+
 // Socket.IO connection handlers
 io.on('connection', (socket) => {
     console.log('✅ Socket.IO client connected:', socket.id);
