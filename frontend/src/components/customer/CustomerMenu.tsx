@@ -540,7 +540,7 @@ const CustomerMenu: React.FC = () => {
                 {viewMode === 'grid' ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     {items.map((item) => (
-                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col">
+                      <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
                           {/* Image - With padding from card edges */}
                           <div className="h-40 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-3">

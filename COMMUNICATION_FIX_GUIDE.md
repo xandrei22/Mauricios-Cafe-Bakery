@@ -163,3 +163,6 @@ CORS_ALLOWED_ORIGINS=https://mauricios-cafe-bakery.vercel.app
 
 
 
+
+
+

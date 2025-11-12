@@ -111,6 +111,7 @@ export default function CustomerLanding() {
           src="/images/cozy.jpg"
           alt="Mauricio's Cafe and Bakery cozy ambience"
           className="absolute inset-0 w-full h-full object-cover"
+          style={{ objectPosition: 'center 40%' }}
         />
         {/* Darker warm overlay to improve text contrast */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#8a5f2d]/80 via-[#b88347]/65 to-black/20"></div>
