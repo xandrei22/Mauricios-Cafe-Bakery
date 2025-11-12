@@ -142,9 +142,14 @@ const AdminRewardProcessing: React.FC = () => {
       const url = `/api/admin/loyalty/redemptions?${params.toString()}`;
       console.log('📋 Admin: Fetching redemptions from:', url);
       console.log('📋 Admin: axiosInstance baseURL:', axiosInstance.defaults.baseURL);
+      console.log('📋 Admin: Full URL will be:', `${axiosInstance.defaults.baseURL}${url}`);
+      console.log('📋 Admin: Auth token exists:', !!localStorage.getItem('authToken'));
+      
       const response = await axiosInstance.get(url);
-      console.log('📋 Admin: Received response:', response.data);
-      if (response.data.success) {
+      console.log('📋 Admin: Received response status:', response.status);
+      console.log('📋 Admin: Received response data:', response.data);
+      
+      if (response.data && response.data.success) {
         // Normalize fields so the table renders regardless of source names
         const normalized: ClaimedReward[] = (response.data.redemptions || []).map((r: any) => ({
           id: r.id,
@@ -167,9 +172,11 @@ const AdminRewardProcessing: React.FC = () => {
         }));
         console.log(`✅ Admin: Found ${normalized.length} redemptions for tab: ${activeTab}`);
         setClaimedRewards(normalized);
+        setError(null); // Clear any previous errors
       } else {
-        console.error('❌ Admin: API returned success:false', response.data.error);
-        setError(response.data.error || 'Failed to fetch claimed rewards');
+        console.error('❌ Admin: API returned success:false', response.data);
+        setError(response.data?.error || 'Failed to fetch claimed rewards');
+        setClaimedRewards([]); // Set empty array on error
       }
     } catch (err: any) {
       console.error('❌ Admin: Error fetching claimed rewards:', err);
@@ -177,14 +184,32 @@ const AdminRewardProcessing: React.FC = () => {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
-        url: '/api/admin/loyalty/redemptions'
+        statusText: err.response?.statusText,
+        url: '/api/admin/loyalty/redemptions',
+        hasToken: !!localStorage.getItem('authToken'),
+        tokenPreview: localStorage.getItem('authToken')?.substring(0, 20) + '...',
+        errorType: err.code || 'unknown'
       });
       
+      // Set empty array on error to prevent UI issues
+      setClaimedRewards([]);
+      
       // Provide more specific error messages
-      if (err.response?.status === 401) {
+      if (!err.response) {
+        // Network error or CORS issue
+        if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+          setError('Network error: Unable to connect to server. Please check your connection and try again.');
+        } else {
+          setError('Connection error. Please check your internet connection and try again.');
+        }
+      } else if (err.response?.status === 401) {
         setError('Authentication failed. Please log in again.');
       } else if (err.response?.status === 403) {
         setError('Access denied. Admin privileges required.');
+      } else if (err.response?.status === 404) {
+        setError('Endpoint not found. Please contact support.');
+      } else if (err.response?.status >= 500) {
+        setError('Server error. Please try again later.');
       } else if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else if (err.message) {
@@ -199,16 +224,38 @@ const AdminRewardProcessing: React.FC = () => {
 
   const fetchLoyaltyStats = useCallback(async () => {
     try {
-      const response = await axiosInstance.get('/api/admin/loyalty/statistics');
-      if (response.data.success) {
-        setStats(response.data.stats);
-      } else {
-        console.error('Failed to fetch loyalty stats:', response.data.error);
+      // Calculate stats from redemptions data instead of separate endpoint
+      // This avoids needing a separate statistics endpoint
+      const response = await axiosInstance.get('/api/admin/loyalty/redemptions?limit=1000');
+      if (response.data.success && response.data.redemptions) {
+        const redemptions = response.data.redemptions;
+        const stats = {
+          totalClaimed: redemptions.length,
+          pendingProcessing: redemptions.filter((r: any) => r.status === 'pending').length,
+          processedToday: redemptions.filter((r: any) => {
+            if (r.status === 'completed' || r.status === 'processed') {
+              const processedDate = new Date(r.processed_at || r.updated_at || r.redemption_date);
+              const today = new Date();
+              return processedDate.toDateString() === today.toDateString();
+            }
+            return false;
+          }).length,
+          expiredToday: redemptions.filter((r: any) => {
+            if (r.status === 'expired') {
+              const expiredDate = new Date(r.expires_at);
+              const today = new Date();
+              return expiredDate.toDateString() === today.toDateString();
+            }
+            return false;
+          }).length
+        };
+        setStats(stats);
       }
     } catch (err) {
       console.error('Error fetching loyalty stats:', err);
+      // Don't set error state for stats - it's not critical
     }
-  }, [API_URL]);
+  }, []);
 
   useEffect(() => {
     fetchClaimedRewards();
