@@ -761,7 +761,7 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 notes,
                 order_time as order_time,
                 estimated_ready_time,
-                payment_status,
+                COALESCE(payment_status, 'pending') as payment_status,
                 payment_method,
                 receipt_path,
                 staff_id,
@@ -769,8 +769,11 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 cancellation_reason,
                 cancelled_at
             FROM orders 
-            WHERE status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
-               OR payment_status IN ('pending', 'pending_verification')
+            WHERE (
+                status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
+                OR COALESCE(payment_status, 'pending') IN ('pending', 'pending_verification')
+            )
+            AND status != 'completed'
             ORDER BY queue_position ASC, order_time ASC
         `);
 
@@ -817,6 +820,9 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 }
             }));
 
+            // Ensure paymentStatus is always set - default to 'pending' if null/undefined
+            const paymentStatus = order.payment_status || 'pending';
+            
             return {
                 orderId: order.id, // Map id to orderId for frontend compatibility
                 order_id: order.id, // Also include order_id for compatibility
@@ -824,14 +830,14 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 customer_name: order.customer_name,
                 items: enrichedItems,
                 total_price: parseFloat(order.total_price),
-                status: order.status,
+                status: order.status || 'pending',
                 order_type: order.order_type,
                 table_number: order.table_number,
                 order_time: order.order_time,
                 estimated_ready_time: order.estimated_ready_time,
                 notes: order.notes,
-                paymentStatus: order.payment_status,
-                paymentMethod: order.payment_method,
+                paymentStatus: paymentStatus,
+                paymentMethod: order.payment_method || '',
                 receiptPath: order.receipt_path,
                 placedBy: order.staff_id ? 'staff' : 'customer',
                 cancelledBy: order.cancelled_by,

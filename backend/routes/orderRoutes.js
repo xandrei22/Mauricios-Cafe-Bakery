@@ -372,8 +372,13 @@ router.get('/', async(req, res) => {
         // Include orders with pending payment status even if order status is different
         // Also include cancelled orders for the cancelled orders tab
         if (!status) {
-            sql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
+            sql += ` AND (
+                status IN (?, ?, ?, ?, ?, ?, ?) 
+                OR COALESCE(payment_status, 'pending') IN (?, ?)
+            )`;
             params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
+            sql += ' AND status != ?';
+            params.push('completed');
         } else if (status) {
             sql += ' AND status = ?';
             params.push(status);
@@ -444,6 +449,9 @@ router.get('/', async(req, res) => {
                 }
             }));
 
+            // Ensure paymentStatus is always set - default to 'pending' if null/undefined
+            const paymentStatus = order.payment_status || 'pending';
+
             return {
                 ...order,
                 id: order.id || order.order_id,
@@ -453,8 +461,8 @@ router.get('/', async(req, res) => {
                 tableNumber: order.table_number,
                 totalPrice: order.total_price || order.total_amount || 0,
                 orderTime: order.created_at || order.order_time,
-                paymentStatus: order.payment_status,
-                paymentMethod: order.payment_method,
+                paymentStatus: paymentStatus,
+                paymentMethod: order.payment_method || '',
                 items: enrichedItems,
                 placedBy: order.staff_id ? (order.staff_id === req.user ? .id && req.user ? .role === 'admin' ? 'admin' : 'staff') : 'customer',
                 receiptPath: order.receipt_path,

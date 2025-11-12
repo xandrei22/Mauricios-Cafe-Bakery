@@ -556,7 +556,7 @@ router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
         let [staffData] = await db.query(`
             SELECT 
                 CASE 
-                    WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
+                    WHEN MAX(o.staff_id) IS NULL THEN 'Unassigned Orders'
                     WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
                     THEN CONCAT('Staff ', u.id)
                     ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
@@ -583,7 +583,7 @@ router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
             [staffData] = await db.query(`
                 SELECT 
                     CASE 
-                        WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
+                        WHEN MAX(o.staff_id) IS NULL THEN 'Unassigned Orders'
                         WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
                         THEN CONCAT('Staff ', u.id)
                         ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
@@ -605,7 +605,7 @@ router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
                 [staffData] = await db.query(`
                     SELECT 
                         CASE 
-                            WHEN o.staff_id IS NULL THEN 'Unassigned Orders'
+                            WHEN MAX(o.staff_id) IS NULL THEN 'Unassigned Orders'
                             WHEN CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')) = ' ' 
                             THEN CONCAT('Staff ', u.id)
                             ELSE TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, '')))
