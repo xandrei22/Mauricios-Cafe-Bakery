@@ -33,7 +33,15 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
     transporter.verify(function(error, success) {
         if (error) {
             console.error('❌ Brevo SMTP configuration error:', error);
+            console.error('❌ Error details:', {
+                code: error.code,
+                command: error.command,
+                response: error.response,
+                responseCode: error.responseCode
+            });
             console.log('⚠️ Email service may not work - check Brevo SMTP credentials');
+            console.log('⚠️ Setting transporter to null - emails will be skipped');
+            transporter = null;
         } else {
             console.log('✅ Brevo SMTP server is ready to send messages');
         }
@@ -56,11 +64,18 @@ if (process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_PASS) {
     // Verify transporter configuration
     transporter.verify(function(error, success) {
         if (error) {
-            console.error('Email configuration error:', error);
-            console.log('Email service disabled - check Brevo SMTP credentials');
+            console.error('❌ Gmail SMTP configuration error:', error);
+            console.error('❌ Error details:', {
+                code: error.code,
+                command: error.command,
+                response: error.response,
+                responseCode: error.responseCode
+            });
+            console.log('⚠️ Email service disabled - check Gmail credentials');
+            console.log('⚠️ Make sure you are using an App Password, not your regular Gmail password');
             transporter = null;
         } else {
-            console.log('Email server is ready to send messages');
+            console.log('✅ Gmail SMTP server is ready to send messages');
         }
     });
 } else {
@@ -170,8 +185,10 @@ const sendWelcomeEmail = async(email, fullName) => {
 const sendResetPasswordEmail = async(email, fullName, resetLink) => {
     try {
         if (!transporter) {
-            console.log('Email service not available - skipping password reset email to:', email);
-            return;
+            console.error('❌ Email service not available - transporter is null');
+            console.error('❌ Skipping password reset email to:', email);
+            console.error('❌ Please check your email configuration (BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD)');
+            throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
         // Determine FROM address
@@ -225,8 +242,10 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
 async function sendLowStockAlert(to, items) {
     try {
         if (!transporter) {
-            console.log('Email service not available - skipping low stock alert');
-            return;
+            console.error('❌ Email service not available - transporter is null');
+            console.error('❌ Skipping low stock alert to:', to);
+            console.error('❌ Please check your email configuration (BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD)');
+            throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
         const itemList = items.map(item => `${item.name} (${item.quantity} ${item.unit})`).join('<br>');
@@ -289,8 +308,10 @@ async function sendEventStatusEmail(to, status, event) {
 async function sendEmail(options) {
     try {
         if (!transporter) {
-            console.log('Email service not available - skipping email to:', options.to);
-            return;
+            console.error('❌ Email service not available - transporter is null');
+            console.error('❌ Skipping email to:', options.to);
+            console.error('❌ Please check your email configuration (BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD)');
+            throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
         const fromAddress = process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'noreply@mauricioscafe.com';
@@ -301,10 +322,30 @@ async function sendEmail(options) {
             html: options.html
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully to:', options.to);
+        console.log('📧 Attempting to send email:', {
+            from: fromAddress,
+            to: options.to,
+            subject: options.subject
+        });
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Email sent successfully:', {
+            messageId: info.messageId,
+            response: info.response,
+            accepted: info.accepted,
+            rejected: info.rejected,
+            to: options.to
+        });
+        return info;
     } catch (error) {
-        console.error('Error sending email:', error.message);
+        console.error('❌ Error sending email:', error.message);
+        console.error('❌ Error details:', {
+            code: error.code,
+            command: error.command,
+            response: error.response,
+            responseCode: error.responseCode,
+            stack: error.stack
+        });
         throw error;
     }
 }
@@ -313,8 +354,10 @@ async function sendEmail(options) {
 const sendVerificationEmail = async(email, fullName, verificationUrl) => {
     try {
         if (!transporter) {
-            console.log('Email service not available - skipping verification email to:', email);
-            return;
+            console.error('❌ Email service not available - transporter is null');
+            console.error('❌ Skipping verification email to:', email);
+            console.error('❌ Please check your email configuration (BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD)');
+            throw new Error('Email service not configured. Please set BREVO_SMTP_USER/BREVO_SMTP_PASS or EMAIL_USER/EMAIL_PASSWORD environment variables.');
         }
 
         console.log('Attempting to send verification email to:', email);

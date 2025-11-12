@@ -464,7 +464,13 @@ router.get('/', async(req, res) => {
                 paymentStatus: paymentStatus,
                 paymentMethod: order.payment_method || '',
                 items: enrichedItems,
-                placedBy: order.staff_id ? (order.staff_id === req.user ? .id && req.user ? .role === 'admin' ? 'admin' : 'staff') : 'customer',
+                placedBy: order.staff_id ?
+                    (
+                        req.user && order.staff_id === req.user.id ?
+                        (req.user.role === 'admin' ? 'admin' : 'staff') :
+                        'staff'
+                    ) :
+                    'customer',
                 receiptPath: order.receipt_path,
                 cancelledBy: order.cancelled_by,
                 cancellationReason: order.cancellation_reason,
