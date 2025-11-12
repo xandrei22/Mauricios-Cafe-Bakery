@@ -35,13 +35,83 @@ router.use(authenticateJWT);
 
 // Generate random 5-character order code (letters and numbers)
 function generateShortOrderCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < 5; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
 }
+
+function normalizeOrderIdentifier(raw) {
+    if (raw === null || raw === undefined) {
+        return { normalized: '', numericId: null };
+    }
+    const normalized = String(raw).trim();
+    const numericId = normalized && /^\d+$/.test(normalized) ? parseInt(normalized, 10) : null;
+    return { normalized, numericId };
+}
+
+async function findOrderByIdentifier(identifier, connection = null) {
+    const { normalized, numericId } = normalizeOrderIdentifier(identifier);
+    if (!normalized) {
+        return null;
+    }
+
+    const executor = connection && typeof connection.query === 'function'
+        ? connection.query.bind(connection)
+        : db.query.bind(db);
+
+    let sql = `
+        SELECT * FROM orders
+        WHERE order_id = ? OR order_number = ?
+    `;
+    const params = [normalized, normalized];
+
+    if (numericId !== null) {
+        sql += ' OR id = ?';
+        params.push(numericId);
+    }
+
+    sql += ' LIMIT 1';
+
+    const [rows] = await executor(sql, params);
+    return rows.length ? rows[0] : null;
+}
+
+function resolveOrderIdentifiers(order, fallback) {
+    const fallbackId = fallback ? String(fallback).trim() : null;
+    if (!order) {
+        return {
+            internalId: fallbackId,
+            publicId: fallbackId
+        };
+    }
+
+    const internalId = order.order_id || order.id || fallbackId;
+    const publicId = order.order_number || order.shortOrderCode || internalId;
+
+    return {
+        internalId,
+        publicId
+    };
+}
+
+router.param('orderId', async(req, res, next, orderIdParam) => {
+    try {
+        const order = await findOrderByIdentifier(orderIdParam);
+        req.requestedOrderId = String(orderIdParam);
+        req.orderRecord = order || null;
+        req.orderIdentifiers = resolveOrderIdentifiers(order, orderIdParam);
+        next();
+    } catch (error) {
+        console.error('Error resolving order identifier:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to resolve order identifier'
+        });
+    }
+});
 
 // Create a new order
 router.post('/', async(req, res) => {
@@ -777,30 +847,27 @@ router.get('/stats/staff-activities', async(req, res) => {
 // Get order by ID
 router.get('/:orderId', async(req, res) => {
     try {
-        const { orderId } = req.params;
+        const order = req.orderRecord;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        const [orders] = await db.query(`
-            SELECT * FROM orders WHERE order_id = ?
-        `, [orderId]);
-
-        if (orders.length === 0) {
+        if (!order || !internalId) {
             return res.status(404).json({ success: false, error: 'Order not found' });
         }
 
-        const order = orders[0];
-        order.items = JSON.parse(order.items);
+        const parsedOrder = { ...order };
+        parsedOrder.items = JSON.parse(order.items || '[]');
+        parsedOrder.id = order.id || order.order_id;
+        parsedOrder.orderId = publicId;
+        parsedOrder.internalOrderId = internalId;
+        parsedOrder.shortOrderCode = order.order_number || publicId;
+        parsedOrder.customerName = order.customer_name;
+        parsedOrder.tableNumber = order.table_number;
+        parsedOrder.totalPrice = order.total_price;
+        parsedOrder.orderTime = order.order_time;
+        parsedOrder.paymentStatus = order.payment_status;
+        parsedOrder.paymentMethod = order.payment_method;
 
-        // Map fields to match frontend interface
-        order.id = order.id || order.order_id;
-        order.orderId = order.order_id;
-        order.customerName = order.customer_name;
-        order.tableNumber = order.table_number;
-        order.totalPrice = order.total_price;
-        order.orderTime = order.order_time;
-        order.paymentStatus = order.payment_status;
-        order.paymentMethod = order.payment_method;
-
-        res.json({ success: true, order });
+        res.json({ success: true, order: parsedOrder });
     } catch (error) {
         console.error('Error fetching order:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch order' });
@@ -812,6 +879,12 @@ router.put('/:orderId/status', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { status, paymentStatus, cancelledBy, cancellationReason, cancelledAt } = req.body;
+        const orderRecord = req.orderRecord;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         let updateFields = [];
         let params = [];
@@ -862,17 +935,20 @@ router.put('/:orderId/status', async(req, res) => {
         }
 
         // Get order details for ingredient deduction
-        const [orderResult] = await db.query(`
-            SELECT * FROM orders WHERE order_id = ?
-        `, [orderId]);
+        let order = orderRecord;
+        if (!order) {
+            const [orderResult] = await db.query(`
+                SELECT * FROM orders WHERE order_id = ?
+            `, [internalId]);
 
-        if (orderResult.length === 0) {
-            return res.status(404).json({ success: false, error: 'Order not found' });
+            if (orderResult.length === 0) {
+                return res.status(404).json({ success: false, error: 'Order not found' });
+            }
+
+            order = orderResult[0];
         }
 
-        const order = orderResult[0];
-
-        params.push(orderId);
+        params.push(internalId);
 
         await db.query(`
             UPDATE orders SET ${updateFields.join(', ')} WHERE order_id = ?
@@ -889,8 +965,8 @@ router.put('/:orderId/status', async(req, res) => {
                     name: item.name
                 }));
 
-                console.log('🔔 OrderRoutes status update: Deducting ingredients for order', orderId);
-                await ingredientDeductionService.deductIngredientsForOrder(order.id, itemsForDeduction, req);
+                console.log('🔔 OrderRoutes status update: Deducting ingredients for order', publicId);
+                await ingredientDeductionService.deductIngredientsForOrder(order.id || internalId, itemsForDeduction, req);
             } catch (deductionError) {
                 console.error('Failed to deduct ingredients during status update:', deductionError);
                 // Don't fail the status update if ingredient deduction fails
@@ -901,28 +977,32 @@ router.put('/:orderId/status', async(req, res) => {
         const io = req.app.get('io');
         if (io) {
             // Emit to specific order room
-            io.to(`order-${orderId}`).emit('order-updated', {
-                orderId,
+            io.to(`order-${publicId}`).emit('order-updated', {
+                orderId: publicId,
+                internalOrderId: internalId,
                 status,
                 paymentStatus,
                 timestamp: new Date()
             });
             // Emit to staff and admin rooms
             io.to('staff-room').emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status,
                 paymentStatus,
                 timestamp: new Date()
             });
             io.to('admin-room').emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status,
                 paymentStatus,
                 timestamp: new Date()
             });
             // Broadcast to all customers
             io.emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status,
                 paymentStatus,
                 timestamp: new Date()
@@ -941,13 +1021,18 @@ router.post('/:orderId/verify-payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { verifiedBy, paymentMethod } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         // Update payment status and move to preparing status
         await db.query(`
             UPDATE orders 
             SET payment_status = 'paid', status = 'preparing' 
             WHERE order_id = ?
-        `, [orderId]);
+        `, [internalId]);
 
         // Note: Ingredient deduction now happens when order is marked as 'ready', not during payment verification
 
@@ -956,45 +1041,49 @@ router.post('/:orderId/verify-payment', async(req, res) => {
             INSERT INTO payment_transactions 
             (order_id, payment_method, amount, status, verified_by, created_at) 
             VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
-        `, [orderId, paymentMethod || 'cash', orderId, verifiedBy || 'admin']);
+        `, [internalId, paymentMethod || 'cash', internalId, verifiedBy || 'admin']);
 
         // Emit real-time update
         const io = req.app.get('io');
         if (io) {
             // Emit order status update
-            io.to(`order-${orderId}`).emit('order-updated', {
-                orderId,
+            io.to(`order-${publicId}`).emit('order-updated', {
+                orderId: publicId,
+                internalOrderId: internalId,
                 status: 'preparing',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('staff-room').emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status: 'preparing',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('admin-room').emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status: 'preparing',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.emit('order-updated', {
-                orderId,
+                orderId: publicId,
+                internalOrderId: internalId,
                 status: 'preparing',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             // Emit payment update to both admin and staff rooms
             io.to('staff-room').emit('payment-updated', {
-                orderId,
+                orderId: publicId,
                 verifiedBy,
                 paymentMethod,
                 timestamp: new Date()
             });
             io.to('admin-room').emit('payment-updated', {
-                orderId,
+                orderId: publicId,
                 verifiedBy,
                 paymentMethod,
                 timestamp: new Date()
@@ -1013,6 +1102,11 @@ router.post('/:orderId/payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod, amount, transactionId } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         const connection = await db.getConnection();
         await connection.beginTransaction();
@@ -1023,14 +1117,14 @@ router.post('/:orderId/payment', async(req, res) => {
                 UPDATE orders 
                 SET payment_status = 'paid', payment_method = ?, status = 'pending' 
                 WHERE order_id = ?
-            `, [paymentMethod, orderId]);
+            `, [paymentMethod, internalId]);
 
             // Log payment transaction
             await connection.query(`
                 INSERT INTO payment_transactions 
                 (order_id, payment_method, amount, transaction_id, status) 
                 VALUES (?, ?, ?, ?, 'completed')
-            `, [orderId, paymentMethod, amount, transactionId]);
+            `, [internalId, paymentMethod, amount, transactionId]);
 
             await connection.commit();
 
@@ -1041,39 +1135,43 @@ router.post('/:orderId/payment', async(req, res) => {
             const io = req.app.get('io');
             if (io) {
                 // Emit order status update
-                io.to(`order-${orderId}`).emit('order-updated', {
-                    orderId,
+                io.to(`order-${publicId}`).emit('order-updated', {
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.to('staff-room').emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.to('admin-room').emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 // Emit payment update
-                io.to(`order-${orderId}`).emit('payment-updated', {
-                    orderId,
+                io.to(`order-${publicId}`).emit('payment-updated', {
+                    orderId: publicId,
                     status: 'paid',
                     method: paymentMethod,
                     timestamp: new Date()
                 });
                 io.to('staff-room').emit('payment-updated', {
-                    orderId,
+                    orderId: publicId,
                     status: 'paid',
                     method: paymentMethod,
                     timestamp: new Date()
@@ -1083,7 +1181,7 @@ router.post('/:orderId/payment', async(req, res) => {
             res.json({
                 success: true,
                 message: 'Payment processed successfully',
-                orderId,
+                orderId: publicId,
                 paymentStatus: 'paid'
             });
         } catch (error) {
@@ -1103,28 +1201,37 @@ router.post('/:orderId/qr-payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        // Get order details
-        const [orders] = await db.query(`
-            SELECT total_price FROM orders WHERE order_id = ?
-        `, [orderId]);
-
-        if (orders.length === 0) {
+        if (!internalId) {
             return res.status(404).json({ success: false, error: 'Order not found' });
         }
 
-        const qrCode = await qrService.generatePaymentQR(orderId, orders[0].total_price, paymentMethod);
+        // Get order details
+        let order = req.orderRecord;
+        if (!order) {
+            const [orders] = await db.query(`
+                SELECT * FROM orders WHERE order_id = ?
+            `, [internalId]);
+
+            if (orders.length === 0) {
+                return res.status(404).json({ success: false, error: 'Order not found' });
+            }
+            order = orders[0];
+        }
+
+        const qrCode = await qrService.generatePaymentQR(publicId, order.total_price, paymentMethod, order.table_number);
 
         // Update order with QR code
         await db.query(`
             UPDATE orders SET qr_code = ? WHERE order_id = ?
-        `, [qrCode.qrCode, orderId]);
+        `, [qrCode.qrCode, internalId]);
 
         res.json({
             success: true,
             qrCode: qrCode.qrCode,
             paymentUrl: qrCode.url,
-            orderId
+            orderId: publicId
         });
     } catch (error) {
         console.error('Error generating payment QR code:', error);
@@ -1136,8 +1243,16 @@ router.post('/:orderId/qr-payment', async(req, res) => {
 router.get('/:orderId/tracking-qr', async(req, res) => {
     try {
         const { orderId } = req.params;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        const qrCode = await qrService.generateOrderTrackingQR(orderId);
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+
+        const order = req.orderRecord || await findOrderByIdentifier(internalId);
+        const tableNumber = order && order.table_number ? order.table_number : null;
+
+        const qrCode = await qrService.generateOrderTrackingQR(publicId, tableNumber);
 
         res.json({
             success: true,
@@ -1155,6 +1270,11 @@ router.post('/:orderId/cancel', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { reason } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         const connection = await db.getConnection();
         await connection.beginTransaction();
@@ -1165,12 +1285,12 @@ router.post('/:orderId/cancel', async(req, res) => {
                 UPDATE orders 
                 SET status = 'cancelled', notes = ? 
                 WHERE order_id = ?
-            `, [reason, orderId]);
+            `, [reason, internalId]);
 
             // Restore inventory
             const [orders] = await connection.query(`
                 SELECT items FROM orders WHERE order_id = ?
-            `, [orderId]);
+            `, [internalId]);
 
             if (orders.length > 0) {
                 const items = JSON.parse(orders[0].items);
@@ -1190,7 +1310,7 @@ router.post('/:orderId/cancel', async(req, res) => {
                                 (ingredient_id, action, quantity_change, previous_quantity, new_quantity, reason, order_id) 
                                 SELECT id, 'add', ?, stock_quantity - ?, stock_quantity, 'Order cancellation', ? 
                                 FROM ingredients WHERE id = ?
-                            `, [ingredient.quantity || 1, ingredient.quantity || 1, orderId, ingredient.id]);
+                            `, [ingredient.quantity || 1, ingredient.quantity || 1, internalId, ingredient.id]);
                         }
                     }
                 }
@@ -1201,13 +1321,15 @@ router.post('/:orderId/cancel', async(req, res) => {
             // Emit cancellation update
             const io = req.app.get('io');
             if (io) {
-                io.to(`order-${orderId}`).emit('order-updated', {
-                    orderId,
+                io.to(`order-${publicId}`).emit('order-updated', {
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'cancelled',
                     timestamp: new Date()
                 });
                 io.to('staff-room').emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'cancelled',
                     timestamp: new Date()
                 });
@@ -1216,7 +1338,7 @@ router.post('/:orderId/cancel', async(req, res) => {
             res.json({
                 success: true,
                 message: 'Order cancelled successfully',
-                orderId
+                orderId: publicId
             });
         } catch (error) {
             await connection.rollback();
