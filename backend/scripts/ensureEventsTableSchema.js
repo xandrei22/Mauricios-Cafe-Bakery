@@ -8,12 +8,30 @@ async function ensureEventsTableSchema() {
     let connection;
     try {
         connection = await pool.getConnection();
-        console.log('🔍 Checking events table schema...');
+        console.log('🔍 [Migration] Checking events table schema...');
+
+        // Check if table exists first
+        try {
+            const [tableCheck] = await connection.query(`
+                SELECT COUNT(*) as count 
+                FROM information_schema.tables 
+                WHERE table_schema = DATABASE() 
+                AND table_name = 'events'
+            `);
+            
+            if (tableCheck[0].count === 0) {
+                console.error('❌ [Migration] Events table does not exist!');
+                return false;
+            }
+        } catch (checkError) {
+            console.error('❌ [Migration] Error checking if table exists:', checkError.message);
+            return false;
+        }
 
         // Check current table structure
         const [columns] = await connection.query('DESCRIBE events');
         const existingColumns = columns.map(c => c.Field.toLowerCase());
-        console.log('📋 Existing columns:', existingColumns.join(', '));
+        console.log('📋 [Migration] Existing columns:', existingColumns.join(', '));
 
         // Define columns we need
         const requiredColumns = [
@@ -35,14 +53,17 @@ async function ensureEventsTableSchema() {
         for (const col of requiredColumns) {
             if (!existingColumns.includes(col.name.toLowerCase())) {
                 try {
+                    console.log(`🔄 [Migration] Adding column: ${col.name}...`);
                     await connection.query(`ALTER TABLE events ADD COLUMN ${col.name} ${col.type}`);
-                    console.log(`✅ Added column: ${col.name}`);
+                    console.log(`✅ [Migration] Added column: ${col.name}`);
                     addedColumns++;
                 } catch (error) {
                     if (error.code === 'ER_DUP_FIELDNAME') {
-                        console.log(`⚠️ Column ${col.name} already exists`);
+                        console.log(`⚠️ [Migration] Column ${col.name} already exists`);
                     } else {
-                        console.error(`❌ Error adding column ${col.name}:`, error.message);
+                        console.error(`❌ [Migration] Error adding column ${col.name}:`, error.message);
+                        console.error(`   Error code: ${error.code}`);
+                        // Don't fail completely, continue with other columns
                     }
                 }
             }

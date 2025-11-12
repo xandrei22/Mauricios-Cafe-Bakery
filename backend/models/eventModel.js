@@ -14,10 +14,17 @@ async function getEventTableColumns() {
     try {
         const [columns] = await pool.query('DESCRIBE events');
         columnCache = columns.map(c => c.Field.toLowerCase());
+        console.log('📋 Events table columns found:', columnCache.length, 'columns');
         return columnCache;
     } catch (error) {
-        console.error('Error checking events table columns:', error);
-        // Return empty array if table doesn't exist
+        console.error('❌ Error checking events table columns:', error.message);
+        console.error('❌ Error code:', error.code);
+        // If table doesn't exist, return empty array
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            console.error('❌ Events table does not exist!');
+            return [];
+        }
+        // Return empty array to trigger migration
         return [];
     }
 }
@@ -106,7 +113,8 @@ async function ensureEventColumns() {
 // Create a new event
 async function createEvent({ customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups }) {
     try {
-        console.log('Attempting to insert event into database:', {
+        console.log('📝 [eventModel] Attempting to insert event into database');
+        console.log('📝 [eventModel] Event data:', {
             customer_id,
             customer_name,
             contact_name,
@@ -121,30 +129,37 @@ async function createEvent({ customer_id, customer_name, contact_name, contact_n
         });
 
         // Ensure required columns exist before inserting
+        console.log('🔍 [eventModel] Checking/ensuring event columns...');
         await ensureEventColumns();
+        console.log('✅ [eventModel] Column check complete');
         
         // Build the INSERT query with all required columns
         const query = `INSERT INTO events (customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`;
-        const params = [customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups];
+        const params = [customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes || null, cups];
         
+        console.log('📤 [eventModel] Executing INSERT query...');
         const [result] = await pool.query(query, params);
 
-        console.log('✅ Database insertion successful. Event ID:', result.insertId);
+        console.log('✅ [eventModel] Database insertion successful. Event ID:', result.insertId);
         return result.insertId;
     } catch (error) {
-        console.error('❌ Database error in createEvent:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        console.error('Error SQL state:', error.sqlState);
+        console.error('❌ [eventModel] Database error in createEvent:');
+        console.error('   Error code:', error.code);
+        console.error('   Error message:', error.message);
+        console.error('   Error SQL state:', error.sqlState);
+        console.error('   Full error:', error);
         
         // Provide more helpful error message
         if (error.code === 'ER_BAD_FIELD_ERROR') {
             const missingField = error.message.match(/Unknown column '([^']+)'/);
             if (missingField) {
-                throw new Error(`Database schema error: Column '${missingField[1]}' does not exist. The automatic migration may have failed. Please run: node scripts/fix-events-table.js`);
+                const errorMsg = `Database schema error: Column '${missingField[1]}' does not exist. The automatic migration may have failed.`;
+                console.error('❌', errorMsg);
+                throw new Error(errorMsg);
             }
         }
         
+        // Re-throw with more context
         throw error;
     }
 }

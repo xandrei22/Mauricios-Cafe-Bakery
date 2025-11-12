@@ -141,6 +141,7 @@ async function createEvent(req, res) {
         
         let eventId;
         try {
+            console.log('🔄 [Controller] Calling eventModel.createEvent...');
             eventId = await eventModel.createEvent({ 
                 customer_id: finalCustomerId, 
                 customer_name: finalCustomerName, 
@@ -151,43 +152,54 @@ async function createEvent(req, res) {
                 event_end_time,
                 address, 
                 event_type, 
-                notes, 
+                notes: notes || null, 
                 cups: cupsNum // Ensure it's a number
             });
-            console.log('✅ Event created successfully with ID:', eventId);
+            console.log('✅ [Controller] Event created successfully with ID:', eventId);
         } catch (dbError) {
-            console.error('❌ Database error creating event:', dbError);
-            console.error('❌ Database error code:', dbError.code);
-            console.error('❌ Database error message:', dbError.message);
-            console.error('❌ Database error stack:', dbError.stack);
+            console.error('❌ [Controller] Database error creating event:');
+            console.error('   Error type:', dbError.constructor.name);
+            console.error('   Error code:', dbError.code);
+            console.error('   Error message:', dbError.message);
+            console.error('   Error SQL state:', dbError.sqlState);
+            console.error('   Error stack:', dbError.stack);
             
             // Provide more helpful error message
             let errorMessage = 'Failed to create event. Please try again later.';
+            let errorDetails = {};
             
             // Check for schema errors
             if (dbError.code === 'ER_BAD_FIELD_ERROR') {
                 const missingField = dbError.message.match(/Unknown column '([^']+)'/);
                 if (missingField) {
                     errorMessage = `Database configuration error: The events table is missing required columns. Please contact the administrator.`;
-                    console.error(`❌ Missing column: ${missingField[1]}`);
-                    console.error('💡 Run migration: node scripts/fix-events-table.js');
+                    console.error(`❌ [Controller] Missing column: ${missingField[1]}`);
+                    console.error('💡 [Controller] Run migration: node scripts/fix-events-table.js');
+                    errorDetails = {
+                        code: dbError.code,
+                        missingColumn: missingField[1],
+                        hint: 'Run: node scripts/fix-events-table.js'
+                    };
                 } else {
                     errorMessage = 'Database configuration error. Please contact the administrator.';
+                    errorDetails = { code: dbError.code, message: dbError.message };
                 }
-            } else if (process.env.NODE_ENV === 'development') {
-                // In development, show more details
-                errorMessage = dbError.message || errorMessage;
+            } else {
+                // Include error details in development
+                errorDetails = {
+                    code: dbError.code,
+                    message: dbError.message,
+                    sqlState: dbError.sqlState
+                };
+                if (process.env.NODE_ENV === 'development') {
+                    errorMessage = dbError.message || errorMessage;
+                }
             }
             
             return res.status(500).json({ 
                 success: false, 
                 message: errorMessage,
-                error: process.env.NODE_ENV === 'development' ? {
-                    code: dbError.code,
-                    message: dbError.message,
-                    sqlState: dbError.sqlState,
-                    hint: dbError.code === 'ER_BAD_FIELD_ERROR' ? 'Run: node scripts/fix-events-table.js' : undefined
-                } : undefined
+                error: process.env.NODE_ENV === 'development' ? errorDetails : undefined
             });
         }
 
@@ -254,12 +266,20 @@ async function createEvent(req, res) {
             message: 'Event request submitted successfully. Admin has been notified.' 
         });
     } catch (err) {
-        console.error('❌ Error creating event:', err);
-        console.error('❌ Error stack:', err.stack);
+        console.error('❌ [Controller] Unexpected error in createEvent handler:');
+        console.error('   Error type:', err.constructor.name);
+        console.error('   Error message:', err.message);
+        console.error('   Error stack:', err.stack);
+        console.error('   Full error:', err);
+        
         res.status(500).json({ 
             success: false, 
             message: 'Server error. Please try again later.',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+            error: process.env.NODE_ENV === 'development' ? {
+                message: err.message,
+                type: err.constructor.name,
+                stack: err.stack
+            } : undefined
         });
     }
 }
