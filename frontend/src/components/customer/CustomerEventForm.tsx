@@ -474,14 +474,19 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={cups}
                 onChange={e => {
                   const value = e.target.value;
-                  // Only allow numbers and ensure minimum is 80
-                  if (value === '' || (Number(value) >= 80)) {
+                  // Allow typing freely - only allow numbers
+                  if (value === '' || /^\d+$/.test(value)) {
                     setCups(value);
-                  } else if (Number(value) < 80 && value !== '') {
-                    toast('Minimum 80 cups', { description: 'The minimum order is 80 cups.' });
                   }
                 }}
-                placeholder="Minimum: 80 cups"
+                onBlur={e => {
+                  // Validate on blur - show warning if less than 80
+                  const value = Number(e.target.value);
+                  if (e.target.value !== '' && value < 80) {
+                    toast('Minimum 80 cups', { description: 'The minimum order is 80 cups. Please enter at least 80.' });
+                  }
+                }}
+                placeholder="Enter number of cups (min: 80)"
                 required
                 className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />

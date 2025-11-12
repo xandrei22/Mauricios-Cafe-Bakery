@@ -54,6 +54,14 @@ const StaffRewardProcessing: React.FC = () => {
 
   const fetchPendingRedemptions = async () => {
     try {
+      // Check if user is authenticated before making request
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.warn('⚠️ Staff: No auth token found, skipping fetch pending redemptions');
+        setPendingRedemptions([]);
+        return;
+      }
+
       console.log('📋 Staff: Fetching pending redemptions from:', `${API_URL}/api/staff/reward-redemptions/pending`);
       const response = await axiosInstance.get(`${API_URL}/api/staff/reward-redemptions/pending`);
       
@@ -67,7 +75,12 @@ const StaffRewardProcessing: React.FC = () => {
         setPendingRedemptions([]);
       }
     } catch (error: any) {
-      console.error('❌ Staff: Error fetching pending redemptions:', error);
+      // Only log error if it's not a 401 (which we handle gracefully)
+      if (error.response?.status !== 401) {
+        console.error('❌ Staff: Error fetching pending redemptions:', error);
+      } else {
+        console.warn('⚠️ Staff: Authentication required for pending redemptions');
+      }
       setPendingRedemptions([]);
     }
   };
@@ -75,6 +88,13 @@ const StaffRewardProcessing: React.FC = () => {
   const searchByClaimCode = async () => {
     if (!claimCode.trim()) {
       setError('Please enter a claim code');
+      return;
+    }
+
+    // Check if user is authenticated
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Authentication required. Please log in again.');
       return;
     }
 
@@ -93,7 +113,11 @@ const StaffRewardProcessing: React.FC = () => {
         setError(response.data.error || 'Redemption not found');
       }
     } catch (error: any) {
-      setError(error.response?.data?.error || 'Failed to search redemption');
+      if (error.response?.status === 401) {
+        setError('Authentication required. Please log in again.');
+      } else {
+        setError(error.response?.data?.error || 'Failed to search redemption');
+      }
     } finally {
       setLoading(false);
     }
