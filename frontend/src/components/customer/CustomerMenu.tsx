@@ -469,7 +469,7 @@ const CustomerMenu: React.FC = () => {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 mb-8">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardContent className="p-6 text-center">
             <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
@@ -536,7 +536,7 @@ const CustomerMenu: React.FC = () => {
                 
                 {/* Items Display - Grid or List View */}
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 mx-4 sm:mx-6 lg:mx-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
                     {items.map((item) => (
                       <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[380px] flex flex-col border-l-2 border-r-2 border-[#a87437]/30">
                         <CardContent className="p-0 flex flex-col h-full">
