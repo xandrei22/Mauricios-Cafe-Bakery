@@ -264,9 +264,12 @@ axiosInstance.interceptors.response.use(
     if (status === 401) {
       console.warn('⚠️ 401 Unauthorized', requestUrl);
 
-      // Do not auto-logout on session check
+      // Do not auto-logout on session check or reward redemption endpoints
+      // Reward redemption endpoints use optionalJWT middleware and may return 401 without meaning logout
       const isSessionCheck = requestUrl.includes('/check-session');
-      if (!isSessionCheck) {
+      const isRewardRedemption = requestUrl.includes('/reward-redemptions');
+      
+      if (!isSessionCheck && !isRewardRedemption) {
         // Clear local storage
         ['authToken', 'adminUser', 'staffUser', 'customerUser', 'loginTimestamp']
           .forEach(key => localStorage.removeItem(key));
