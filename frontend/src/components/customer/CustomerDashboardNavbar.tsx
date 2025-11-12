@@ -161,6 +161,17 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
       fetchCustomerEvents();
     });
 
+    // Listen for new notifications (for event status updates)
+    newSocket.on('new-notification', (notificationData) => {
+      console.log('New notification received in CustomerDashboardNavbar:', notificationData);
+      // Only process if it's for this customer
+      if (notificationData.user_type === 'customer' && 
+          (notificationData.user_id === customer_id || !notificationData.user_id)) {
+        // Refresh events to get updated status
+        fetchCustomerEvents();
+      }
+    });
+
     fetchCustomerEvents();
 
     return () => {

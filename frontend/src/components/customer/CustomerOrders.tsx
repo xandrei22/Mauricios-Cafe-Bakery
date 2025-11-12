@@ -10,11 +10,9 @@ const CLIENT_PROFANITY_WORDS: string[] = [
   // Minimal built-in list for client-side UX only; server enforces full list
   'ass', 'bastard', 'bitch', 'bloody', 'bollocks', 'crap', 'cunt',
   'damn', 'dick', 'fuck', 'fucking', 'motherfucker', 'piss', 'prick',
-  'shit', 'slut', 'twat', 'whore', 'pakyu', 'putangina mo', "bobo", "bobo ka"
+  'shit', 'slut', 'twat', 'whore',
   // Add some Spanish/Tagalog commonly encountered words
-  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo'
-  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo ka mo'
-  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo', 'bobo ka mo', 'bobo ka mo'
+  'puta', 'putangina', 'gago', 'ulol', 'punyeta', 'pakyu', 'putangina mo', 'bobo', 'bobo ka', 'bobo mo'
 ];
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
