@@ -14,6 +14,8 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface RewardRedemption {
   id: number;
@@ -39,7 +41,7 @@ const StaffRewardProcessing: React.FC = () => {
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>([]);
   const [activeTab, setActiveTab] = useState('search');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     fetchPendingRedemptions();
@@ -53,27 +55,18 @@ const StaffRewardProcessing: React.FC = () => {
   const fetchPendingRedemptions = async () => {
     try {
       console.log('📋 Staff: Fetching pending redemptions from:', `${API_URL}/api/staff/reward-redemptions/pending`);
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/pending`, {
-        credentials: 'omit'
-      });
+      const response = await axiosInstance.get(`${API_URL}/api/staff/reward-redemptions/pending`);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📋 Staff: Received redemptions:', data);
-        if (data.success) {
-          const redemptions = data.redemptions || [];
-          console.log(`✅ Staff: Found ${redemptions.length} pending redemptions`);
-          setPendingRedemptions(redemptions);
-        } else {
-          console.error('❌ Staff: API returned success:false', data.error);
-          setPendingRedemptions([]);
-        }
+      console.log('📋 Staff: Received redemptions:', response.data);
+      if (response.data.success) {
+        const redemptions = response.data.redemptions || [];
+        console.log(`✅ Staff: Found ${redemptions.length} pending redemptions`);
+        setPendingRedemptions(redemptions);
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ Staff: Failed to fetch pending redemptions:', response.status, errorData);
+        console.error('❌ Staff: API returned success:false', response.data.error);
         setPendingRedemptions([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Staff: Error fetching pending redemptions:', error);
       setPendingRedemptions([]);
     }
@@ -92,23 +85,15 @@ const StaffRewardProcessing: React.FC = () => {
     try {
       // Convert to uppercase to match database (claim codes are stored in uppercase)
       const upperCaseCode = claimCode.toUpperCase();
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/search/${upperCaseCode}`, {
-        credentials: 'omit'
-      });
+      const response = await axiosInstance.get(`${API_URL}/api/staff/reward-redemptions/search/${upperCaseCode}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setRedemption(data.redemption);
-        } else {
-          setError(data.error || 'Redemption not found');
-        }
+      if (response.data.success) {
+        setRedemption(response.data.redemption);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to search redemption');
+        setError(response.data.error || 'Redemption not found');
       }
-    } catch (error) {
-      setError('Failed to search redemption');
+    } catch (error: any) {
+      setError(error.response?.data?.error || 'Failed to search redemption');
     } finally {
       setLoading(false);
     }
@@ -119,31 +104,19 @@ const StaffRewardProcessing: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/${redemptionId}/${action}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit'
-      });
+      const response = await axiosInstance.post(`${API_URL}/api/staff/reward-redemptions/${redemptionId}/${action}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSuccess(`Reward ${action === 'complete' ? 'completed' : 'cancelled'} successfully!`);
-          setRedemption(null);
-          setClaimCode('');
-          fetchPendingRedemptions();
-          setTimeout(() => setSuccess(null), 3000);
-        } else {
-          setError(data.error || `Failed to ${action} redemption`);
-        }
+      if (response.data.success) {
+        setSuccess(`Reward ${action === 'complete' ? 'completed' : 'cancelled'} successfully!`);
+        setRedemption(null);
+        setClaimCode('');
+        fetchPendingRedemptions();
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || `Failed to ${action} redemption`);
+        setError(response.data.error || `Failed to ${action} redemption`);
       }
-    } catch (error) {
-      setError(`Failed to ${action} redemption`);
+    } catch (error: any) {
+      setError(error.response?.data?.error || `Failed to ${action} redemption`);
     } finally {
       setLoading(false);
     }

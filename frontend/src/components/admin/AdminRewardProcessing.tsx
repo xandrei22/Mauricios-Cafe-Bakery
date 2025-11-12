@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../customer/AuthContext';
 import {
   Tabs,
   TabsContent,
@@ -35,6 +34,8 @@ import {
   // CircleDot
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface ClaimedReward {
   id: number;
@@ -116,12 +117,11 @@ const CountdownTimer: React.FC<{ expiryDate: string }> = ({ expiryDate }) => {
 };
 
 const AdminRewardProcessing: React.FC = () => {
-  const { user } = useAuth();
+  const API_URL = getApiUrl();
   const [claimedRewards, setClaimedRewards] = useState<ClaimedReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingRewardId, setProcessingRewardId] = useState<number | null>(null);
-  const [staffId, setStaffId] = useState<number | null>(null);
   const [redemptionProof, setRedemptionProof] = useState<string>('');
   const [activeTab, setActiveTab] = useState('pending');
   const [stats, setStats] = useState<LoyaltyStats | null>(null);
@@ -134,31 +134,19 @@ const AdminRewardProcessing: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
       // Prefer admin redemptions API (supports filtering and consistent fields)
       const params = new URLSearchParams();
       if (activeTab === 'pending') params.set('status', 'pending');
       if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
       if (activeTab === 'cancelled') params.set('status', 'cancelled');
       if (activeTab === 'expired') params.set('status', 'expired');
-      const url = `/api/admin/loyalty/redemptions?${params.toString()}`;
+      const url = `${API_URL}/api/admin/loyalty/redemptions?${params.toString()}`;
       console.log('📋 Admin: Fetching redemptions from:', url);
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ Admin: HTTP error:', response.status, errorData);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log('📋 Admin: Received response:', data);
-      if (data.success) {
+      const response = await axiosInstance.get(url);
+      console.log('📋 Admin: Received response:', response.data);
+      if (response.data.success) {
         // Normalize fields so the table renders regardless of source names
-        const normalized: ClaimedReward[] = (data.redemptions || []).map((r: any) => ({
+        const normalized: ClaimedReward[] = (response.data.redemptions || []).map((r: any) => ({
           id: r.id,
           customer_id: r.customer_id,
           customer_name: r.customer_name,
@@ -180,53 +168,40 @@ const AdminRewardProcessing: React.FC = () => {
         console.log(`✅ Admin: Found ${normalized.length} redemptions for tab: ${activeTab}`);
         setClaimedRewards(normalized);
       } else {
-        console.error('❌ Admin: API returned success:false', data.error);
-        setError(data.error || 'Failed to fetch claimed rewards');
+        console.error('❌ Admin: API returned success:false', response.data.error);
+        setError(response.data.error || 'Failed to fetch claimed rewards');
       }
     } catch (err: any) {
       console.error('❌ Admin: Error fetching claimed rewards:', err);
-      setError(err.message || 'An unexpected error occurred');
+      setError(err.response?.data?.error || err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, API_URL]);
 
   const fetchLoyaltyStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/loyalty/statistics', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.stats);
+      const response = await axiosInstance.get(`${API_URL}/api/admin/loyalty/statistics`);
+      if (response.data.success) {
+        setStats(response.data.stats);
       } else {
-        console.error('Failed to fetch loyalty stats:', data.error);
+        console.error('Failed to fetch loyalty stats:', response.data.error);
       }
     } catch (err) {
       console.error('Error fetching loyalty stats:', err);
     }
-  }, []);
+  }, [API_URL]);
 
   useEffect(() => {
     fetchClaimedRewards();
     fetchLoyaltyStats();
-    // Set staffId from localStorage or default to 9 for testing
-    const storedStaffId = localStorage.getItem('staffId');
-    setStaffId(storedStaffId ? parseInt(storedStaffId) : (user?.id || 9)); // Fallback to 9 if user.id is not available
     
     // Auto-refresh every 10 seconds to catch new redemptions
     const interval = setInterval(() => {
       fetchClaimedRewards();
     }, 10000);
     return () => clearInterval(interval);
-  }, [fetchClaimedRewards, fetchLoyaltyStats, user?.id]);
+  }, [fetchClaimedRewards, fetchLoyaltyStats]);
 
   const searchByClaimCode = async () => {
     if (!claimCode.trim()) {
@@ -239,57 +214,40 @@ const AdminRewardProcessing: React.FC = () => {
     setSearchResult(null);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await axiosInstance.get(`${API_URL}/api/admin/loyalty/redemptions/search/${claimCode.toUpperCase()}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Normalize the redemption data to match ClaimedReward interface
-          const normalized: ClaimedReward = {
-            id: data.redemption.id,
-            customer_id: data.redemption.customer_id,
-            customer_name: data.redemption.customer_name,
-            customer_email: data.redemption.customer_email,
-            reward_id: data.redemption.reward_id,
-            reward_name: data.redemption.reward_name,
-            reward_type: data.redemption.reward_type,
-            description: data.redemption.reward_description || '',
-            points_cost: data.redemption.points_required || data.redemption.points_redeemed,
-            points_required: data.redemption.points_required,
-            redemption_date: data.redemption.redemption_date || data.redemption.created_at || null,
-            expires_at: data.redemption.expires_at,
-            status: data.redemption.status,
-            staff_id: data.redemption.staff_id || null,
-            redemption_proof: data.redemption.redemption_proof || null,
-            order_id: data.redemption.order_id || null,
-          };
-          setSearchResult(normalized);
-        } else {
-          setSearchError(data.error || 'Redemption not found');
-        }
+      if (response.data.success) {
+        // Normalize the redemption data to match ClaimedReward interface
+        const normalized: ClaimedReward = {
+          id: response.data.redemption.id,
+          customer_id: response.data.redemption.customer_id,
+          customer_name: response.data.redemption.customer_name,
+          customer_email: response.data.redemption.customer_email,
+          reward_id: response.data.redemption.reward_id,
+          reward_name: response.data.redemption.reward_name,
+          reward_type: response.data.redemption.reward_type,
+          description: response.data.redemption.reward_description || '',
+          points_cost: response.data.redemption.points_required || response.data.redemption.points_redeemed,
+          points_required: response.data.redemption.points_required,
+          redemption_date: response.data.redemption.redemption_date || response.data.redemption.created_at || null,
+          expires_at: response.data.redemption.expires_at,
+          status: response.data.redemption.status,
+          staff_id: response.data.redemption.staff_id || null,
+          redemption_proof: response.data.redemption.redemption_proof || null,
+          order_id: response.data.redemption.order_id || null,
+        };
+        setSearchResult(normalized);
       } else {
-        const errorData = await response.json();
-        setSearchError(errorData.error || 'Failed to search redemption');
+        setSearchError(response.data.error || 'Redemption not found');
       }
-    } catch (error) {
-      setSearchError('Failed to search redemption');
+    } catch (error: any) {
+      setSearchError(error.response?.data?.error || 'Failed to search redemption');
     } finally {
       setSearchLoading(false);
     }
   };
 
   const processReward = async (rewardId: number, status: 'processed' | 'cancelled') => {
-    if (!staffId) {
-      Swal.fire('Error', 'Staff ID not available. Please log in as staff.', 'error');
-      return;
-    }
-
     if (status === 'processed' && !redemptionProof.trim()) {
       Swal.fire('Error', 'Redemption proof is required to process the reward.', 'error');
       return;
@@ -297,35 +255,24 @@ const AdminRewardProcessing: React.FC = () => {
 
     setProcessingRewardId(rewardId);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/loyalty/redemptions/${rewardId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          adminId: user?.id,
-          status: status === 'processed' ? 'completed' : 'cancelled',
-          notes: status === 'processed' ? (redemptionProof.trim() || 'Processed by admin') : 'Cancelled by admin',
-        }),
+      const response = await axiosInstance.put(`${API_URL}/api/admin/loyalty/redemptions/${rewardId}/status`, {
+        status: status === 'processed' ? 'completed' : 'cancelled',
+        notes: status === 'processed' ? (redemptionProof.trim() || 'Processed by admin') : 'Cancelled by admin',
       });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || `Failed to ${status} reward`);
+      if (response.data.success) {
+        Swal.fire('Success', `Reward ${status} successfully!`, 'success');
+        setRedemptionProof('');
+        setSearchResult(null);
+        setClaimCode('');
+        fetchClaimedRewards(); // Refresh the list
+        fetchLoyaltyStats(); // Refresh stats
+      } else {
+        throw new Error(response.data.error || `Failed to ${status} reward`);
       }
-
-      Swal.fire('Success', `Reward ${status} successfully!`, 'success');
-      setRedemptionProof('');
-      setSearchResult(null);
-      setClaimCode('');
-      fetchClaimedRewards(); // Refresh the list
-      fetchLoyaltyStats(); // Refresh stats
     } catch (err: any) {
       console.error(`Error ${status} reward:`, err);
-      Swal.fire('Error', err.message || `Failed to ${status} reward.`, 'error');
+      Swal.fire('Error', err.response?.data?.error || err.message || `Failed to ${status} reward.`, 'error');
     } finally {
       setProcessingRewardId(null);
     }
