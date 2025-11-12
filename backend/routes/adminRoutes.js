@@ -2392,6 +2392,8 @@ router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
             FROM loyalty_reward_redemptions lrr
             ${whereClause}
         `, params);
+        
+        console.log(`📊 Admin redemptions count query: ${whereClause}, params:`, params, `total: ${countResult[0].total}`);
 
         // Get redemptions with full details
         const [redemptions] = await db.query(`
@@ -2416,6 +2418,16 @@ router.get('/loyalty/redemptions', authenticateJWT, async(req, res) => {
             ORDER BY lrr.redemption_date DESC
             LIMIT ? OFFSET ?
         `, [...params, parseInt(limit), offset]);
+
+        console.log(`📋 Admin redemptions query: status=${status || 'all'}, found ${redemptions.length} redemptions`);
+        if (redemptions.length > 0) {
+            console.log('   Sample redemption:', {
+                id: redemptions[0].id,
+                claim_code: redemptions[0].claim_code,
+                status: redemptions[0].status,
+                customer_name: redemptions[0].customer_name
+            });
+        }
 
         res.json({
             success: true,
@@ -2541,7 +2553,7 @@ router.get('/loyalty/redemptions/search/:claimCode', authenticateJWT, async(req,
             JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
             LEFT JOIN users u ON lrr.staff_id = u.id
             LEFT JOIN orders o ON lrr.order_id = o.order_id
-            WHERE lrr.claim_code = ?
+            WHERE UPPER(lrr.claim_code) = UPPER(?)
         `, [claimCode]);
 
         if (redemptions.length === 0) {

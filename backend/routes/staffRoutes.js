@@ -2761,7 +2761,7 @@ router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
             FROM loyalty_reward_redemptions lrr
             JOIN customers c ON lrr.customer_id = c.id
             JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
-            WHERE lrr.claim_code = ?
+            WHERE UPPER(lrr.claim_code) = UPPER(?)
         `, [claimCode]);
         if (!rows || rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Redemption not found' });
@@ -2775,6 +2775,12 @@ router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
 
 router.get('/reward-redemptions/pending', async(req, res) => {
     try {
+        // First, check total pending count for debugging
+        const [countResult] = await db.query(`
+            SELECT COUNT(*) as total FROM loyalty_reward_redemptions WHERE status = 'pending'
+        `);
+        console.log(`📊 Total pending redemptions in database: ${countResult[0].total}`);
+        
         const [rows] = await db.query(`
             SELECT 
                 lrr.id,
@@ -2785,6 +2791,7 @@ router.get('/reward-redemptions/pending', async(req, res) => {
                 lrr.redemption_date,
                 lrr.status,
                 lrr.expires_at,
+                lrr.order_id,
                 c.full_name as customer_name,
                 c.email as customer_email,
                 lr.name as reward_name,
@@ -2795,9 +2802,19 @@ router.get('/reward-redemptions/pending', async(req, res) => {
             WHERE lrr.status = 'pending'
             ORDER BY lrr.redemption_date DESC
         `);
+        console.log(`📋 Staff pending redemptions query: Found ${rows.length} pending redemptions`);
+        if (rows.length > 0) {
+            console.log('   Sample redemption:', {
+                id: rows[0].id,
+                claim_code: rows[0].claim_code,
+                customer_name: rows[0].customer_name,
+                reward_name: rows[0].reward_name,
+                order_id: rows[0].order_id
+            });
+        }
         return res.json({ success: true, redemptions: rows });
     } catch (err) {
-        console.error('Staff pending redemptions error:', err && err.message ? err.message : err);
+        console.error('❌ Staff pending redemptions error:', err && err.message ? err.message : err);
         return res.status(500).json({ success: false, error: 'Failed to fetch pending redemptions' });
     }
 });

@@ -293,13 +293,46 @@ router.post('/redeem-reward', async(req, res) => {
         // Note: The database should allow NULL for order_id (see fix-redemption-order-id-null.sql)
         const effectiveOrderId = orderId || null;
 
-        const [redemptionResult] = await db.query(`
-            INSERT INTO loyalty_reward_redemptions 
-            (customer_id, reward_id, order_id, points_redeemed, redemption_proof, staff_id, status, expires_at, claim_code) 
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-        `, [customerId, rewardId, effectiveOrderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
+        let redemptionId;
+        try {
+            const [redemptionResult] = await db.query(`
+                INSERT INTO loyalty_reward_redemptions 
+                (customer_id, reward_id, order_id, points_redeemed, redemption_proof, staff_id, status, expires_at, claim_code) 
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            `, [customerId, rewardId, effectiveOrderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
 
-        const redemptionId = redemptionResult.insertId;
+            redemptionId = redemptionResult.insertId;
+            console.log('✅ Redemption created successfully:', {
+                redemptionId,
+                claimCode,
+                customerId,
+                rewardId,
+                orderId: effectiveOrderId
+            });
+        } catch (insertError) {
+            console.error('❌ Failed to insert redemption:', insertError);
+            console.error('   Error code:', insertError.code);
+            console.error('   Error message:', insertError.message);
+            console.error('   SQL state:', insertError.sqlState);
+            console.error('   Attempted values:', {
+                customerId,
+                rewardId,
+                orderId: effectiveOrderId,
+                points_redeemed: reward.points_required,
+                claimCode
+            });
+            
+            // Check if it's a NOT NULL constraint error
+            if (insertError.code === 'ER_BAD_NULL_ERROR' || insertError.message?.includes('NULL')) {
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Database configuration error: order_id cannot be NULL. Please run the database migration script (fix-redemption-order-id.js) to allow NULL order_id values.',
+                    details: insertError.message
+                });
+            }
+            
+            throw insertError; // Re-throw to be caught by outer catch
+        }
 
         // Deduct points from effective balance to keep DB in sync
         const newBalance = Math.max(0, currentPoints - reward.points_required);

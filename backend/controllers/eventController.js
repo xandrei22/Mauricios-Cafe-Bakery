@@ -68,11 +68,28 @@ async function createEvent(req, res) {
         
         // Validate and clean contact number format (Philippine mobile format)
         const cleanedContactNumber = String(contact_number || '').replace(/[\s\-\(\)\+]/g, '');
-        const phMobileRegex = /^(09|\+639)\d{9}$/;
-        const phMobileRegexAlt = /^0\d{10}$/;
-        if (!phMobileRegex.test(cleanedContactNumber) && !phMobileRegexAlt.test(cleanedContactNumber)) {
-            console.log('❌ Validation failed - invalid contact number format:', contact_number);
-            return res.status(400).json({ success: false, message: 'Please enter a valid Philippine mobile number (e.g., 09123456789 or 09214733335).' });
+        console.log('🔍 Contact number validation:', {
+            original: contact_number,
+            cleaned: cleanedContactNumber,
+            length: cleanedContactNumber.length
+        });
+        
+        // Must be 11 digits starting with 09 or 0
+        if (cleanedContactNumber.length !== 11) {
+            console.log('❌ Validation failed - contact number length:', cleanedContactNumber.length, 'Expected: 11');
+            return res.status(400).json({ 
+                success: false, 
+                message: `Contact number must be 11 digits. You entered ${cleanedContactNumber.length} digits. Please use format: 09XXXXXXXXX or 0XXXXXXXXXX.` 
+            });
+        }
+        
+        const phMobileRegex = /^(09|0)\d{9}$/; // 11 digits: 09XXXXXXXXX or 0XXXXXXXXXX
+        if (!phMobileRegex.test(cleanedContactNumber)) {
+            console.log('❌ Validation failed - invalid contact number format:', contact_number, 'Cleaned:', cleanedContactNumber);
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Please enter a valid Philippine mobile number starting with 09 or 0 (11 digits total). Example: 09123456789 or 09214733335.' 
+            });
         }
 
         console.log('✅ Validation passed, creating event in database...');
@@ -101,62 +118,68 @@ async function createEvent(req, res) {
             });
         }
 
-        // Create notification for new event request
+        // Create notification for new event request (don't fail if notification fails)
         try {
+            console.log('📢 Creating notification for event request:', eventId);
             await notificationService.notifyEventRequest({
                 id: eventId,
                 event_date: event_date,
-                cups: cups,
+                cups: cupsNum,
                 customer_name: customer_name,
-                contact_number: contact_number
+                contact_number: cleanedContactNumber
             });
+            console.log('✅ Notification created successfully');
         } catch (notificationError) {
-            console.error('Failed to create event request notification:', notificationError);
+            console.error('⚠️ Failed to create event request notification (non-critical):', notificationError);
+            // Don't fail the request if notification fails - event is already created
         }
 
         // Emit real-time update for new event
         const io = req.app.get('io');
         if (io) {
-            console.log('📡 Emitting event-updated to admin-room for new event:', eventId);
+            console.log('📡 Emitting Socket.IO events for new event:', eventId);
             
-            // Notify admin room specifically
-            io.to('admin-room').emit('event-updated', {
+            const eventData = {
                 type: 'event_created',
                 eventId,
                 customer_name,
                 event_type,
                 event_date,
-                cups,
-                timestamp: new Date()
-            });
+                cups: cupsNum,
+                timestamp: new Date().toISOString()
+            };
             
-            // Also emit new-notification event for admins
-            console.log('📡 Emitting new-notification to admin-room for new event:', eventId);
-            io.to('admin-room').emit('new-notification', {
+            // Notify admin room specifically (most important)
+            console.log('📡 Emitting to admin-room...');
+            io.to('admin-room').emit('event-updated', eventData);
+            
+            // Also emit new-notification event for admins (for notification system)
+            const notificationData = {
                 notification_type: 'event_request',
                 title: 'New Event Request',
-                message: `New event request for ${event_date} - ${cups} cups from ${customer_name}`,
+                message: `New event request for ${event_date} - ${cupsNum} cups from ${customer_name}`,
                 priority: 'high',
-                timestamp: new Date()
-            });
+                eventId: eventId,
+                timestamp: new Date().toISOString()
+            };
+            console.log('📡 Emitting new-notification to admin-room...');
+            io.to('admin-room').emit('new-notification', notificationData);
             
             // Broadcast to all (for admin dashboard updates)
-            io.emit('event-updated', {
-                type: 'event_created',
-                eventId,
-                customer_name,
-                event_type,
-                event_date,
-                cups,
-                timestamp: new Date()
-            });
+            console.log('📡 Broadcasting event-updated to all clients...');
+            io.emit('event-updated', eventData);
             
-            console.log('✅ Socket.IO events emitted successfully');
+            console.log('✅ All Socket.IO events emitted successfully');
         } else {
-            console.error('❌ Socket.IO instance not available');
+            console.error('❌ Socket.IO instance not available - notifications may not be delivered in real-time');
         }
 
-        res.status(201).json({ success: true, eventId, message: 'Event request submitted successfully.' });
+        console.log('✅ Sending success response to client. Event ID:', eventId);
+        res.status(201).json({ 
+            success: true, 
+            eventId: eventId,
+            message: 'Event request submitted successfully. Admin has been notified.' 
+        });
     } catch (err) {
         console.error('❌ Error creating event:', err);
         console.error('❌ Error stack:', err.stack);
