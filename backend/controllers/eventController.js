@@ -5,9 +5,20 @@ const notificationService = require('../services/notificationService');
 // Customer: Create event
 async function createEvent(req, res) {
     try {
-        console.log('📥 Event creation request received');
-        console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
-        console.log('📥 Request headers:', req.headers);
+        console.log('📥 [Controller] ========== EVENT CREATION REQUEST ==========');
+        console.log('📥 [Controller] Event creation request received');
+        console.log('📥 [Controller] Request method:', req.method);
+        console.log('📥 [Controller] Request URL:', req.url);
+        console.log('📥 [Controller] Request body:', JSON.stringify(req.body, null, 2));
+        console.log('📥 [Controller] Request headers:', {
+            authorization: req.headers.authorization ? 'Present' : 'Missing',
+            'content-type': req.headers['content-type']
+        });
+        console.log('📥 [Controller] Authenticated user:', req.user ? {
+            id: req.user.id,
+            email: req.user.email,
+            role: req.user.role
+        } : 'Not authenticated');
         
         const { 
             customer_id, 
@@ -134,27 +145,40 @@ async function createEvent(req, res) {
             }
         }
         
-        console.log('📝 Final event data:', {
-            customer_id: finalCustomerId,
-            customer_name: finalCustomerName
-        });
+        // Ensure all required fields are not undefined
+        const finalEventData = {
+            customer_id: finalCustomerId || null,
+            customer_name: finalCustomerName || 'Unknown Customer',
+            contact_name: contact_name || finalCustomerName || 'Unknown',
+            contact_number: cleanedContactNumber,
+            event_date: event_date,
+            event_start_time: event_start_time,
+            event_end_time: event_end_time,
+            address: address,
+            event_type: event_type,
+            notes: notes || null,
+            cups: cupsNum
+        };
+        
+        console.log('📝 Final event data to insert:', finalEventData);
+        
+        // Validate no critical fields are missing
+        if (!finalEventData.event_date || !finalEventData.event_start_time || !finalEventData.event_end_time) {
+            console.error('❌ Critical fields missing:', {
+                event_date: finalEventData.event_date,
+                event_start_time: finalEventData.event_start_time,
+                event_end_time: finalEventData.event_end_time
+            });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Missing required event date or time fields.' 
+            });
+        }
         
         let eventId;
         try {
             console.log('🔄 [Controller] Calling eventModel.createEvent...');
-            eventId = await eventModel.createEvent({ 
-                customer_id: finalCustomerId, 
-                customer_name: finalCustomerName, 
-                contact_name,
-                contact_number: cleanedContactNumber, // Use cleaned contact number
-                event_date, 
-                event_start_time,
-                event_end_time,
-                address, 
-                event_type, 
-                notes: notes || null, 
-                cups: cupsNum // Ensure it's a number
-            });
+            eventId = await eventModel.createEvent(finalEventData);
             console.log('✅ [Controller] Event created successfully with ID:', eventId);
         } catch (dbError) {
             console.error('❌ [Controller] Database error creating event:');
@@ -210,12 +234,16 @@ async function createEvent(req, res) {
                 id: eventId,
                 event_date: event_date,
                 cups: cupsNum,
-                customer_name: customer_name,
+                customer_name: finalCustomerName,
                 contact_number: cleanedContactNumber
             });
             console.log('✅ Notification created successfully');
         } catch (notificationError) {
             console.error('⚠️ Failed to create event request notification (non-critical):', notificationError);
+            console.error('⚠️ Notification error details:', {
+                message: notificationError.message,
+                stack: notificationError.stack
+            });
             // Don't fail the request if notification fails - event is already created
         }
 
@@ -227,7 +255,7 @@ async function createEvent(req, res) {
             const eventData = {
                 type: 'event_created',
                 eventId,
-                customer_name,
+                customer_name: finalCustomerName,
                 event_type,
                 event_date,
                 cups: cupsNum,
@@ -242,7 +270,7 @@ async function createEvent(req, res) {
             const notificationData = {
                 notification_type: 'event_request',
                 title: 'New Event Request',
-                message: `New event request for ${event_date} - ${cupsNum} cups from ${customer_name}`,
+                message: `New event request for ${event_date} - ${cupsNum} cups from ${finalCustomerName}`,
                 priority: 'high',
                 eventId: eventId,
                 timestamp: new Date().toISOString()

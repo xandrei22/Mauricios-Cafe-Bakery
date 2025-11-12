@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 // Note: ensureAdminAuthenticated removed - all routes now use authenticateJWT (JWT-only)
-const { authenticateJWT } = require('../middleware/jwtAuth');
+const { authenticateJWT, optionalJWT } = require('../middleware/jwtAuth');
 const { login, checkSession, logout, createStaff, editStaff, getAllStaff, countStaff, countAdmins, deleteStaff, getRevenueMetrics, getOrderMetrics, getInventoryMetrics, forgotPassword, resetPassword } = require('../controllers/adminController');
 const ActivityLogger = require('../utils/activityLogger');
 const AdminInventoryService = require('../services/adminInventoryService');
@@ -2366,9 +2366,9 @@ router.post('/loyalty/customers/:customerId/adjust', authenticateJWT, async(req,
 });
 
 // NEW: Get all loyalty reward redemptions (admin only) - requires authentication
-router.get('/loyalty/redemptions', async(req, res) => {
+router.get('/loyalty/redemptions', optionalJWT, async(req, res) => {
     try {
-        // Check for JWT authentication first, then fall back to session
+        // Check for JWT authentication first (set by optionalJWT), then fall back to session
         const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
         if (!isAuthenticated) {
             return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -2556,9 +2556,9 @@ router.get('/loyalty/redemptions/:redemptionId', authenticateJWT, async(req, res
 });
 
 // NEW: Search redemption by claim code (admin only) - requires authentication
-router.get('/loyalty/redemptions/search/:claimCode', async(req, res) => {
+router.get('/loyalty/redemptions/search/:claimCode', optionalJWT, async(req, res) => {
     try {
-        // Check for JWT authentication first, then fall back to session
+        // Check for JWT authentication first (set by optionalJWT), then fall back to session
         const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
         if (!isAuthenticated) {
             return res.status(401).json({ success: false, error: 'Authentication required' });
@@ -2605,9 +2605,9 @@ router.get('/loyalty/redemptions/search/:claimCode', async(req, res) => {
 });
 
 // NEW: Update redemption status (admin only) - requires authentication
-router.put('/loyalty/redemptions/:redemptionId/status', async(req, res) => {
+router.put('/loyalty/redemptions/:redemptionId/status', optionalJWT, async(req, res) => {
     try {
-        // Check for JWT authentication first, then fall back to session
+        // Check for JWT authentication first (set by optionalJWT), then fall back to session
         const isAuthenticated = req.user || (req.session && (req.session.adminUser || req.session.admin));
         if (!isAuthenticated) {
             return res.status(401).json({ success: false, error: 'Authentication required' });

@@ -130,14 +130,22 @@ async function createEvent({ customer_id, customer_name, contact_name, contact_n
 
         // Ensure required columns exist before inserting
         console.log('🔍 [eventModel] Checking/ensuring event columns...');
-        await ensureEventColumns();
-        console.log('✅ [eventModel] Column check complete');
+        try {
+            await ensureEventColumns();
+            console.log('✅ [eventModel] Column check complete');
+        } catch (migrationErr) {
+            console.error('❌ [eventModel] Column migration failed:', migrationErr);
+            // Don't throw here - let the INSERT attempt happen and catch the actual error
+            console.log('⚠️ [eventModel] Continuing with INSERT attempt despite migration warning...');
+        }
         
         // Build the INSERT query with all required columns
         const query = `INSERT INTO events (customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes, cups, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())`;
         const params = [customer_id, customer_name, contact_name, contact_number, event_date, event_start_time, event_end_time, address, event_type, notes || null, cups];
         
         console.log('📤 [eventModel] Executing INSERT query...');
+        console.log('📤 [eventModel] Query params:', params.map((p, i) => `${i}: ${p} (${typeof p})`).join(', '));
+        
         const [result] = await pool.query(query, params);
 
         console.log('✅ [eventModel] Database insertion successful. Event ID:', result.insertId);
