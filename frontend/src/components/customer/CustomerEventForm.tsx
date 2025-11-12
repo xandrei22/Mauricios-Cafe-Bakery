@@ -61,8 +61,18 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   // Fetch user's event requests
   const fetchUserEvents = async () => {
     try {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, {
-        credentials: 'omit'
+        credentials: 'omit',
+        headers: headers
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -257,13 +267,25 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     console.log('📤 Submitting event form with data:', formData);
     console.log('📡 API URL:', `${API_URL}/api/events`);
     
+    // Get JWT token from localStorage
+    const token = localStorage.getItem('authToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    
+    // Add JWT token to headers if available
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('✅ JWT token added to request headers');
+    } else {
+      console.warn('⚠️ No JWT token found in localStorage');
+    }
+    
     try {
       const res = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        headers: headers,
         credentials: 'omit',
         body: JSON.stringify(formData),
       });

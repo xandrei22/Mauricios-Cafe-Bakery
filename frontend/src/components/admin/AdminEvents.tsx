@@ -63,7 +63,20 @@ const AdminEvents: React.FC = () => {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/events/admin');
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/events/admin`, {
+        credentials: 'omit',
+        headers: headers
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         setEvents(data.events);
@@ -141,7 +154,21 @@ const AdminEvents: React.FC = () => {
   const handleAction = async (id: number, action: 'accept' | 'reject') => {
     setActionLoading(id);
     try {
-      const res = await fetch(`/api/events/${id}/${action}`, { method: 'POST' });
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/events/${id}/${action}`, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: headers
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         toast(`Event ${action}ed`, { description: data.message });
@@ -174,11 +201,21 @@ const AdminEvents: React.FC = () => {
 
     setPaymentLoading(true);
     try {
-      const res = await fetch('/api/admin/event-sales', {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/admin/event-sales`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         credentials: 'omit',
         body: JSON.stringify({
           event_id: selectedEvent.id,
