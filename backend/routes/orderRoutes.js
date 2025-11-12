@@ -1689,7 +1689,7 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
 
         // Get current active order (pending, preparing, ready)
         const [currentOrderResult] = await db.query(`
-            SELECT order_id, status, items, total_price, order_time 
+            SELECT order_id, order_number, status, items, total_price, order_time 
             FROM orders 
             WHERE customer_id = ? AND status IN ('pending', 'preparing', 'ready')
             ORDER BY order_time DESC 
@@ -1697,6 +1697,7 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
         `, [customerId]);
         const currentOrder = currentOrderResult[0] ? {
             id: currentOrderResult[0].order_id,
+            orderNumber: currentOrderResult[0].order_number,
             status: currentOrderResult[0].status,
             items: JSON.parse(currentOrderResult[0].items),
             total: currentOrderResult[0].total_price,

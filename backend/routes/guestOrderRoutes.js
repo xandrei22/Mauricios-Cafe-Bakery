@@ -297,7 +297,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
     }
 });
 
-// Get guest order status by order ID only (GUEST - no auth required)
+// Get guest order status by order ID or order number (GUEST - no auth required)
 router.get('/order-status/:orderId', async(req, res) => {
     try {
         const { orderId } = req.params;
@@ -324,8 +324,8 @@ router.get('/order-status/:orderId', async(req, res) => {
                 c.email as customer_email
             FROM orders o
             LEFT JOIN customers c ON o.customer_id = c.id
-            WHERE o.order_id = ?
-        `, [orderId]);
+            WHERE o.order_id = ? OR o.order_number = ?
+        `, [orderId, orderId]);
 
         if (orders.length === 0) {
             return res.status(404).json({
