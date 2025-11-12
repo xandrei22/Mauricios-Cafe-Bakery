@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 
 const CustomerResetPassword: React.FC = () => {
-  const { token } = useParams<{ token: string }>();
+  const { token: urlToken } = useParams<{ token: string }>();
+  const [searchParams] = useSearchParams();
+  const queryToken = searchParams.get('token');
+  // Support both URL parameter and query parameter for token
+  const token = urlToken || queryToken;
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -11,6 +15,14 @@ const CustomerResetPassword: React.FC = () => {
   const [status, setStatus] = useState<'idle'|'success'|'error'>('idle');
   const [message, setMessage] = useState('');
   const navigate = useNavigate();
+
+  // Check if token is missing
+  useEffect(() => {
+    if (!token) {
+      setStatus('error');
+      setMessage('Invalid reset link. Please request a new password reset.');
+    }
+  }, [token]);
 
   // Password strength validation function
   function isStrongPassword(password: string) {

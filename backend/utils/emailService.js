@@ -256,9 +256,17 @@ const sendResetPasswordEmail = async(email, fullName, resetLink) => {
                     <p style="color: #333; font-size: 16px; line-height: 1.6;">Dear ${fullName},</p>
                     <p style="color: #333; font-size: 16px; line-height: 1.6;">We received a request to reset your password. Click the button below to reset it. This link will expire in 1 hour.</p>
                     <div style="text-align: center; margin: 30px 0;">
-                      <a href="${resetLink}" style="background-color: #8B4513; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-size: 18px;">Reset Password</a>
+                      <a href="${resetLink}" 
+                         style="display: inline-block; background-color: #8B4513; color: white; padding: 15px 30px; 
+                                border-radius: 6px; text-decoration: none; font-size: 18px; font-weight: bold;">
+                        Reset Password
+                      </a>
                     </div>
-                    <p style="color: #666; font-size: 14px;">If you did not request a password reset, you can safely ignore this email.</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                      If the button doesn't work, you can also copy and paste this link into your browser:<br>
+                      <a href="${resetLink}" style="color: #8B4513; word-break: break-all;">${resetLink}</a>
+                    </p>
+                    <p style="color: #666; font-size: 14px; margin-top: 20px;">If you did not request a password reset, you can safely ignore this email.</p>
                   </div>
                   <div style="text-align: center; padding: 20px; color: #666; font-size: 12px; border-top: 1px solid #eee;">
                     <p>This is an automated message, please do not reply to this email.</p>
