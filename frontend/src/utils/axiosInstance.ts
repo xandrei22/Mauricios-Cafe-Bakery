@@ -268,8 +268,10 @@ axiosInstance.interceptors.response.use(
       // Reward redemption endpoints use optionalJWT middleware and may return 401 without meaning logout
       const isSessionCheck = requestUrl.includes('/check-session');
       const isRewardRedemption = requestUrl.includes('/reward-redemptions');
+      const isAdminLoyaltyRedemptions = requestUrl.includes('/admin/loyalty/redemptions');
+      const isStaffRewardRedemptions = requestUrl.includes('/staff/reward-redemptions');
       
-      if (!isSessionCheck && !isRewardRedemption) {
+      if (!isSessionCheck && !isRewardRedemption && !isAdminLoyaltyRedemptions && !isStaffRewardRedemptions) {
         // Clear local storage
         ['authToken', 'adminUser', 'staffUser', 'customerUser', 'loginTimestamp']
           .forEach(key => localStorage.removeItem(key));

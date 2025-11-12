@@ -283,6 +283,10 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     }
     
     try {
+      console.log('📤 Making POST request to:', `${API_URL}/api/events`);
+      console.log('📤 Request headers:', headers);
+      console.log('📤 Request body:', formData);
+      
       const res = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
         headers: headers,
@@ -292,6 +296,26 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       
       console.log('📥 Response status:', res.status);
       console.log('📥 Response ok:', res.ok);
+      console.log('📥 Response headers:', Object.fromEntries(res.headers.entries()));
+      
+      // Handle authentication errors first
+      if (res.status === 401) {
+        const responseText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { message: 'Authentication failed. Please log in again.' };
+        }
+        console.error('❌ Authentication error:', errorData);
+        toast.error('Authentication required', { 
+          description: errorData.message || 'Please log in again to submit event requests.',
+          duration: 7000
+        });
+        setLoading(false);
+        setIsSubmitting(false);
+        return;
+      }
       
       // Get response as text first to handle both JSON and non-JSON
       const responseText = await res.text();
@@ -316,7 +340,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       if (res.status >= 200 && res.status < 300 && data.success) {
         console.log('✅ Event request submitted successfully! Event ID:', data.eventId);
         toast.success('Event request submitted!', { 
-          description: 'Your event request has been sent to the admin. You will be notified once it is reviewed.',
+          description: data.message || 'Your event request has been sent to the admin. You will be notified once it is reviewed.',
           duration: 5000
         });
         // Reset form
@@ -338,6 +362,11 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         console.error('❌ Submission failed:', data);
         let errorMessage = data.message || data.error?.message || data.error || 'Please try again.';
         
+        // Handle validation errors
+        if (res.status === 400) {
+          errorMessage = data.message || data.error || 'Please check your form and try again.';
+        }
+        
         // Show more detailed error in development
         if (import.meta.env.DEV && data.error) {
           console.error('Full error object:', data.error);
@@ -358,9 +387,20 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         stack: err.stack,
         name: err.name
       });
+      
+      // Check if it's a network error or CORS error
+      let errorMessage = 'Failed to connect to server. Please check your connection and try again.';
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err.message.includes('CORS')) {
+        errorMessage = 'CORS error. Please contact support.';
+      } else {
+        errorMessage = err.message || errorMessage;
+      }
+      
       toast.error('Network error', { 
-        description: err.message || 'Failed to connect to server. Please check your connection and try again.',
-        duration: 5000
+        description: errorMessage,
+        duration: 7000
       });
     } finally {
       setLoading(false);
