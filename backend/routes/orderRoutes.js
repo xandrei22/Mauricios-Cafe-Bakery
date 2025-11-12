@@ -377,8 +377,10 @@ router.get('/', async(req, res) => {
                 OR COALESCE(payment_status, 'pending') IN (?, ?)
             )`;
             params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
-            sql += ' AND status != ?';
-            params.push('completed');
+            // Don't exclude completed orders if they have pending payment - they might need verification
+            // Only exclude completed orders that are fully paid
+            sql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
+            params.push('completed', 'paid');
         } else if (status) {
             sql += ' AND status = ?';
             params.push(status);
@@ -469,8 +471,7 @@ router.get('/', async(req, res) => {
                         req.user && order.staff_id === req.user.id ?
                         (req.user.role === 'admin' ? 'admin' : 'staff') :
                         'staff'
-                    ) :
-                    'customer',
+                    ) : 'customer',
                 receiptPath: order.receipt_path,
                 cancelledBy: order.cancelled_by,
                 cancellationReason: order.cancellation_reason,
@@ -484,8 +485,10 @@ router.get('/', async(req, res) => {
 
         // Match the same WHERE conditions as the main query
         if (!status) {
-            countSql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
+            countSql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR COALESCE(payment_status, \'pending\') IN (?, ?))';
             countParams.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
+            countSql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
+            countParams.push('completed', 'paid');
         } else if (status) {
             countSql += ' AND status = ?';
             countParams.push(status);

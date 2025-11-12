@@ -773,7 +773,7 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
                 OR COALESCE(payment_status, 'pending') IN ('pending', 'pending_verification')
             )
-            AND status != 'completed'
+            AND NOT (status = 'completed' AND COALESCE(payment_status, 'pending') = 'paid')
             ORDER BY queue_position ASC, order_time ASC
         `);
 
