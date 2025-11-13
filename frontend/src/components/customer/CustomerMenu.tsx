@@ -695,6 +695,7 @@ const CustomerMenu: React.FC = () => {
             if (paymentMethod === 'gcash' || paymentMethod === 'paymaya') {
               console.log('Digital payment selected:', paymentMethod);
 
+              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
               let response;
               if (receiptFile) {
                 // Use FormData for file upload
@@ -702,14 +703,14 @@ const CustomerMenu: React.FC = () => {
                 formData.append('orderData', JSON.stringify(orderData));
                 formData.append('receipt', receiptFile);
                 
-                response = await fetch('/api/customer/checkout', {
+                response = await fetch(`${API_URL}/api/customer/checkout`, {
                   method: 'POST',
                   credentials: 'omit',
                   body: formData,
                 });
               } else {
                 // Use JSON for orders without receipt
-                response = await fetch('/api/customer/checkout', {
+                response = await fetch(`${API_URL}/api/customer/checkout`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
@@ -738,7 +739,8 @@ const CustomerMenu: React.FC = () => {
               }
             } else {
               // For cash payments, proceed normally
-              const response = await fetch('/api/customer/checkout', {
+              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+              const response = await fetch(`${API_URL}/api/customer/checkout`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

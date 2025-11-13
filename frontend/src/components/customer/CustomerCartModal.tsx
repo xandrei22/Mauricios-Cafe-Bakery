@@ -99,10 +99,6 @@ export default function CustomerCartModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        {/* BRIGHT RED TESTING BANNER */}
-        <div className="bg-red-500 text-white p-2 text-center font-bold text-xs sm:text-sm">
-          TESTING: CustomerCartModal.tsx - Upload Receipt Fix
-        </div>
         <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
           {/* LEFT SIDE - Cart Title - Hidden on mobile, shown on tablet+ */}
           <div className="hidden md:flex flex-col justify-center items-center bg-gray-50 px-4 lg:px-8 py-8 lg:py-12 min-w-[200px] lg:min-w-[280px] border-r shrink-0">
@@ -219,13 +215,6 @@ export default function CustomerCartModal({
 
             {/* Footer - Order Details and Actions */}
             <div className="p-3 sm:p-4 lg:p-6 border-t bg-gray-50 space-y-3 sm:space-y-4 overflow-y-auto max-h-[60vh] sm:max-h-none">
-              {/* DEBUG INFO */}
-              <div className="bg-yellow-200 p-3 rounded-lg border-2 border-yellow-400">
-                <div className="text-sm font-bold text-yellow-800">
-                  DEBUG: hasTableAccess: {String(hasTableAccess)} | tableNumber: "{tableNumber}" | orderType: {orderType} | isDisabled: {String(orderType === 'dine_in' && (!hasTableAccess || !tableNumber.trim()))}
-                </div>
-              </div>
-              
               {cart.length > 0 && (
                 <>
                   {/* Authentication Status */}
@@ -302,7 +291,7 @@ export default function CustomerCartModal({
 
                   {/* Payment Method */}
                   <div>
-                    <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 block">Payment Method - TESTING</label>
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3 block">Payment Method</label>
                     <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       {(['cash','gcash','paymaya'] as const).map((m) => (
                         <button
@@ -319,78 +308,72 @@ export default function CustomerCartModal({
                     </div>
                   </div>
 
-                  {/* Receipt Upload for Digital Payments - ALWAYS VISIBLE FOR TESTING */}
-                  <div className="bg-green-500 text-white p-4 border-2 border-green-600 rounded mb-4">
-                    <div className="text-lg font-bold mb-2">🚨 UPLOAD RECEIPT SECTION - ALWAYS VISIBLE 🚨</div>
-                    <div className="text-sm mb-2">Payment Method: {paymentMethod}</div>
-                    <div className="text-sm mb-2">Should Show: {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') ? 'YES' : 'NO'}</div>
-                    
-                    {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
-                      <div className="mt-3 bg-white text-black p-3 rounded">
-                        <label className="text-sm font-medium text-gray-700 mb-3 block">
-                          Upload Payment Receipt
-                          <span className="text-red-500 ml-1">*</span>
-                        </label>
-                        <div className="space-y-3">
-                          {!receiptFile ? (
-                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#a87437] transition-colors">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileUpload}
-                                className="hidden"
-                                id="receipt-upload"
-                              />
-                              <label
-                                htmlFor="receipt-upload"
-                                className="cursor-pointer flex flex-col items-center gap-2"
-                              >
-                                <Upload className="w-8 h-8 text-gray-400" />
-                                <div className="text-sm text-gray-600">
-                                  Click to upload receipt image
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  JPG, PNG (max 5MB)
-                                </div>
-                              </label>
-                            </div>
-                          ) : (
-                            <div className="border border-gray-200 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  <FileImage className="w-5 h-5 text-[#a87437]" />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {receiptFile.name}
-                                  </span>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={removeReceipt}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  Remove
-                                </Button>
+                  {/* Receipt Upload for Digital Payments */}
+                  {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-3 block">
+                        Upload Payment Receipt
+                        <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <div className="space-y-3">
+                        {!receiptFile ? (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#a87437] transition-colors">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleFileUpload}
+                              className="hidden"
+                              id="receipt-upload"
+                            />
+                            <label
+                              htmlFor="receipt-upload"
+                              className="cursor-pointer flex flex-col items-center gap-2"
+                            >
+                              <Upload className="w-8 h-8 text-gray-400" />
+                              <div className="text-sm text-gray-600">
+                                Click to upload receipt image
                               </div>
-                              {receiptPreview && (
-                                <div className="mt-3">
-                                  <img
-                                    src={receiptPreview}
-                                    alt="Receipt preview"
-                                    className="w-full h-32 object-cover rounded border"
-                                  />
-                                </div>
-                              )}
+                              <div className="text-xs text-gray-500">
+                                JPG, PNG (max 5MB)
+                              </div>
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="border border-gray-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <FileImage className="w-5 h-5 text-[#a87437]" />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {receiptFile.name}
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={removeReceipt}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                Remove
+                              </Button>
                             </div>
-                          )}
-                          <p className="text-xs text-gray-500">
-                            Please upload a clear photo of your {paymentMethod.toUpperCase()} payment receipt for verification.
-                          </p>
-                        </div>
+                            {receiptPreview && (
+                              <div className="mt-3">
+                                <img
+                                  src={receiptPreview}
+                                  alt="Receipt preview"
+                                  className="w-full h-32 object-cover rounded border"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500">
+                          Please upload a clear photo of your {paymentMethod.toUpperCase()} payment receipt for verification.
+                        </p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Order Summary */}
                   <div className="border-t pt-4 pb-6">

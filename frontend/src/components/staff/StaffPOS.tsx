@@ -489,7 +489,7 @@ const StaffPOS: React.FC = () => {
                   )}
                   
                   {/* Receipt Viewing for Digital Payments */}
-                  {(selectedOrder.paymentMethod === 'gcash' || selectedOrder.paymentMethod === 'paymaya') && selectedOrder.paymentStatus === 'pending_verification' && (
+                  {(selectedOrder.paymentMethod === 'gcash' || selectedOrder.paymentMethod === 'paymaya') && selectedOrder.paymentStatus === 'pending_verification' && selectedOrder.receiptPath && (
                     <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div>
@@ -499,7 +499,7 @@ const StaffPOS: React.FC = () => {
                         <Button
                           size="sm"
                           onClick={() => {
-                            const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/receipts/receipt/${selectedOrder.orderId}`;
+                            const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${selectedOrder.orderId}`;
                             window.open(receiptUrl, '_blank');
                           }}
                           className="bg-blue-600 hover:bg-blue-700 text-white"

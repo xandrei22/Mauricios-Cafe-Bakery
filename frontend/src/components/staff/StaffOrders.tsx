@@ -34,6 +34,7 @@ interface Order {
   estimatedReadyTime: string;
   orderTime: string;
   paymentMethod: string;
+  receiptPath?: string;
 }
 
 const formatOrderId = (value: unknown): string => {
@@ -63,7 +64,8 @@ const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
       queuePosition: order.queue_position ?? order.queuePosition ?? 0,
       estimatedReadyTime: order.estimated_ready_time || order.estimatedReadyTime,
       orderTime: order.order_time || order.orderTime,
-      paymentMethod: String(order.payment_method || order.paymentMethod || '')
+      paymentMethod: String(order.payment_method || order.paymentMethod || ''),
+      receiptPath: order.receipt_path || order.receiptPath || undefined
     };
   });
 };
@@ -413,6 +415,26 @@ const StaffOrders: React.FC = () => {
                                 </div>
                               ))}
                             </div>
+                            {/* Receipt Viewing for Digital Payments */}
+                            {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-medium text-blue-900">Receipt Available</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                                      window.open(receiptUrl, '_blank');
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-2"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => updateOrderStatus(order.orderId, 'ready')}
@@ -479,6 +501,26 @@ const StaffOrders: React.FC = () => {
                                 </div>
                               ))}
                             </div>
+                            {/* Receipt Viewing for Digital Payments */}
+                            {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-medium text-blue-900">Receipt Available</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                                      window.open(receiptUrl, '_blank');
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-2"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => updateOrderStatus(order.orderId, 'completed')}
@@ -575,6 +617,28 @@ const StaffOrders: React.FC = () => {
                       <span className="font-semibold text-xl text-gray-900">₱{Number(order.totalPrice || 0).toFixed(2)}</span>
                     </div>
                     
+                    {/* Receipt Viewing for Digital Payments */}
+                    {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
+                            <p className="text-xs text-blue-700">Customer has uploaded a receipt for verification</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                              window.open(receiptUrl, '_blank');
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            View Receipt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="flex gap-3">
                       <Button
                         size="sm"
@@ -651,6 +715,28 @@ const StaffOrders: React.FC = () => {
                     <div className="flex justify-between items-center mb-4 pt-3 border-t border-[#a87437]/20">
                       <span className="font-semibold text-xl text-gray-900">₱{order.totalPrice}</span>
                     </div>
+                    
+                    {/* Receipt Viewing for Digital Payments */}
+                    {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
+                            <p className="text-xs text-blue-700">Customer has uploaded a receipt for verification</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                              window.open(receiptUrl, '_blank');
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            View Receipt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     
                     <Button
                       size="sm"
