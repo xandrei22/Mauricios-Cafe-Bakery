@@ -23,3 +23,5 @@ MODIFY COLUMN order_id VARCHAR(50) NULL;
 -- ADD CONSTRAINT fk_redemption_order_id 
 -- FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE SET NULL;
 
+
+

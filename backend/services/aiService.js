@@ -21,9 +21,11 @@ class AIService {
             'gemini-pro' // legacy fallback
         ].filter(Boolean);
         let initialized = false;
+        this.modelName = null;
         for (const name of preferredModels) {
             try {
                 this.model = this.genAI.getGenerativeModel({ model: name });
+                this.modelName = name;
                 console.log(`[AI] Gemini model initialized: ${name}`);
                 initialized = true;
                 break;
@@ -35,6 +37,61 @@ class AIService {
             console.warn('[AI] No Gemini model initialized; AI will use local fallback.');
             this.model = null;
         }
+        
+        // Token usage tracking
+        this.tokenUsage = {
+            chatbot: {
+                totalTokens: 0,
+                promptTokens: 0,
+                completionTokens: 0,
+                calls: 0
+            },
+            customization: {
+                totalTokens: 0,
+                promptTokens: 0,
+                completionTokens: 0,
+                calls: 0
+            }
+        };
+    }
+    
+    _extractTokenUsage(response, featureType) {
+        try {
+            const usageMetadata = response.usageMetadata;
+            if (usageMetadata) {
+                const promptTokens = usageMetadata.promptTokenCount || 0;
+                const completionTokens = usageMetadata.candidatesTokenCount || usageMetadata.completionTokenCount || 0;
+                const totalTokens = usageMetadata.totalTokenCount || (promptTokens + completionTokens);
+                
+                this.tokenUsage[featureType].totalTokens += totalTokens;
+                this.tokenUsage[featureType].promptTokens += promptTokens;
+                this.tokenUsage[featureType].completionTokens += completionTokens;
+                this.tokenUsage[featureType].calls += 1;
+                
+                return {
+                    promptTokens,
+                    completionTokens,
+                    totalTokens
+                };
+            }
+        } catch (error) {
+            console.warn('Failed to extract token usage:', error);
+        }
+        return null;
+    }
+    
+    getTokenUsage() {
+        return {
+            model: this.modelName || 'Not initialized',
+            chatbot: { ...this.tokenUsage.chatbot },
+            customization: { ...this.tokenUsage.customization },
+            total: {
+                totalTokens: this.tokenUsage.chatbot.totalTokens + this.tokenUsage.customization.totalTokens,
+                promptTokens: this.tokenUsage.chatbot.promptTokens + this.tokenUsage.customization.promptTokens,
+                completionTokens: this.tokenUsage.chatbot.completionTokens + this.tokenUsage.customization.completionTokens,
+                calls: this.tokenUsage.chatbot.calls + this.tokenUsage.customization.calls
+            }
+        };
     }
 
     async getDrinkRecommendations(dietaryPreferences, customerHistory = [], currentMenu = []) {

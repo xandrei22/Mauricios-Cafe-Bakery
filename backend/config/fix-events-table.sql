@@ -26,3 +26,5 @@ CREATE INDEX IF NOT EXISTS idx_events_customer_id ON events(customer_id);
 -- Add index for status if it doesn't exist  
 CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
 
+
+

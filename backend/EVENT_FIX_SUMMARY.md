@@ -79,3 +79,5 @@ If you still get errors:
 - ✅ Only admins can view all events and accept/reject requests
 - ✅ All API endpoints require authentication
 
+
+

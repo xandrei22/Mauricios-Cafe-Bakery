@@ -41,3 +41,5 @@ Check server logs for:
 
 The system will automatically fix the database schema on first event submission.
 
+
+

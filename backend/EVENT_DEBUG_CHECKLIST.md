@@ -99,3 +99,5 @@ node scripts/fix-events-table.js
 
 The detailed logging will show exactly where it's failing!
 
+
+
