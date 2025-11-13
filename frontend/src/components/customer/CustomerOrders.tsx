@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io, Socket } from 'socket.io-client';
-import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare, Download } from 'lucide-react';
+import { CheckCircle, Clock, Coffee, Utensils, Bell, Calendar, X, Star, MessageSquare, Download, Upload, FileImage } from 'lucide-react';
 import './progress-bar.css';
 import ProgressBar from '../ui/ProgressBar';
 const CLIENT_PROFANITY_WORDS: string[] = [
@@ -68,6 +68,12 @@ const CustomerOrders: React.FC = () => {
   const [feedbackCategory, setFeedbackCategory] = useState('General');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [ordersWithFeedback, setOrdersWithFeedback] = useState<Set<string>>(new Set());
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [receiptFileForModal, setReceiptFileForModal] = useState<File | null>(null);
+  const [receiptPreviewForModal, setReceiptPreviewForModal] = useState<string | null>(null);
+  const [uploadingReceiptForModal, setUploadingReceiptForModal] = useState(false);
 
   const commentContainsProfanity = useMemo(
     () => containsProfanity(feedbackComment.trim()),
@@ -615,6 +621,109 @@ const CustomerOrders: React.FC = () => {
     }
   };
 
+  // Handle receipt file upload
+  const handleReceiptFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isModal: boolean = false) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file (JPG, PNG, etc.)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+      
+      if (isModal) {
+        setReceiptFileForModal(file);
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setReceiptPreviewForModal(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setReceiptFile(file);
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setReceiptPreview(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  // Remove receipt
+  const removeReceipt = (isModal: boolean = false) => {
+    if (isModal) {
+      setReceiptFileForModal(null);
+      setReceiptPreviewForModal(null);
+    } else {
+      setReceiptFile(null);
+      setReceiptPreview(null);
+    }
+  };
+
+  // Upload receipt to backend
+  const handleUploadReceipt = async (orderId: string, isModal: boolean = false) => {
+    const fileToUpload = isModal ? receiptFileForModal : receiptFile;
+    
+    if (!fileToUpload) {
+      alert('Please select a receipt file to upload');
+      return;
+    }
+
+    if (isModal) {
+      setUploadingReceiptForModal(true);
+    } else {
+      setUploadingReceipt(true);
+    }
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const formData = new FormData();
+      formData.append('receipt', fileToUpload);
+      formData.append('orderId', orderId);
+
+      const response = await fetch(`${API_URL}/api/receipts/upload-receipt`, {
+        method: 'POST',
+        credentials: 'omit',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Receipt uploaded successfully! The staff will verify your payment shortly.');
+        // Clear the file inputs
+        if (isModal) {
+          setReceiptFileForModal(null);
+          setReceiptPreviewForModal(null);
+        } else {
+          setReceiptFile(null);
+          setReceiptPreview(null);
+        }
+        // Refresh orders to get updated payment status
+        fetchOrders();
+      } else {
+        alert(result.message || 'Failed to upload receipt. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error uploading receipt:', error);
+      alert('Failed to upload receipt. Please try again.');
+    } finally {
+      if (isModal) {
+        setUploadingReceiptForModal(false);
+      } else {
+        setUploadingReceipt(false);
+      }
+    }
+  };
+
   // Get order ID - always use the full order_id (long ID) for consistency
   const getShortOrderCode = (order: Order | null | undefined): string => {
     if (!order) return 'N/A';
@@ -1024,6 +1133,77 @@ const CustomerOrders: React.FC = () => {
                          </p>
                        </div>
                      </div>
+
+                     {/* Receipt Upload for Digital Payments */}
+                     {getCurrentOrder() && (getCurrentOrder()?.payment_method === 'gcash' || getCurrentOrder()?.payment_method === 'paymaya') && 
+                      getCurrentOrder()?.payment_status !== 'paid' && (
+                       <div className="mt-4">
+                         <label className="text-sm font-medium text-gray-700 mb-3 block">
+                           Upload Payment Receipt
+                           <span className="text-red-500 ml-1">*</span>
+                         </label>
+                         <div className="space-y-3">
+                           {!receiptFile ? (
+                             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#a87437] transition-colors">
+                               <input
+                                 type="file"
+                                 accept="image/*"
+                                 onChange={(e) => handleReceiptFileUpload(e, false)}
+                                 className="hidden"
+                                 id="receipt-upload-current"
+                               />
+                               <label
+                                 htmlFor="receipt-upload-current"
+                                 className="cursor-pointer flex flex-col items-center gap-2"
+                               >
+                                 <Upload className="w-8 h-8 text-gray-400" />
+                                 <div className="text-sm text-gray-600">
+                                   Click to upload receipt image
+                                 </div>
+                                 <div className="text-xs text-gray-500">
+                                   JPG, PNG (max 5MB)
+                                 </div>
+                               </label>
+                             </div>
+                           ) : (
+                             <div className="border border-gray-200 rounded-lg p-4">
+                               <div className="flex items-center justify-between mb-3">
+                                 <div className="flex items-center gap-2">
+                                   <FileImage className="w-5 h-5 text-[#a87437]" />
+                                   <span className="text-sm font-medium text-gray-700">
+                                     {receiptFile.name}
+                                   </span>
+                                 </div>
+                                 <button
+                                   type="button"
+                                   onClick={() => removeReceipt(false)}
+                                   className="text-red-600 hover:text-red-700 text-sm"
+                                 >
+                                   Remove
+                                 </button>
+                               </div>
+                               {receiptPreview && (
+                                 <div className="mt-3">
+                                   <img
+                                     src={receiptPreview}
+                                     alt="Receipt preview"
+                                     className="max-w-full h-auto max-h-48 rounded-lg border border-gray-200"
+                                   />
+                                 </div>
+                               )}
+                               <button
+                                 type="button"
+                                 onClick={() => handleUploadReceipt(getCurrentOrder()!.order_id, false)}
+                                 disabled={uploadingReceipt}
+                                 className="mt-3 w-full px-4 py-2 bg-[#a87437] text-white rounded-lg hover:bg-[#8f652f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                               >
+                                 {uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+                               </button>
+                             </div>
+                           )}
+                         </div>
+                       </div>
+                     )}
                    </div>
 
                    {/* Total Amount */}
@@ -1512,7 +1692,11 @@ const CustomerOrders: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">Order Details</h2>
               <button
                 title="Close order details"
-                onClick={() => setShowOrderDetailsModal(false)}
+                onClick={() => {
+                  setShowOrderDetailsModal(false);
+                  setReceiptFileForModal(null);
+                  setReceiptPreviewForModal(null);
+                }}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <X className="w-6 h-6 text-gray-500" />
@@ -1711,6 +1895,100 @@ const CustomerOrders: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Payment Information */}
+              <div className="p-6 border-t border-gray-100">
+                <h4 className="text-lg font-bold text-gray-900 mb-4">Payment Information</h4>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Payment Method</p>
+                    <p className="font-medium text-gray-900 capitalize">{selectedOrderForDetails.payment_method || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Payment Status</p>
+                    <p className={`font-medium ${
+                      selectedOrderForDetails.payment_status === 'paid' ? 'text-green-600' :
+                      selectedOrderForDetails.payment_status === 'failed' ? 'text-red-600' :
+                      'text-amber-600'
+                    }`}>
+                      {selectedOrderForDetails.payment_status === 'paid' ? 'Paid' :
+                       selectedOrderForDetails.payment_status === 'failed' ? 'Failed' :
+                       'Pending'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Receipt Upload for Digital Payments */}
+                {(selectedOrderForDetails.payment_method === 'gcash' || selectedOrderForDetails.payment_method === 'paymaya') && 
+                 selectedOrderForDetails.payment_status !== 'paid' && (
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-gray-700 mb-3 block">
+                      Upload Payment Receipt
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="space-y-3">
+                      {!receiptFileForModal ? (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-[#a87437] transition-colors">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleReceiptFileUpload(e, true)}
+                            className="hidden"
+                            id="receipt-upload-modal"
+                          />
+                          <label
+                            htmlFor="receipt-upload-modal"
+                            className="cursor-pointer flex flex-col items-center gap-2"
+                          >
+                            <Upload className="w-8 h-8 text-gray-400" />
+                            <div className="text-sm text-gray-600">
+                              Click to upload receipt image
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              JPG, PNG (max 5MB)
+                            </div>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileImage className="w-5 h-5 text-[#a87437]" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {receiptFileForModal.name}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeReceipt(true)}
+                              className="text-red-600 hover:text-red-700 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          {receiptPreviewForModal && (
+                            <div className="mt-3">
+                              <img
+                                src={receiptPreviewForModal}
+                                alt="Receipt preview"
+                                className="max-w-full h-auto max-h-48 rounded-lg border border-gray-200"
+                              />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleUploadReceipt(selectedOrderForDetails.order_id, true)}
+                            disabled={uploadingReceiptForModal}
+                            className="mt-3 w-full px-4 py-2 bg-[#a87437] text-white rounded-lg hover:bg-[#8f652f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                          >
+                            {uploadingReceiptForModal ? 'Uploading...' : 'Upload Receipt'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Total Amount */}
