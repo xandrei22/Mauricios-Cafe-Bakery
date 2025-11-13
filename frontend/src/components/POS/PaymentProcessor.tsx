@@ -479,8 +479,8 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                   ) : selectedOrder.paymentMethod === 'gcash' || selectedOrder.paymentMethod === 'paymaya' ? (
                     <>
                       <div className="flex gap-2">
-                        {/* Show View Receipt button only if order was placed by customer and has a receipt */}
-                        {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
+                        {/* Show View Receipt button if order has a receipt (uploaded by customer or guest) */}
+                        {selectedOrder.receiptPath && (
                           <button
                             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
                             onClick={() => viewReceipt(selectedOrder.orderId)}
@@ -503,8 +503,8 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                   ) : (
                     <>
                       <div className="flex gap-1">
-                        {/* Show View Receipt button only if order was placed by customer and has a receipt */}
-                        {selectedOrder.placedBy === 'customer' && selectedOrder.receiptPath && (
+                        {/* Show View Receipt button if order has a receipt (uploaded by customer or guest) */}
+                        {selectedOrder.receiptPath && (
                           <button
                             className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center transition-colors text-xs"
                             onClick={() => viewReceipt(selectedOrder.orderId)}

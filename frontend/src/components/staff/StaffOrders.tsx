@@ -722,7 +722,7 @@ const StaffOrders: React.FC = () => {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
-                            <p className="text-xs text-blue-700">Customer has uploaded a receipt for verification</p>
+                            <p className="text-xs text-blue-700">Customer or guest has uploaded a receipt for verification</p>
                           </div>
                           <Button
                             size="sm"
