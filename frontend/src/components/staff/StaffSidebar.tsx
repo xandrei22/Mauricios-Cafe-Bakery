@@ -43,18 +43,41 @@ const StaffSidebar: React.FC = () => {
   }, []);
 
   // Get user position and filter menu items accordingly
-  const userPosition = storedStaff?.position || storedStaff?.role || '';
+  const userPosition = storedStaff?.position || '';
   const filteredMenuItems = React.useMemo(() => {
+    // Debug: Log position for troubleshooting
+    console.log('🔍 Staff Sidebar Debug:', {
+      userPosition,
+      role: storedStaff?.role,
+      fullUser: storedStaff
+    });
+    
     // If user is admin or manager, show all items
-    if (storedStaff?.role === 'admin' || userPosition === 'Manager') {
+    if (storedStaff?.role === 'admin' || userPosition?.toLowerCase() === 'manager') {
+      console.log('✅ Admin/Manager - showing all items');
       return allMenuItems;
     }
-    // Filter items based on position
-    return allMenuItems.filter(item => {
+    
+    // If no position is set, show all items (fallback for existing users who haven't re-logged)
+    if (!userPosition || userPosition === '') {
+      console.warn('⚠️ No position found for user - showing all items. User needs to log out and log back in.');
+      return allMenuItems;
+    }
+    
+    // Filter items based on position (case-insensitive comparison)
+    const normalizedPosition = userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase();
+    const filtered = allMenuItems.filter(item => {
       if (!item.allowedPositions) return true;
-      return item.allowedPositions.includes(userPosition);
+      // Case-insensitive comparison
+      const isAllowed = item.allowedPositions.some(pos => 
+        pos.toLowerCase() === normalizedPosition.toLowerCase()
+      );
+      return isAllowed;
     });
-  }, [userPosition, storedStaff?.role]);
+    
+    console.log(`✅ Filtered menu items for ${normalizedPosition}:`, filtered.map(i => i.label));
+    return filtered;
+  }, [userPosition, storedStaff?.role, storedStaff]);
 
   const displayName =
     (typeof storedStaff?.username === 'string' && storedStaff.username.trim().length > 0

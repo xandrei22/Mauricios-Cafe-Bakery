@@ -666,14 +666,19 @@ const AdminStaff: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">Position/Job Title</label>
-                    <Input
+                    <select
                       id="position"
                       name="position"
                       value={form.position}
                       onChange={handleChange}
-                      placeholder="Position/Job Title"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                      className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                    >
+                      <option value="">Select Position</option>
+                      <option value="Cashier">Cashier</option>
+                      <option value="Barista">Barista</option>
+                      <option value="Manager">Manager</option>
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">Required for access control</div>
                   </div>
                   <div>
                     <label htmlFor="work_schedule" className="block text-sm font-medium text-gray-700 mb-1">Work Schedule</label>
@@ -953,8 +958,8 @@ const AdminStaff: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Role and Status - 2 columns */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Role, Position, and Status - 3 columns */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="edit-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                     <select
@@ -966,7 +971,24 @@ const AdminStaff: React.FC = () => {
                       required
                     >
                       <option value="staff">Staff</option>
+                      <option value="manager">Manager</option>
                     </select>
+                  </div>
+                  <div>
+                    <label htmlFor="edit-position" className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                    <select
+                      id="edit-position"
+                      name="position"
+                      value={editForm.position || ''}
+                      onChange={handleEditChange}
+                      className="w-full p-2 pr-12 border border-[#a87437] rounded-lg bg-white focus:border-[#8f652f] focus:ring-[#a87437]"
+                    >
+                      <option value="">Select Position</option>
+                      <option value="Cashier">Cashier</option>
+                      <option value="Barista">Barista</option>
+                      <option value="Manager">Manager</option>
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">Required for access control</div>
                   </div>
                   <div>
                     <label htmlFor="edit-status">Status</label>
@@ -1078,15 +1100,6 @@ const AdminStaff: React.FC = () => {
 
                 {/* Work Information - 2 columns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Input
-                      name="position"
-                      value={editForm.position || ''}
-                      onChange={handleEditChange}
-                      placeholder="Position/Job Title"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
-                  </div>
                   <div>
                     <label htmlFor="edit-work_schedule">Work Schedule</label>
                     <select
