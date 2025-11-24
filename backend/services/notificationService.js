@@ -57,9 +57,15 @@ class NotificationService {
                 this.io.emit('new-notification', notification[0]);
                 
                 // Also emit specifically to admin room if notification is for admins
-                if (userType === 'admin' || (!userId && userType === 'admin')) {
+                if (userType === 'admin' || (!userId && !userType)) {
                     console.log('📡 Emitting notification to admin-room:', notification[0].id);
                     this.io.to('admin-room').emit('new-notification', notification[0]);
+                }
+                
+                // Also emit to staff room if notification is for staff
+                if (userType === 'staff') {
+                    console.log('📡 Emitting notification to staff-room:', notification[0].id);
+                    this.io.to('staff-room').emit('new-notification', notification[0]);
                 }
             }
 

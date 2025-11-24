@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
+const notificationService = require('../services/notificationService');
 const { v4: uuidv4 } = require('uuid');
 const { authenticateJWT } = require('../middleware/jwtAuth');
 
@@ -976,37 +977,35 @@ router.put('/:orderId/status', async(req, res) => {
         // Emit real-time update
         const io = req.app.get('io');
         if (io) {
+            const updatePayload = {
+                orderId: publicId,
+                internalOrderId: internalId,
+                status,
+                paymentStatus,
+                timestamp: new Date()
+            };
+            
             // Emit to specific order room
-            io.to(`order-${publicId}`).emit('order-updated', {
-                orderId: publicId,
-                internalOrderId: internalId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
+            io.to(`order-${publicId}`).emit('order-updated', updatePayload);
             // Emit to staff and admin rooms
-            io.to('staff-room').emit('order-updated', {
-                orderId: publicId,
-                internalOrderId: internalId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
-            io.to('admin-room').emit('order-updated', {
-                orderId: publicId,
-                internalOrderId: internalId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
-            // Broadcast to all customers
-            io.emit('order-updated', {
-                orderId: publicId,
-                internalOrderId: internalId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
+            io.to('staff-room').emit('order-updated', updatePayload);
+            io.to('admin-room').emit('order-updated', updatePayload);
+            
+            // Emit to customer room if customer_id exists
+            if (order && order.customer_id) {
+                try {
+                    const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                    if (customer.length > 0 && customer[0].email) {
+                        io.to(`customer-${customer[0].email}`).emit('order-updated', updatePayload);
+                        console.log(`📤 OrderRoutes: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                    }
+                } catch (customerError) {
+                    console.warn('Failed to get customer email for room emission:', customerError.message);
+                }
+            }
+            
+            // Broadcast to all customers as fallback
+            io.emit('order-updated', updatePayload);
         }
 
         res.json({ success: true, message: 'Order status updated successfully' });
@@ -1042,6 +1041,38 @@ router.post('/:orderId/verify-payment', async(req, res) => {
             (order_id, payment_method, amount, status, verified_by, created_at) 
             VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
         `, [internalId, paymentMethod || 'cash', internalId, verifiedBy || 'admin']);
+
+        // Get order details for notification
+        const [orderDetails] = await db.query(`
+            SELECT customer_name, total_price, order_type, table_number 
+            FROM orders 
+            WHERE order_id = ?
+        `, [internalId]);
+
+        const order = orderDetails[0] || {};
+
+        // Create notification for admins about payment verification
+        try {
+            await notificationService.createNotification({
+                type: 'payment_update',
+                title: 'Payment Verified',
+                message: `Payment verified for Order ${publicId}. Customer: ${order.customer_name || 'Unknown'}, Amount: ₱${parseFloat(order.total_price || 0).toFixed(2)}, Method: ${(paymentMethod || 'cash').toUpperCase()}`,
+                data: {
+                    orderId: publicId,
+                    internalOrderId: internalId,
+                    customerName: order.customer_name,
+                    totalPrice: order.total_price,
+                    paymentMethod: paymentMethod || 'cash',
+                    verifiedBy: verifiedBy || 'admin'
+                },
+                userType: 'admin',
+                priority: 'medium'
+            });
+            console.log('📢 Notification created for payment verification:', publicId);
+        } catch (notificationError) {
+            console.error('⚠️ Failed to create payment verification notification (non-critical):', notificationError);
+            // Don't fail the request if notification fails
+        }
 
         // Emit real-time update
         const io = req.app.get('io');
@@ -1269,7 +1300,7 @@ router.get('/:orderId/tracking-qr', async(req, res) => {
 router.post('/:orderId/cancel', async(req, res) => {
     try {
         const { orderId } = req.params;
-        const { reason } = req.body;
+        const { reason, cancelledBy, cancellationReason, cancelledAt } = req.body;
         const { internalId, publicId } = req.orderIdentifiers || {};
 
         if (!internalId) {
@@ -1280,12 +1311,39 @@ router.post('/:orderId/cancel', async(req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Update order status
+            // Update order status with cancellation details
+            const updateFields = ['status = ?', 'updated_at = NOW()'];
+            const updateValues = ['cancelled'];
+            
+            if (reason || cancellationReason) {
+                updateFields.push('notes = ?');
+                updateValues.push(reason || cancellationReason || 'Order cancelled');
+            }
+            
+            if (cancelledBy) {
+                updateFields.push('cancelled_by = ?');
+                updateValues.push(cancelledBy);
+            }
+            
+            if (cancellationReason) {
+                updateFields.push('cancellation_reason = ?');
+                updateValues.push(cancellationReason);
+            }
+            
+            if (cancelledAt) {
+                updateFields.push('cancelled_at = ?');
+                updateValues.push(cancelledAt);
+            } else {
+                updateFields.push('cancelled_at = NOW()');
+            }
+            
+            updateValues.push(internalId);
+            
             await connection.query(`
                 UPDATE orders 
-                SET status = 'cancelled', notes = ? 
+                SET ${updateFields.join(', ')}
                 WHERE order_id = ?
-            `, [reason, internalId]);
+            `, updateValues);
 
             // Restore inventory
             const [orders] = await connection.query(`
@@ -1318,21 +1376,63 @@ router.post('/:orderId/cancel', async(req, res) => {
 
             await connection.commit();
 
-            // Emit cancellation update
+            // Get order details for notification
+            const [orderDetails] = await connection.query(`
+                SELECT customer_name, total_price, order_type, table_number 
+                FROM orders 
+                WHERE order_id = ?
+            `, [internalId]);
+
+            const order = orderDetails[0] || {};
+
+            // Create notification for admins about order cancellation
+            try {
+                await notificationService.createNotification({
+                    type: 'order_update',
+                    title: 'Order Cancelled',
+                    message: `Order ${publicId} has been cancelled${cancelledBy ? ` by ${cancelledBy}` : ''}. Customer: ${order.customer_name || 'Unknown'}, Total: ₱${parseFloat(order.total_price || 0).toFixed(2)}`,
+                    data: {
+                        orderId: publicId,
+                        internalOrderId: internalId,
+                        customerName: order.customer_name,
+                        totalPrice: order.total_price,
+                        cancelledBy: cancelledBy || null,
+                        cancellationReason: cancellationReason || reason || null,
+                        cancelledAt: cancelledAt || new Date().toISOString()
+                    },
+                    userType: 'admin',
+                    priority: 'high'
+                });
+                console.log('📢 Notification created for order cancellation:', publicId);
+            } catch (notificationError) {
+                console.error('⚠️ Failed to create cancellation notification (non-critical):', notificationError);
+                // Don't fail the request if notification fails
+            }
+
+            // Emit cancellation update to all relevant rooms
             const io = req.app.get('io');
             if (io) {
-                io.to(`order-${publicId}`).emit('order-updated', {
+                const cancellationPayload = {
                     orderId: publicId,
                     internalOrderId: internalId,
                     status: 'cancelled',
+                    cancelledBy: cancelledBy || null,
+                    cancellationReason: cancellationReason || reason || null,
+                    cancelledAt: cancelledAt || new Date().toISOString(),
                     timestamp: new Date()
-                });
-                io.to('staff-room').emit('order-updated', {
-                    orderId: publicId,
-                    internalOrderId: internalId,
-                    status: 'cancelled',
-                    timestamp: new Date()
-                });
+                };
+                
+                // Emit to specific order room
+                io.to(`order-${publicId}`).emit('order-updated', cancellationPayload);
+                
+                // Emit to staff and admin rooms
+                io.to('staff-room').emit('order-updated', cancellationPayload);
+                io.to('admin-room').emit('order-updated', cancellationPayload);
+                
+                // Broadcast to all clients for real-time updates
+                io.emit('order-updated', cancellationPayload);
+                
+                console.log('📤 Cancellation event emitted:', cancellationPayload);
             }
 
             res.json({

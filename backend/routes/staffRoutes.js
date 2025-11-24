@@ -1029,6 +1029,19 @@ router.put('/orders/:orderId/status', authenticateJWT, async(req, res) => {
                 io.to(`order-${emitId}`).emit('order-updated', payload);
                 io.to('staff-room').emit('order-updated', payload);
                 io.to('admin-room').emit('order-updated', payload);
+                
+                // Emit to customer room if customer_id exists
+                if (order && order.customer_id) {
+                    try {
+                        const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                        if (customer.length > 0 && customer[0].email) {
+                            io.to(`customer-${customer[0].email}`).emit('order-updated', payload);
+                            console.log(`📤 Staff: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                        }
+                    } catch (customerError) {
+                        console.warn('Failed to get customer email for room emission:', customerError.message);
+                    }
+                }
             }
         } catch (e) { console.warn('Emit order-updated failed:', e.message); }
 
