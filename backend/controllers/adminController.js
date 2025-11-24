@@ -502,7 +502,8 @@ async function editStaff(req, res) {
 
         if (position !== undefined) {
             updateFields.push('position = ?');
-            queryParams.push(position === '' ? null : position);
+            // Allow empty string to be set to null, or keep the value if provided
+            queryParams.push(position === '' || position === null ? null : position);
         }
 
         if (work_schedule !== undefined) {
@@ -555,35 +556,71 @@ async function editStaff(req, res) {
             return res.status(404).json({ message: 'Staff account not found' });
         }
 
-        if (existingStaff[0].role !== 'staff') {
+        // Allow updating if current role is 'staff' or 'manager' (staff members can be promoted to manager)
+        const currentRole = existingStaff[0].role;
+        if (currentRole !== 'staff' && currentRole !== 'manager') {
             return res.status(400).json({ message: 'User is not a staff member' });
+        }
+
+        if (updateFields.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
         }
 
         const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
         queryParams.push(id);
         console.log('editStaff: SQL Query:', query);
         console.log('editStaff: Query Params:', queryParams);
+        console.log('editStaff: Update Fields Count:', updateFields.length);
 
-        const [result] = await db.query(query, queryParams);
-        console.log('editStaff: Update result:', result);
+        try {
+            const [result] = await db.query(query, queryParams);
+            console.log('editStaff: Update result:', result);
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Staff account not found or no changes made' });
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Staff account not found or no changes made' 
+                });
+            }
+
+            console.log('editStaff: Successfully updated staff account:', id);
+            return res.json({ 
+                success: true, 
+                message: 'Staff account updated successfully' 
+            });
+        } catch (sqlError) {
+            console.error('editStaff: SQL Error:', sqlError);
+            throw sqlError; // Re-throw to be caught by outer catch
         }
-
-        res.json({ success: true, message: 'Staff account updated successfully' });
     } catch (error) {
         console.error('Error updating staff account:', error);
         console.error('Error details:', {
             message: error.message,
             code: error.code,
             sqlMessage: error.sqlMessage,
+            sqlState: error.sqlState,
+            errno: error.errno,
             stack: error.stack
         });
+        
+        // Provide more specific error messages
+        let errorMessage = 'Error updating staff account';
+        if (error.code === 'ER_BAD_FIELD_ERROR') {
+            errorMessage = `Database field error: ${error.sqlMessage || error.message}`;
+        } else if (error.code === 'ER_DUP_ENTRY') {
+            errorMessage = 'Duplicate entry: This username or email already exists';
+        } else if (error.sqlMessage) {
+            errorMessage = `Database error: ${error.sqlMessage}`;
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        
         res.status(500).json({ 
             success: false,
-            message: 'Error updating staff account',
-            error: error.message || 'Unknown error occurred'
+            message: errorMessage,
+            error: error.message || 'Unknown error occurred',
+            code: error.code,
+            sqlMessage: error.sqlMessage
         });
     }
 }
