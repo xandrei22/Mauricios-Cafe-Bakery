@@ -732,13 +732,6 @@ const CustomerOrders: React.FC = () => {
     }
   };
 
-  // Get order ID - always use the full order_id (long ID) for consistency
-  const getShortOrderCode = (order: Order | null | undefined): string => {
-    if (!order) return 'N/A';
-    // Always return the full long order_id, never the 5-character order_number
-    return order.order_id || order.id || 'N/A';
-  };
-
   const handleFeedbackClick = (order: Order) => {
     setSelectedOrderForFeedback(order);
     setShowFeedbackModal(true);
