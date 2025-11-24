@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io, Socket } from 'socket.io-client';
@@ -48,6 +48,15 @@ interface Order {
   notes?: string;
 }
 
+interface StatusNotification {
+  id: string;
+  orderId: string;
+  orderNumber?: string;
+  status: Order['status'];
+  previousStatus?: Order['status'];
+  timestamp: number;
+}
+
 const CustomerOrders: React.FC = () => {
   const { loading, authenticated, user } = useAuth();
   const navigate = useNavigate();
@@ -74,6 +83,119 @@ const CustomerOrders: React.FC = () => {
   const [receiptFileForModal, setReceiptFileForModal] = useState<File | null>(null);
   const [receiptPreviewForModal, setReceiptPreviewForModal] = useState<string | null>(null);
   const [uploadingReceiptForModal, setUploadingReceiptForModal] = useState(false);
+  const [statusNotifications, setStatusNotifications] = useState<StatusNotification[]>([]);
+  const statusHistoryRef = useRef<Record<string, Order['status']>>({});
+  const notificationsInitializedRef = useRef(false);
+  const notificationTimeoutsRef = useRef<Record<string, number>>({});
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const formatStatusLabel = useCallback((status?: Order['status']) => {
+    if (!status) return 'Pending';
+    return status
+      .toString()
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioConstructor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioConstructor();
+    }
+
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+    oscillator.start(now);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    oscillator.stop(now + 0.8);
+  }, []);
+
+  const showBrowserNotification = useCallback(
+    (order: Order, previousStatus?: Order['status']) => {
+      if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+
+      const title = 'Order Status Updated';
+      const body = previousStatus
+        ? `Order ${order.order_number || order.order_id} is now ${formatStatusLabel(order.status)} (was ${formatStatusLabel(previousStatus)}).`
+        : `Order ${order.order_number || order.order_id} status changed to ${formatStatusLabel(order.status)}.`;
+
+      const triggerNotification = () => {
+        try {
+          new Notification(title, { body });
+        } catch (error) {
+          console.warn('Unable to show notification:', error);
+        }
+      };
+
+      if (Notification.permission === 'granted') {
+        triggerNotification();
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission()
+          .then((permission) => {
+            if (permission === 'granted') {
+              triggerNotification();
+            }
+          })
+          .catch(() => {});
+      }
+    },
+    [formatStatusLabel]
+  );
+
+  const removeNotification = useCallback((id: string) => {
+    setStatusNotifications((prev) => prev.filter((notification) => notification.id !== id));
+    if (typeof window !== 'undefined') {
+      const timeoutId = notificationTimeoutsRef.current[id];
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+        delete notificationTimeoutsRef.current[id];
+      }
+    }
+  }, []);
+
+  const enqueueStatusNotification = useCallback(
+    (order: Order, previousStatus?: Order['status']) => {
+      const notificationId = `${order.order_id}-${Date.now()}`;
+      setStatusNotifications((prev) => [
+        ...prev,
+        {
+          id: notificationId,
+          orderId: order.order_id,
+          orderNumber: order.order_number || order.order_id,
+          status: order.status,
+          previousStatus,
+          timestamp: Date.now()
+        }
+      ]);
+
+      playNotificationSound();
+      showBrowserNotification(order, previousStatus);
+
+      if (typeof window !== 'undefined') {
+        const timeoutId = window.setTimeout(() => removeNotification(notificationId), 8000);
+        notificationTimeoutsRef.current[notificationId] = timeoutId;
+      }
+    },
+    [playNotificationSound, showBrowserNotification, removeNotification]
+  );
 
   const commentContainsProfanity = useMemo(
     () => containsProfanity(feedbackComment.trim()),
@@ -89,6 +211,44 @@ const CustomerOrders: React.FC = () => {
     console.log('🛒 Order placed event received:', event.detail);
     fetchOrders(); // Refresh orders data
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close?.().catch(() => {});
+      }
+      if (typeof window !== 'undefined') {
+        Object.values(notificationTimeoutsRef.current).forEach((timeoutId) => {
+          window.clearTimeout(timeoutId);
+        });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+
+    const updates: Array<{ order: Order; previousStatus?: Order['status'] }> = [];
+
+    orders.forEach((order) => {
+      const previousStatus = statusHistoryRef.current[order.order_id];
+      if (previousStatus && previousStatus !== order.status) {
+        updates.push({ order, previousStatus });
+      }
+      statusHistoryRef.current[order.order_id] = order.status;
+    });
+
+    if (!notificationsInitializedRef.current) {
+      notificationsInitializedRef.current = true;
+      return;
+    }
+
+    updates.forEach(({ order, previousStatus }) => enqueueStatusNotification(order, previousStatus));
+  }, [orders, enqueueStatusNotification]);
 
   useEffect(() => {
     console.log('🔍 CustomerOrders useEffect triggered:');
@@ -1681,6 +1841,44 @@ const CustomerOrders: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {statusNotifications.length > 0 && (
+        <div className="fixed top-4 right-4 z-[120] w-full max-w-sm space-y-3">
+          {statusNotifications.map((notification) => (
+            <div
+              key={notification.id}
+              className="bg-white border border-amber-100 shadow-xl rounded-xl p-4 flex gap-3 transition transform"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-gray-900">
+                  Order {notification.orderNumber}
+                </p>
+                <p className="text-sm text-gray-700">
+                  Status updated to{' '}
+                  <span className="font-medium text-amber-700">
+                    {formatStatusLabel(notification.status)}
+                  </span>
+                </p>
+                {notification.previousStatus && (
+                  <p className="text-xs text-gray-500">
+                    Previous: {formatStatusLabel(notification.previousStatus)}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => removeNotification(notification.id)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Dismiss notification"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

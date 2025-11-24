@@ -229,23 +229,23 @@ const AdminStaff: React.FC = () => {
     try {
       // Prepare update data - only include fields that should be sent to backend
       const updateData: any = {
-        username: editForm.username,
-        email: editForm.email,
-        first_name: editForm.first_name,
-        last_name: editForm.last_name,
-        age: editForm.age,
-        role: editForm.role,
-        phone: editForm.phone || null,
-        address: editForm.address || null,
-        position: editForm.position || null,
-        work_schedule: editForm.work_schedule || null,
-        date_hired: editForm.date_hired || null,
-        employee_id: editForm.employee_id || null,
+        username: editForm.username?.trim() || '',
+        email: editForm.email?.trim() || '',
+        first_name: editForm.first_name?.trim() || '',
+        last_name: editForm.last_name?.trim() || '',
+        age: editForm.age || '',
+        role: editForm.role || 'staff',
+        phone: editForm.phone?.trim() || '',
+        address: editForm.address?.trim() || '',
+        position: editForm.position?.trim() || '',
+        work_schedule: editForm.work_schedule || '',
+        date_hired: editForm.date_hired || '',
+        employee_id: editForm.employee_id?.trim() || '',
         status: editForm.status || 'active',
-        gender: editForm.gender || null,
-        birthday: editForm.birthday || null,
-        emergency_contact: editForm.emergency_contact || null,
-        emergency_phone: editForm.emergency_phone || null,
+        gender: editForm.gender || '',
+        birthday: editForm.birthday || '',
+        emergency_contact: editForm.emergency_contact?.trim() || '',
+        emergency_phone: editForm.emergency_phone?.trim() || '',
       };
 
       // Only include password if it's provided and not empty
@@ -253,16 +253,21 @@ const AdminStaff: React.FC = () => {
         updateData.password = editForm.password;
       }
 
-      // Remove undefined values
+      // Remove undefined values and convert empty strings to null for optional fields
       Object.keys(updateData).forEach(key => {
         if (updateData[key] === undefined) {
           delete updateData[key];
+        } else if (updateData[key] === '' && ['phone', 'address', 'position', 'work_schedule', 'date_hired', 'employee_id', 'gender', 'birthday', 'emergency_contact', 'emergency_phone'].includes(key)) {
+          // Convert empty strings to null for optional fields
+          updateData[key] = null;
         }
       });
 
       console.log('Updating staff with data:', updateData);
+      console.log('Staff ID:', editForm.id);
 
-      await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm.id}`, updateData);
+      const response = await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm.id}`, updateData);
+      console.log('Update response:', response.data);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -275,11 +280,17 @@ const AdminStaff: React.FC = () => {
       fetchStats();
     } catch (error: any) {
       const errorData = error?.response?.data;
-      const message = errorData?.message || errorData?.error || error?.message || 'Error updating staff member';
+      const errorMessage = errorData?.message || errorData?.error || error?.message || 'Error updating staff member';
+      const detailedError = errorData?.error || error?.message || 'Unknown error';
+      
       console.error('Staff update error:', error);
+      console.error('Error response:', error?.response);
       console.error('Error details:', errorData);
       console.error('Request data sent:', editForm);
-      setError(message);
+      console.error('Full error object:', error);
+      
+      // Show more detailed error message
+      setError(`${errorMessage}${detailedError !== errorMessage ? `: ${detailedError}` : ''}`);
     } finally {
       setLoading(false);
     }
