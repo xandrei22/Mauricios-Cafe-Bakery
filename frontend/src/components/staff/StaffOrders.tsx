@@ -48,10 +48,15 @@ const formatOrderId = (value: unknown): string => {
 
 const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
   return ordersData.map((order: any) => {
+    // Always prioritize order_id from the database, ensure it's stable
     const rawOrderId = String(order.order_id || order.orderId || order.id || '').trim();
+    // Ensure we always have a consistent order_id - never let it be empty or change
+    if (!rawOrderId) {
+      console.warn('⚠️ Order missing order_id:', order);
+    }
     return {
-      orderId: rawOrderId,
-      displayOrderId: rawOrderId, // Use full order ID
+      orderId: rawOrderId, // This should always be the same for the same order
+      displayOrderId: rawOrderId, // Use full order ID consistently
       customerName: (order.customer_name || order.customerName || '').toString().trim(),
       tableNumber: order.table_number ?? order.tableNumber,
       items: Array.isArray(order.items)
@@ -65,7 +70,9 @@ const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
       estimatedReadyTime: order.estimated_ready_time || order.estimatedReadyTime,
       orderTime: order.order_time || order.orderTime,
       paymentMethod: String(order.payment_method || order.paymentMethod || ''),
-      receiptPath: order.receipt_path || order.receiptPath || undefined
+      receiptPath: order.receipt_path || order.receiptPath || undefined,
+      // Store original order_id for reference
+      _originalOrderId: order.order_id || rawOrderId
     };
   });
 };
@@ -124,13 +131,34 @@ const StaffOrders: React.FC = () => {
       if (!silent) setLoading(true);
       const response = await axiosInstance.get('/api/staff/orders');
       const data = response.data;
+      let newOrders: Order[] = [];
+      
       if (data && data.success && Array.isArray(data.orders)) {
-        setOrders(transformOrdersResponse(data.orders));
+        newOrders = transformOrdersResponse(data.orders);
       } else if (data && Array.isArray(data.orders)) {
-        setOrders(transformOrdersResponse(data.orders));
-      } else {
-        setOrders([]);
+        newOrders = transformOrdersResponse(data.orders);
       }
+      
+      // Ensure order_id consistency - preserve existing order_id if present
+      setOrders(prevOrders => {
+        // Create a map of existing orders by order_id for reference
+        const existingOrdersMap = new Map(prevOrders.map(o => [o.orderId, o]));
+        
+        // Update orders while preserving order_id consistency
+        return newOrders.map(newOrder => {
+          const existingOrder = existingOrdersMap.get(newOrder.orderId);
+          // If order exists and has a stable order_id, preserve it
+          if (existingOrder && existingOrder.orderId === newOrder.orderId) {
+            // Merge updates but keep the same order_id
+            return {
+              ...newOrder,
+              orderId: existingOrder.orderId, // Ensure order_id never changes
+              displayOrderId: existingOrder.displayOrderId || newOrder.displayOrderId
+            };
+          }
+          return newOrder;
+        });
+      });
     } catch (error) {
       console.error('Error fetching orders:', error);
       if (!silent) setOrders([]);

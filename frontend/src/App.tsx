@@ -4,6 +4,7 @@ import "./utils/cartClearDebug"; // Import debug utility
 import { AuthProvider } from "./components/customer/AuthContext";
 import { AlertProvider } from "./contexts/AlertContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PositionProtectedRoute from "./components/auth/PositionProtectedRoute";
 import Unauthorized from "./components/auth/Unauthorized";
 import AdminLanding from "./components/admin/AdminLanding";
 import CustomerLanding from "./components/customer/CustomerLanding";
@@ -154,8 +155,16 @@ function App() {
           <Route index element={<StaffLanding />} />
           <Route path="dashboard" element={<StaffDashboard />} />
           <Route path="inventory" element={<StaffInventory />} />
-          <Route path="orders" element={<StaffOrders />} />
-          <Route path="pos" element={<POSPage />} />
+          <Route path="orders" element={
+            <PositionProtectedRoute allowedPositions={['Barista', 'Manager', 'Admin']}>
+              <StaffOrders />
+            </PositionProtectedRoute>
+          } />
+          <Route path="pos" element={
+            <PositionProtectedRoute allowedPositions={['Cashier', 'Manager', 'Admin']}>
+              <POSPage />
+            </PositionProtectedRoute>
+          } />
           <Route path="loyalty" element={<StaffLoyalty />} />
           <Route path="sales" element={<StaffSales />} />
           <Route path="activity-logs" element={<StaffActivityLogs />} />

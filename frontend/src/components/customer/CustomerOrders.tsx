@@ -1277,7 +1277,7 @@ const CustomerOrders: React.FC = () => {
                <div className="space-y-4">
                  {getPaginatedOrders().map((order) => (
                    <div 
-                     key={order.id} 
+                     key={order.order_id || order.id} 
                      className="bg-white rounded-2xl shadow-xl p-6 cursor-pointer transition-all duration-200 hover:shadow-2xl border-2 border-transparent hover:border-amber-200"
                      onClick={() => handleOrderCardClick(order)}
                    >

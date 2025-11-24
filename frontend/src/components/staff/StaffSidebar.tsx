@@ -14,14 +14,14 @@ import React, { useState } from "react";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
 import { MoreVertical } from "lucide-react";
 
-const menuItems = [
-  { label: "Dashboard", path: "/staff/dashboard", icon: "/images/dashboard.png" },
-  { label: "Manage Inventory", path: "/staff/inventory", icon: "/images/inventory.png" },
-  { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png" },
-  { label: "POS System", path: "/staff/pos", icon: "/images/payment.png" },
-  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png" },
-  { label: "Sales", path: "/staff/sales", icon: "/images/payment.png" },
-  { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png" },
+const allMenuItems = [
+  { label: "Dashboard", path: "/staff/dashboard", icon: "/images/dashboard.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Manage Inventory", path: "/staff/inventory", icon: "/images/inventory.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png", allowedPositions: ['Barista', 'Manager', 'Admin'] },
+  { label: "POS System", path: "/staff/pos", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
+  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Sales", path: "/staff/sales", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
 ];
 
 const settingsItems = [
@@ -41,6 +41,20 @@ const StaffSidebar: React.FC = () => {
       return {};
     }
   }, []);
+
+  // Get user position and filter menu items accordingly
+  const userPosition = storedStaff?.position || storedStaff?.role || '';
+  const filteredMenuItems = React.useMemo(() => {
+    // If user is admin or manager, show all items
+    if (storedStaff?.role === 'admin' || userPosition === 'Manager') {
+      return allMenuItems;
+    }
+    // Filter items based on position
+    return allMenuItems.filter(item => {
+      if (!item.allowedPositions) return true;
+      return item.allowedPositions.includes(userPosition);
+    });
+  }, [userPosition, storedStaff?.role]);
 
   const displayName =
     (typeof storedStaff?.username === 'string' && storedStaff.username.trim().length > 0
@@ -106,7 +120,7 @@ const StaffSidebar: React.FC = () => {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu className="pl-3 group-data-[collapsible=icon]:pl-3 flex flex-col">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <SidebarMenuButton 
                   asChild 
