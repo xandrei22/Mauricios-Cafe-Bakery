@@ -293,7 +293,8 @@ async function staffLogin(req, res) {
             username: user.username,
             email: user.email,
             fullName: user.full_name,
-            role: user.role
+            role: user.role,
+            position: user.position || null
         }, secret, { expiresIn: '1d' });
 
         return res.json({
@@ -303,7 +304,8 @@ async function staffLogin(req, res) {
                 username: user.username,
                 email: user.email,
                 fullName: user.full_name,
-                role: user.role
+                role: user.role,
+                position: user.position || null
             },
             token
         });
@@ -327,7 +329,8 @@ function checkStaffSession(req, res) {
                 username: req.user.username,
                 email: req.user.email,
                 fullName: req.user.fullName || req.user.name,
-                role: req.user.role
+                role: req.user.role,
+                position: req.user.position || null
             }
         });
     }
