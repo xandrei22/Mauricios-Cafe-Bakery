@@ -3,6 +3,7 @@ import { SidebarTrigger, useSidebar } from "../ui/sidebar";
 import { Bell, ChevronRight } from "lucide-react";
 import { useLocation } from 'react-router-dom';
 import NotificationSystem from './NotificationSystem';
+import { io, Socket } from 'socket.io-client';
 
 const AdminNavbar: React.FC = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -12,6 +13,7 @@ const AdminNavbar: React.FC = () => {
   const notificationRef = useRef<HTMLDivElement>(null);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const location = useLocation();
   const { state } = useSidebar(); // Get sidebar state
 
@@ -102,6 +104,54 @@ const AdminNavbar: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Initialize Socket.IO connection for real-time notifications
+  useEffect(() => {
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const newSocket = io(API_URL, {
+      transports: ['polling', 'websocket'],
+      path: '/socket.io',
+      withCredentials: false,
+      timeout: 30000,
+      forceNew: true,
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    });
+
+    // Join admin room for notifications
+    const joinAdminRoom = () => {
+      newSocket.emit('join-admin-room');
+      console.log('📡 Joined admin room for notifications');
+    };
+    
+    joinAdminRoom();
+    newSocket.on('connect', joinAdminRoom);
+    newSocket.io.on('reconnect', joinAdminRoom);
+
+    // Listen for new notifications
+    newSocket.on('new-notification', (notification: any) => {
+      console.log('📢 New notification received:', notification);
+      // Only add if it's for admin
+      if (notification.user_type === 'admin' || !notification.user_type) {
+        // Add to notifications list
+        setNotifications(prev => [notification, ...prev]);
+        // Increment unread count if not read
+        if (!notification.is_read) {
+          setUnreadCount(prev => prev + 1);
+        }
+        // Refresh notifications to get latest count
+        fetchNotifications();
+      }
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.close();
     };
   }, []);
 

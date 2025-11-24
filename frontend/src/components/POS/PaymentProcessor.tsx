@@ -19,6 +19,8 @@ interface Order {
   cancelledAt?: string;
   receiptPath?: string;
   placedBy?: 'customer' | 'admin' | 'staff';
+  orderTime?: string;
+  order_time?: string;
 }
 
 interface PaymentProcessorProps {
@@ -41,27 +43,62 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const [activeTab, setActiveTab] = useState<'pending' | 'cancelled'>('pending');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const pendingOrders = orders.filter(order => {
-    // Pending Payments should ONLY show orders that need payment verification
-    // Flow: Order placed → Pending Payments → (if verified) Preparing → (if cancelled) Cancelled Orders
-    const paymentStatus = (order.paymentStatus || '').toLowerCase();
-    const orderStatus = (order.status || '').toLowerCase();
-    
-    // Only include orders with pending payment status (not paid)
-    const hasPendingPayment = paymentStatus === 'pending' || paymentStatus === 'pending_verification';
-    
-    // Exclude cancelled orders (they go to Cancelled Orders tab)
-    const isNotCancelled = orderStatus !== 'cancelled';
-    
-    // Exclude orders that are already paid (they should be in Preparing/Ready status, not Pending Payments)
-    const isNotPaid = paymentStatus !== 'paid';
-    
-    // Include only orders that have pending payment AND are not cancelled AND are not paid
-    const include = hasPendingPayment && isNotCancelled && isNotPaid;
-    
-    console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, includeInPending=${include}`);
-    return include;
-  });
+  const pendingOrders = orders
+    .filter(order => {
+      // Pending Payments should ONLY show orders that need payment verification
+      // Flow: Order placed → Pending Payments → (if verified) Preparing → (if cancelled) Cancelled Orders
+      const paymentStatus = (order.paymentStatus || '').toLowerCase();
+      const orderStatus = (order.status || '').toLowerCase();
+      
+      // Only include orders with pending payment status (not paid)
+      const hasPendingPayment = paymentStatus === 'pending' || paymentStatus === 'pending_verification';
+      
+      // Exclude cancelled orders (they go to Cancelled Orders tab)
+      const isNotCancelled = orderStatus !== 'cancelled';
+      
+      // Exclude orders that are already paid (they should be in Preparing/Ready status, not Pending Payments)
+      const isNotPaid = paymentStatus !== 'paid';
+      
+      // Include only orders that have pending payment AND are not cancelled AND are not paid
+      const include = hasPendingPayment && isNotCancelled && isNotPaid;
+      
+      console.log(`🔍 Order ${order.orderId}: paymentStatus=${order.paymentStatus}, status=${order.status}, includeInPending=${include}`);
+      return include;
+    })
+    .sort((a, b) => {
+      // First, prioritize orders with receipt uploaded (pending_verification) over pending
+      const aStatus = (a.paymentStatus || '').toLowerCase();
+      const bStatus = (b.paymentStatus || '').toLowerCase();
+      
+      if (aStatus === 'pending_verification' && bStatus === 'pending') {
+        return -1; // pending_verification comes first
+      }
+      if (aStatus === 'pending' && bStatus === 'pending_verification') {
+        return 1; // pending comes after pending_verification
+      }
+      
+      // Then sort by order time (oldest first) - process oldest orders first
+      const aTime = a.orderTime || a.order_time || '';
+      const bTime = b.orderTime || b.order_time || '';
+      
+      if (aTime && bTime) {
+        return new Date(aTime).getTime() - new Date(bTime).getTime();
+      }
+      if (aTime) return -1;
+      if (bTime) return 1;
+      
+      // Fallback: sort by orderId (extract timestamp if available)
+      const aId = a.orderId || '';
+      const bId = b.orderId || '';
+      const aTimestamp = aId.match(/\d+/)?.[0];
+      const bTimestamp = bId.match(/\d+/)?.[0];
+      
+      if (aTimestamp && bTimestamp) {
+        return parseInt(aTimestamp) - parseInt(bTimestamp);
+      }
+      
+      return 0;
+    });
   
   // Debug logging
   React.useEffect(() => {
@@ -100,7 +137,39 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
     })));
   }, [orders, pendingOrders]);
   
-  const cancelledOrders = orders.filter(order => order.status === 'cancelled');
+  const cancelledOrders = orders
+    .filter(order => order.status === 'cancelled')
+    .sort((a, b) => {
+      // Sort by cancellation time (most recent first) or order time
+      const aCancelledAt = a.cancelledAt || '';
+      const bCancelledAt = b.cancelledAt || '';
+      
+      if (aCancelledAt && bCancelledAt) {
+        return new Date(bCancelledAt).getTime() - new Date(aCancelledAt).getTime();
+      }
+      
+      // Fallback to order time (most recent first)
+      const aTime = a.orderTime || a.order_time || '';
+      const bTime = b.orderTime || b.order_time || '';
+      
+      if (aTime && bTime) {
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      }
+      if (aTime) return -1;
+      if (bTime) return 1;
+      
+      // Fallback: sort by orderId (extract timestamp if available, most recent first)
+      const aId = a.orderId || '';
+      const bId = b.orderId || '';
+      const aTimestamp = aId.match(/\d+/)?.[0];
+      const bTimestamp = bId.match(/\d+/)?.[0];
+      
+      if (aTimestamp && bTimestamp) {
+        return parseInt(bTimestamp) - parseInt(aTimestamp);
+      }
+      
+      return 0;
+    });
 
   const toShortId = (rawOrderId: string) => {
     try {
@@ -190,24 +259,29 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
         transactionId
       });
 
-      if (res.status >= 200 && res.status < 300) {
-        const result = res.data || {};
-        if (result.success) {
-          // Show success message with better visibility
-          alert('Payment verified successfully! Order is now pending preparation.');
-          onPaymentProcessed();
-          setSelectedOrder(null);
-          setShowReceiptModal(false);
-          // Stay in POS - no navigation needed
-        } else {
-          alert(`Failed to verify payment: ${result.message || result.error || 'Unknown error'}`);
-        }
+      const result = res.data || {};
+      
+      if (res.status >= 200 && res.status < 300 && result.success) {
+        // Show success message with better visibility
+        alert('Payment verified successfully! Order is now pending preparation.');
+        onPaymentProcessed();
+        setSelectedOrder(null);
+        setShowReceiptModal(false);
+        setShowReferenceModal(false);
+        // Stay in POS - no navigation needed
       } else {
-        alert(`Failed to verify payment: HTTP ${res.status}`);
+        // Handle non-success response
+        const errorMessage = result.error || result.message || `HTTP ${res.status}`;
+        alert(`Failed to verify payment: ${errorMessage}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying payment:', error);
-      alert('Error verifying payment. Please try again.');
+      // Extract error message from response if available
+      const errorMessage = error?.response?.data?.error || 
+                         error?.response?.data?.message || 
+                         error?.message || 
+                         'Network or server error';
+      alert(`Error verifying payment: ${errorMessage}`);
     } finally {
       setProcessingPayment(false);
     }
@@ -526,9 +600,9 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                       onClick={async () => {
                         if (confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
                           try {
-                            // Use the staff orders endpoint instead of admin
-                            const res = await axiosInstance.put(`${API_URL}/api/orders/${selectedOrder.orderId}/status`, {
-                              status: 'cancelled',
+                            // Use the correct cancel endpoint
+                            const res = await axiosInstance.post(`${API_URL}/api/orders/${selectedOrder.orderId}/cancel`, {
+                              reason: 'Cancelled by staff during payment processing',
                               cancelledBy: staffId,
                               cancellationReason: 'Cancelled by staff during payment processing',
                               cancelledAt: new Date().toISOString()
@@ -541,14 +615,16 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                                 onPaymentProcessed(); // Refresh the orders list
                                 setSelectedOrder(null);
                               } else {
-                                alert(`Failed to cancel order: ${result.error || 'Unknown error'}`);
+                                alert(`Failed to cancel order: ${result.error || result.message || 'Unknown error'}`);
                               }
                             } else {
-                              alert(`Failed to cancel order: HTTP ${res.status}`);
+                              const errorData = res.data || {};
+                              alert(`Failed to cancel order: ${errorData.error || errorData.message || `HTTP ${res.status}`}`);
                             }
-                          } catch (error) {
+                          } catch (error: any) {
                             console.error('Error cancelling order:', error);
-                            alert('Error cancelling order: Network or server error');
+                            const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Network or server error';
+                            alert(`Error cancelling order: ${errorMessage}`);
                           }
                         }
                       }}
