@@ -540,6 +540,14 @@ const CustomerOrders: React.FC = () => {
     return result;
   };
 
+  // Get order ID - always use the full order_id (long ID) for consistency
+  const getShortOrderCode = (order: Order | null | undefined): string => {
+    if (!order) return 'N/A';
+    // Always return the full long order_id in format: ORD-{timestamp}-{random}
+    // This ensures consistency across the application
+    return order.order_id || order.id || 'N/A';
+  };
+
   const formatOrderTime = (timeString: string) => {
     return new Date(timeString).toLocaleTimeString('en-US', {
       hour: '2-digit',
