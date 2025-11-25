@@ -499,22 +499,39 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
         const staffId = (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
 
-        // Ensure customer record exists
+        // Ensure customer record exists and get the correct customer name
         let finalCustomerId = customerId;
-        if (!finalCustomerId && customerEmail) {
+        let finalCustomerName = customerName; // Default to the provided name
+        
+        if (finalCustomerId) {
+            // If customerId is provided, fetch the customer's full_name from database
+            // This ensures we use the authoritative name from the database, not from JWT token
+            const [customerRecord] = await db.query(
+                'SELECT id, full_name FROM customers WHERE id = ?', [finalCustomerId]
+            );
+            
+            if (customerRecord.length > 0) {
+                // Use the full_name from database if available, otherwise fall back to provided name
+                finalCustomerName = customerRecord[0].full_name || customerName;
+            }
+        } else if (customerEmail) {
             // Check if customer exists by email
             const [existingCustomer] = await db.query(
-                'SELECT id FROM customers WHERE email = ?', [customerEmail]
+                'SELECT id, full_name FROM customers WHERE email = ?', [customerEmail]
             );
 
             if (existingCustomer.length > 0) {
                 finalCustomerId = existingCustomer[0].id;
+                // Use the full_name from database if available
+                finalCustomerName = existingCustomer[0].full_name || customerName;
             } else {
                 // Create a new customer record
                 const [newCustomer] = await db.query(
                     'INSERT INTO customers (email, full_name, username, password, created_at) VALUES (?, ?, ?, ?, NOW())', [customerEmail, customerName, customerEmail.split('@')[0], 'GUEST_ACCOUNT']
                 );
                 finalCustomerId = newCustomer.insertId;
+                // For new customers, use the provided name
+                finalCustomerName = customerName;
             }
         }
 
@@ -527,7 +544,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             orderIdStr,
             orderNumberStr,
             finalCustomerId, // Use the found/created customer ID
-            customerName,
+            finalCustomerName, // Use the customer name from database when available
             safeTableNumber,
             JSON.stringify(items),
             totalAmount,

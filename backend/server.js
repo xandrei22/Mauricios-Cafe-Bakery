@@ -367,6 +367,15 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Handle order room join (for guest order tracking)
+    socket.on('join-order-room', (orderId) => {
+        if (orderId) {
+            const roomName = `order-${orderId}`;
+            socket.join(roomName);
+            console.log(`✅ Socket ${socket.id} joined ${roomName}`);
+        }
+    });
+
     // Handle disconnect
     socket.on('disconnect', () => {
         console.log('❌ Socket.IO client disconnected:', socket.id);
