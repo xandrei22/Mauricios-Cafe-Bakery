@@ -37,8 +37,6 @@ const GuestOrderTracking: React.FC = () => {
   const [searchOrderId, setSearchOrderId] = useState(decodedParamId || '');
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
   const audioContextRef = useRef<AudioContext | null>(null);
   const previousStatusRef = useRef<string | null>(null);
   const currentOrderIdRef = useRef<string | null>(null);
@@ -123,33 +121,6 @@ const GuestOrderTracking: React.FC = () => {
     oscillator.start(now);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
     oscillator.stop(now + 0.8);
-  }, []);
-
-  const showBrowserNotification = useCallback((message: string) => {
-    if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
-
-    const title = 'Order Status Updated';
-    const body = message;
-
-    const triggerNotification = () => {
-      try {
-        new Notification(title, { body });
-      } catch (error) {
-        console.warn('Unable to show notification:', error);
-      }
-    };
-
-    if (Notification.permission === 'granted') {
-      triggerNotification();
-    } else if (Notification.permission === 'default') {
-      Notification.requestPermission()
-        .then((permission) => {
-          if (permission === 'granted') {
-            triggerNotification();
-          }
-        })
-        .catch(() => {});
-    }
   }, []);
 
   const downloadReceipt = async (orderId: string) => {
@@ -360,34 +331,19 @@ const GuestOrderTracking: React.FC = () => {
         console.log('🔔 GuestOrderTracking: Order updated:', updatedOrder);
         setLastUpdate(new Date());
         
-        // Show notification for status changes (including initial load if status changes)
+        // Play sound for status changes (no visual notifications for guest)
         const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
         const paymentStatusChanged = previousPaymentStatus && previousPaymentStatus !== updatedOrder.paymentStatus;
         
         if (statusChanged) {
-          const statusMessage = `Order status updated to: ${updatedOrder.status.charAt(0).toUpperCase() + updatedOrder.status.slice(1).replace(/_/g, ' ')}`;
-          setNotificationMessage(statusMessage);
-          setShowNotification(true);
-          
-          // Play notification sound
+          // Play notification sound only (no visual notification for guest)
           playNotificationSound();
-          
-          // Show browser notification
-          showBrowserNotification(statusMessage);
-          
-          setTimeout(() => setShowNotification(false), 5000);
         } else if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid') {
-          const paymentMessage = 'Payment confirmed! Your order is being processed.';
-          setNotificationMessage(paymentMessage);
-          setShowNotification(true);
-          
-          // Play notification sound
+          // Play sound when payment is confirmed
           playNotificationSound();
-          
-          // Show browser notification
-          showBrowserNotification(paymentMessage);
-          
-          setTimeout(() => setShowNotification(false), 5000);
+        } else if (!previousStatus && updatedOrder.status && updatedOrder.status !== 'pending') {
+          // First time seeing this order with a non-pending status - play sound
+          playNotificationSound();
         }
         
         // Update previous status ref
@@ -410,7 +366,7 @@ const GuestOrderTracking: React.FC = () => {
       s.off('reconnect', handleConnect);
       s.close();
     };
-  }, [order?.orderId, decodedParamId, searchOrderId, playNotificationSound, showBrowserNotification]);
+  }, [order?.orderId, decodedParamId, searchOrderId, playNotificationSound]);
 
   // Cleanup audio context on unmount
   useEffect(() => {
@@ -424,16 +380,6 @@ const GuestOrderTracking: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <CustomerNavbar />
-      
-      {/* Real-time Notification */}
-      {showNotification && (
-        <div className="fixed top-20 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            <span className="text-sm font-medium">{notificationMessage}</span>
-          </div>
-        </div>
-      )}
       
       <div className="max-w-4xl mx-auto px-4 py-8 pt-20">
         {/* Header */}
