@@ -778,6 +778,7 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 notes,
                 order_time as order_time,
                 estimated_ready_time,
+                queue_position,
                 COALESCE(payment_status, 'pending') as payment_status,
                 payment_method,
                 receipt_path,
@@ -791,7 +792,7 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 OR COALESCE(payment_status, 'pending') IN ('pending', 'pending_verification')
             )
             AND NOT (status = 'completed' AND COALESCE(payment_status, 'pending') = 'paid')
-            ORDER BY queue_position ASC, order_time ASC
+            ORDER BY COALESCE(queue_position, 999999) ASC, order_time ASC
         `);
 
         // Process orders and enrich items with menu item names
@@ -844,18 +845,29 @@ router.get('/orders', authenticateJWT, async(req, res) => {
                 orderId: order.id, // Map id to orderId for frontend compatibility
                 order_id: order.id, // Also include order_id for compatibility
                 id: order.id,
+                customerName: order.customer_name,
                 customer_name: order.customer_name,
                 items: enrichedItems,
+                totalPrice: parseFloat(order.total_price),
                 total_price: parseFloat(order.total_price),
                 status: order.status || 'pending',
+                orderType: order.order_type,
                 order_type: order.order_type,
+                tableNumber: order.table_number,
                 table_number: order.table_number,
+                orderTime: order.order_time,
                 order_time: order.order_time,
+                estimatedReadyTime: order.estimated_ready_time,
                 estimated_ready_time: order.estimated_ready_time,
+                queuePosition: order.queue_position || 0,
+                queue_position: order.queue_position || 0,
                 notes: order.notes,
                 paymentStatus: paymentStatus,
+                payment_status: paymentStatus,
                 paymentMethod: order.payment_method || '',
+                payment_method: order.payment_method || '',
                 receiptPath: order.receipt_path,
+                receipt_path: order.receipt_path,
                 placedBy: order.staff_id ? 'staff' : 'customer',
                 cancelledBy: order.cancelled_by,
                 cancellationReason: order.cancellation_reason,
