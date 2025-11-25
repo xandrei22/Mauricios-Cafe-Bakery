@@ -161,6 +161,20 @@ const AdminStaff: React.FC = () => {
     }
   };
 
+  const normalizeDateValue = (value?: string | null) => {
+    if (!value) return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.includes('T')) {
+      return trimmed.split('T')[0];
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return trimmed;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -178,7 +192,12 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      await axiosInstance.post(`${API_URL}/api/admin/staff`, form);
+      const payload = {
+        ...form,
+        date_hired: normalizeDateValue(form.date_hired),
+        birthday: normalizeDateValue(form.birthday)
+      };
+      await axiosInstance.post(`${API_URL}/api/admin/staff`, payload);
       Swal.fire({
         icon: 'success',
         title: 'Success!',
@@ -239,11 +258,11 @@ const AdminStaff: React.FC = () => {
         address: editForm.address?.trim() || '',
         position: editForm.position?.trim() || '',
         work_schedule: editForm.work_schedule || '',
-        date_hired: editForm.date_hired || '',
+        date_hired: normalizeDateValue(editForm.date_hired),
         employee_id: editForm.employee_id?.trim() || '',
         status: editForm.status || 'active',
         gender: editForm.gender || '',
-        birthday: editForm.birthday || '',
+        birthday: normalizeDateValue(editForm.birthday),
         emergency_contact: editForm.emergency_contact?.trim() || '',
         emergency_phone: editForm.emergency_phone?.trim() || '',
       };
