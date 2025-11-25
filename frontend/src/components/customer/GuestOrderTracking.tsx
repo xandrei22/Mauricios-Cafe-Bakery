@@ -342,7 +342,7 @@ const GuestOrderTracking: React.FC = () => {
           estimatedReadyTime: (payload as any).estimatedReadyTime || (prev as any)?.estimatedReadyTime || '',
           totalPrice: (payload as any).totalPrice || (payload as any).total_price || (prev as any)?.totalPrice || 0,
           items: (payload as any).items || (prev as any)?.items || [],
-          tableNumber: (payload as any).tableNumber || (payload as any).table_number || (prev as any)?.tableNumber ?? null,
+          tableNumber: ((payload as any).tableNumber || (payload as any).table_number || (prev as any)?.tableNumber) ?? null,
           customerEmail: (payload as any).customerEmail || (prev as any)?.customerEmail || ''
         } as Order;
         
@@ -354,7 +354,7 @@ const GuestOrderTracking: React.FC = () => {
           items: (payload as any).items || base.items,
           totalPrice: (payload as any).totalPrice || (payload as any).total_price || base.totalPrice,
           customerName: payload.customerName || base.customerName,
-          tableNumber: (payload as any).tableNumber || (payload as any).table_number ?? base.tableNumber,
+          tableNumber: ((payload as any).tableNumber || (payload as any).table_number) ?? base.tableNumber,
         };
         
         console.log('🔔 GuestOrderTracking: Order updated:', updatedOrder);
