@@ -177,10 +177,20 @@ const GuestOrderTracking: React.FC = () => {
       if (data.success) {
         const fetchedOrder = data.order;
         setOrder(fetchedOrder);
-        // Update the current order ID ref for socket room joining
-        currentOrderIdRef.current = decoded;
+        // Use the orderId directly from the API response (long format like ORD-1764039875901-qb6xvn1fj)
+        // This is the format the backend uses for socket rooms
+        const longOrderId = fetchedOrder.orderId || decoded;
+        currentOrderIdRef.current = longOrderId;
         // Store the initial status for comparison
         previousStatusRef.current = fetchedOrder.status || null;
+        
+        console.log('🔌 GuestOrderTracking: Order fetched, orderId:', longOrderId);
+        
+        // If socket is connected, join the order room with the long order ID
+        if (socket && socket.connected) {
+          console.log('🔌 GuestOrderTracking: Joining socket room with long order ID:', longOrderId);
+          socket.emit('join-order-room', longOrderId);
+        }
       } else {
         setError(data.message || 'Order not found');
         setOrder(null);
@@ -209,28 +219,43 @@ const GuestOrderTracking: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
-  // Rejoin socket room when order changes
+  // Rejoin socket room when order is first fetched or order ID changes
   useEffect(() => {
     if (order && order.orderId && socket && socket.connected) {
-      const rawOrderId = decodeId(order.orderId) || order.orderId;
-      console.log('🔌 GuestOrderTracking: Rejoining socket room for order:', rawOrderId);
-      socket.emit('join-order-room', rawOrderId);
-      currentOrderIdRef.current = rawOrderId;
+      // Use the orderId directly (long format) - don't decode it
+      const longOrderId = order.orderId;
+      // Only rejoin if the order ID has actually changed
+      if (currentOrderIdRef.current !== longOrderId) {
+        console.log('🔌 GuestOrderTracking: Order ID changed, rejoining socket room with long ID:', longOrderId);
+        socket.emit('join-order-room', longOrderId);
+        currentOrderIdRef.current = longOrderId;
+      }
     }
   }, [order?.orderId, socket]);
 
   // Realtime updates: connect to socket and join order room
   useEffect(() => {
     // Use the order ID from the fetched order, or from params/search
+    // Don't recreate socket if we already have one connected for this order
     const activeOrderId = order?.orderId || currentOrderIdRef.current || decodedParamId || searchOrderId;
     if (!activeOrderId) return;
     
-    // Update the ref with the current order ID
+    // Update the ref with the current order ID (use long format from order if available)
+    // The order.orderId from API is already in long format (ORD-xxx-xxx)
     if (order?.orderId) {
-      currentOrderIdRef.current = decodeId(order.orderId) || order.orderId;
+      currentOrderIdRef.current = order.orderId; // Use long format directly
+    } else {
+      // If no order yet, decode the activeOrderId if it's encoded, otherwise use as-is
+      currentOrderIdRef.current = activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId);
     }
 
-    console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId);
+    // Don't recreate socket if we already have one and it's connected
+    if (socket && socket.connected && currentOrderIdRef.current) {
+      console.log('🔌 GuestOrderTracking: Socket already connected, skipping recreation');
+      return;
+    }
+
+    console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId, 'raw:', rawOrderId);
     
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     const s = io(API_URL, {
@@ -250,11 +275,13 @@ const GuestOrderTracking: React.FC = () => {
     const handleConnect = () => {
       console.log('🔌 GuestOrderTracking: Socket connected for order:', activeOrderId);
       setIsConnected(true);
-      // Join a dedicated room for this order (backend expects 'join-order-room' with raw id)
-      // Decode if needed to get the raw order ID
-      const rawOrderId = decodeId(activeOrderId) || activeOrderId;
-      s.emit('join-order-room', rawOrderId);
-      console.log('🔌 GuestOrderTracking: Joined order room:', `order-${rawOrderId}`);
+      // Join a dedicated room for this order using the long order ID format
+      // Use the current order ID from ref if available (should be long format from API)
+      // Otherwise use activeOrderId directly (might be encoded, so decode it)
+      const longOrderId = currentOrderIdRef.current || (activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId));
+      console.log('🔌 GuestOrderTracking: Joining order room with long order ID:', longOrderId);
+      s.emit('join-order-room', longOrderId);
+      console.log('🔌 GuestOrderTracking: Joined order room:', `order-${longOrderId}`);
     };
 
     s.on('connect', handleConnect);
@@ -279,35 +306,52 @@ const GuestOrderTracking: React.FC = () => {
       console.log('🔔 GuestOrderTracking: Received update:', payload);
       if (!payload) return;
       
-      // More flexible order ID matching - check both raw and decoded versions
+      // Order ID matching - backend sends long format (ORD-xxx-xxx)
       const payloadOrderId = payload.orderId || payload.order_id || payload.internalOrderId;
-      const rawActiveOrderId = decodeId(activeOrderId) || activeOrderId;
-      const decodedPayloadOrderId = payloadOrderId ? (decodeId(payloadOrderId) || payloadOrderId) : null;
+      // Use the long order ID from currentOrderIdRef (from API response) or decode if needed
+      const currentLongOrderId = currentOrderIdRef.current || (activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId));
       
-      // Match if order IDs match (either raw or decoded)
-      if (payloadOrderId && 
-          payloadOrderId !== activeOrderId && 
-          payloadOrderId !== rawActiveOrderId &&
-          decodedPayloadOrderId !== activeOrderId &&
-          decodedPayloadOrderId !== rawActiveOrderId) {
+      // Match if order IDs match (both should be in long format)
+      const orderIdMatches = payloadOrderId && (
+        payloadOrderId === currentLongOrderId ||
+        payloadOrderId === activeOrderId ||
+        currentLongOrderId === payloadOrderId ||
+        // Also check if they're the same after normalization
+        (payloadOrderId.includes('ORD-') && currentLongOrderId.includes('ORD-') && 
+         payloadOrderId.split('-').slice(0, 2).join('-') === currentLongOrderId.split('-').slice(0, 2).join('-'))
+      );
+      
+      // If payload has no orderId, assume it's for us (we're in the order room)
+      if (payloadOrderId && !orderIdMatches) {
         console.log('🔔 GuestOrderTracking: Order ID mismatch, ignoring update:', {
           payloadOrderId,
+          currentLongOrderId,
           activeOrderId,
-          rawActiveOrderId,
-          decodedPayloadOrderId
+          orderIdMatches
         });
         return;
       }
+      
+      console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
+        payloadOrderId,
+        currentLongOrderId,
+        status: payload.status
+      });
       
       setOrder(prev => {
         const previousStatus = prev?.status || previousStatusRef.current;
         const previousPaymentStatus = prev?.paymentStatus;
         
+        // Always update status if provided in payload, even if it's the same
+        // This ensures the UI updates even if the status hasn't technically "changed"
+        const newStatus = payload.status || prev?.status || 'pending';
+        const newPaymentStatus = payload.paymentStatus || prev?.paymentStatus || 'unpaid';
+        
         const base = prev || {
           orderId: activeOrderId,
           customerName: payload.customerName || '',
-          status: payload.status || 'pending',
-          paymentStatus: payload.paymentStatus || 'unpaid',
+          status: newStatus,
+          paymentStatus: newPaymentStatus,
           paymentMethod: (payload as any).paymentMethod || 'cash',
           orderTime: (payload as any).orderTime || (prev as any)?.orderTime || new Date().toISOString(),
           estimatedReadyTime: (payload as any).estimatedReadyTime || (prev as any)?.estimatedReadyTime || '',
@@ -319,8 +363,8 @@ const GuestOrderTracking: React.FC = () => {
         
         const updatedOrder = {
           ...base,
-          status: payload.status ?? base.status,
-          paymentStatus: payload.paymentStatus ?? base.paymentStatus,
+          status: newStatus, // Always use the new status from payload
+          paymentStatus: newPaymentStatus, // Always use the new payment status from payload
           paymentMethod: payload.paymentMethod ?? base.paymentMethod,
           items: (payload as any).items || base.items,
           totalPrice: (payload as any).totalPrice || (payload as any).total_price || base.totalPrice,
@@ -328,7 +372,13 @@ const GuestOrderTracking: React.FC = () => {
           tableNumber: ((payload as any).tableNumber || (payload as any).table_number) ?? base.tableNumber,
         };
         
-        console.log('🔔 GuestOrderTracking: Order updated:', updatedOrder);
+        console.log('🔔 GuestOrderTracking: Order updated:', {
+          previousStatus,
+          newStatus: updatedOrder.status,
+          previousPaymentStatus,
+          newPaymentStatus: updatedOrder.paymentStatus,
+          updatedOrder
+        });
         setLastUpdate(new Date());
         
         // Play sound for status changes (no visual notifications for guest)
@@ -336,13 +386,20 @@ const GuestOrderTracking: React.FC = () => {
         const paymentStatusChanged = previousPaymentStatus && previousPaymentStatus !== updatedOrder.paymentStatus;
         
         if (statusChanged) {
+          console.log('🔔 GuestOrderTracking: Status changed, playing sound');
           // Play notification sound only (no visual notification for guest)
           playNotificationSound();
         } else if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid') {
+          console.log('🔔 GuestOrderTracking: Payment confirmed, playing sound');
           // Play sound when payment is confirmed
           playNotificationSound();
         } else if (!previousStatus && updatedOrder.status && updatedOrder.status !== 'pending') {
+          console.log('🔔 GuestOrderTracking: First status update, playing sound');
           // First time seeing this order with a non-pending status - play sound
+          playNotificationSound();
+        } else if (payload.status && payload.status !== previousStatus) {
+          // Fallback: if payload has status and it's different, play sound
+          console.log('🔔 GuestOrderTracking: Status update detected (fallback), playing sound');
           playNotificationSound();
         }
         
@@ -366,7 +423,9 @@ const GuestOrderTracking: React.FC = () => {
       s.off('reconnect', handleConnect);
       s.close();
     };
-  }, [order?.orderId, decodedParamId, searchOrderId, playNotificationSound]);
+    // Only recreate socket when the order ID changes (from URL params or search), not when order status updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedParamId, searchOrderId, playNotificationSound]);
 
   // Cleanup audio context on unmount
   useEffect(() => {
