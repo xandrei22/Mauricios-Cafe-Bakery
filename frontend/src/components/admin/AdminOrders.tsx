@@ -60,37 +60,86 @@ const formatOrderId = (value: unknown): string => {
 };
 
 const transformOrderRecord = (order: any): Order => {
-  const rawStatus = (order.status || '').toLowerCase();
-  const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-  const itemsArray = Array.isArray(order.items)
-    ? order.items
-    : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-  const orderId = order.orderId || order.order_id || order.id;
+  try {
+    const rawStatus = (order.status || '').toLowerCase();
+    const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
+    
+    // Handle items - can be array, string, or undefined
+    let itemsArray: any[] = [];
+    if (Array.isArray(order.items)) {
+      itemsArray = order.items;
+    } else if (typeof order.items === 'string') {
+      try {
+        itemsArray = JSON.parse(order.items || '[]');
+      } catch (parseError) {
+        console.warn('Failed to parse items JSON:', parseError);
+        itemsArray = [];
+      }
+    }
+    
+    const orderId = order.orderId || order.order_id || order.id;
 
-  if (!orderId || orderId === '0' || orderId === 0) {
-    console.warn('Invalid order ID detected:', {
-      order,
-      orderId,
-      orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
-    });
+    if (!orderId || orderId === '0' || orderId === 0) {
+      console.warn('⚠️ Invalid order ID detected:', {
+        order,
+        orderId,
+        orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
+      });
+      // Return a placeholder order instead of throwing
+      return {
+        orderId: 'INVALID',
+        customerName: order.customerName || order.customer_name || 'Unknown',
+        tableNumber: order.tableNumber || order.table_number || undefined,
+        items: itemsArray,
+        totalPrice: 0,
+        status: 'pending' as Order['status'],
+        paymentStatus: 'pending' as Order['paymentStatus'],
+        orderType: 'dine_in' as Order['orderType'],
+        queuePosition: 0,
+        estimatedReadyTime: '',
+        orderTime: new Date().toISOString(),
+        paymentMethod: 'cash',
+        notes: order.notes
+      };
+    }
+
+    const transformed: Order = {
+      orderId: String(orderId),
+      displayOrderId: formatOrderId(orderId),
+      customerName: order.customerName || order.customer_name || 'Unknown Customer',
+      tableNumber: order.tableNumber ?? order.table_number ?? undefined,
+      items: itemsArray,
+      totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
+      status: normalizedStatus as Order['status'],
+      paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as Order['paymentStatus'],
+      orderType: (order.orderType || order.order_type || 'dine_in') as Order['orderType'],
+      queuePosition: order.queuePosition ?? order.queue_position ?? 0,
+      estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time || '',
+      orderTime: order.orderTime || order.order_time || new Date().toISOString(),
+      paymentMethod: (order.paymentMethod || order.payment_method || 'cash').toLowerCase(),
+      notes: order.notes || undefined
+    };
+    
+    return transformed;
+  } catch (error) {
+    console.error('❌ Error transforming order record:', error, order);
+    // Return a safe default order
+    return {
+      orderId: order.id || order.order_id || 'ERROR',
+      customerName: 'Error Loading Order',
+      tableNumber: undefined,
+      items: [],
+      totalPrice: 0,
+      status: 'pending' as Order['status'],
+      paymentStatus: 'pending' as Order['paymentStatus'],
+      orderType: 'dine_in' as Order['orderType'],
+      queuePosition: 0,
+      estimatedReadyTime: '',
+      orderTime: new Date().toISOString(),
+      paymentMethod: 'cash',
+      notes: undefined
+    };
   }
-
-  return {
-    orderId: String(orderId),
-    displayOrderId: formatOrderId(orderId),
-    customerName: order.customerName || order.customer_name,
-    tableNumber: order.tableNumber || order.table_number,
-    items: itemsArray,
-    totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
-    status: normalizedStatus as Order['status'],
-    paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as Order['paymentStatus'],
-    orderType: (order.orderType || order.order_type || 'dine_in') as Order['orderType'],
-    queuePosition: order.queuePosition ?? order.queue_position ?? 0,
-    estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
-    orderTime: order.orderTime || order.order_time,
-    paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
-    notes: order.notes
-  };
 };
 
 const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
@@ -282,12 +331,40 @@ const AdminOrders: React.FC = () => {
       const response = await axiosInstance.get('/api/staff/orders');
       const data = response.data;
 
+      console.log('📋 AdminOrders - Raw API response:', data);
+      console.log('📋 AdminOrders - Response type:', typeof data);
+      console.log('📋 AdminOrders - Response keys:', data ? Object.keys(data) : 'null');
+      
       let ordersList: Order[] = [];
+      
+      // Handle different response formats
       if (data && data.success && Array.isArray(data.orders)) {
+        console.log('📋 AdminOrders - Processing orders from data.orders:', data.orders.length);
+        if (data.orders.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data.orders[0]);
+        }
         ordersList = transformOrdersResponse(data.orders);
       } else if (data && Array.isArray(data.orders)) {
+        console.log('📋 AdminOrders - Processing orders from data.orders (no success flag):', data.orders.length);
+        if (data.orders.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data.orders[0]);
+        }
         ordersList = transformOrdersResponse(data.orders);
+      } else if (data && Array.isArray(data)) {
+        // Sometimes the response is just an array
+        console.log('📋 AdminOrders - Processing orders from direct array:', data.length);
+        if (data.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data[0]);
+        }
+        ordersList = transformOrdersResponse(data);
+      } else {
+        console.warn('📋 AdminOrders - Unexpected response format:', data);
+        console.warn('📋 AdminOrders - Data structure:', JSON.stringify(data, null, 2));
+        ordersList = [];
       }
+      
+      console.log('📋 AdminOrders - Transformed orders:', ordersList.length);
+      console.log('📋 AdminOrders - Sample order:', ordersList[0]);
       
       setOrders(ordersList);
       
@@ -307,8 +384,21 @@ const AdminOrders: React.FC = () => {
         paid: ordersList.filter(o => o.paymentStatus === 'paid').length
       });
     } catch (error: any) {
-      console.error('Error fetching orders:', error);
+      console.error('❌ AdminOrders - Error fetching orders:', error);
+      console.error('❌ AdminOrders - Error response:', error?.response?.data);
+      console.error('❌ AdminOrders - Error status:', error?.response?.status);
+      
+      // Show error toast
+      if (!silent) {
+        toast.error('Failed to load orders. Please refresh the page.');
+      }
+      
       if (error?.response?.status === 401) {
+        console.warn('❌ AdminOrders - Unauthorized, redirecting to login');
+        navigate('/admin-login');
+        setOrders([]);
+      } else {
+        // Set empty array on error to show empty state
         setOrders([]);
       }
     } finally {
@@ -531,11 +621,23 @@ const AdminOrders: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <RefreshCw className="w-8 h-8 animate-spin text-gray-500" />
+      <div className="flex flex-col justify-center items-center py-16">
+        <RefreshCw className="w-8 h-8 animate-spin text-gray-500 mb-4" />
+        <p className="text-gray-600">Loading orders...</p>
       </div>
     );
   }
+
+  // Debug: Log current state
+  console.log('📋 AdminOrders - Render state:', {
+    totalOrders: orders.length,
+    preparingCount: preparingOrders.length,
+    readyCount: readyOrders.length,
+    filteredCount: filteredOrders.length,
+    searchTerm,
+    statusFilter,
+    orderTypeFilter
+  });
 
   return (
       <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-4">
@@ -545,7 +647,17 @@ const AdminOrders: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Orders</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor and manage customer orders in real-time</p>
         </div>
-        <div className="flex items-center gap-3" />
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => fetchOrders()}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Order Statistics */}
@@ -858,6 +970,16 @@ const AdminOrders: React.FC = () => {
                   </div>
                   <p className="text-lg font-medium">No orders being prepared</p>
                   <p className="text-sm">Orders will appear here when preparation starts</p>
+                  {orders.length === 0 && (
+                    <Button
+                      onClick={() => fetchOrders()}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Refresh Orders
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -979,6 +1101,16 @@ const AdminOrders: React.FC = () => {
                   </div>
                   <p className="text-lg font-medium">No orders ready</p>
                   <p className="text-sm">Orders will appear here when they're ready for pickup</p>
+                  {orders.length === 0 && (
+                    <Button
+                      onClick={() => fetchOrders()}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Refresh Orders
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="grid gap-4">
