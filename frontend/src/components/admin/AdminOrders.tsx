@@ -111,9 +111,42 @@ const AdminOrders: React.FC = () => {
   const [activeTab, setActiveTab] = useState('preparing');
   const [isMobile, setIsMobile] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const API_URL = getApiUrl();
 
   // Tab options for dropdown - will be defined after orders are loaded
+
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioConstructor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioConstructor();
+    }
+
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+    oscillator.start(now);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    oscillator.stop(now + 0.8);
+  }, []);
 
   // Screen size detection
   useEffect(() => {
@@ -203,10 +236,19 @@ const AdminOrders: React.FC = () => {
           console.warn('Socket error:', error);
         });
 
-        // When any order is created/updated/paid, refresh silently
-        socket.on('new-order-received', silentRefetch);
-        socket.on('order-updated', silentRefetch);
-        socket.on('payment-updated', silentRefetch);
+        // When any order is created/updated/paid, refresh silently and play sound
+        socket.on('new-order-received', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
+        socket.on('order-updated', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
+        socket.on('payment-updated', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
         socket.on('inventory-updated', silentRefetch);
 
       } catch (error) {
@@ -227,8 +269,11 @@ const AdminOrders: React.FC = () => {
         }
       }
       socketRef.current = null;
+      if (audioContextRef.current) {
+        audioContextRef.current.close?.().catch(() => {});
+      }
     };
-  }, [API_URL]);
+  }, [API_URL, playNotificationSound]);
 
   const fetchOrders = async (options: { silent?: boolean } = {}) => {
     const { silent = false } = options;
@@ -666,7 +711,7 @@ const AdminOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-blue-800">Order #{order.displayOrderId || order.orderId}</span>
+                              <span className="text-blue-800">Order #{order.orderId}</span>
                               <Badge className="bg-blue-100 text-blue-800 border-blue-200">
               Preparing
               </Badge>
@@ -732,7 +777,7 @@ const AdminOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-green-800">Order #{order.displayOrderId || order.orderId}</span>
+                              <span className="text-green-800">Order #{order.orderId}</span>
                               <Badge className="bg-green-100 text-green-800 border-green-200">
               Ready
                               </Badge>
@@ -943,7 +988,7 @@ const AdminOrders: React.FC = () => {
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                           <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                            <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
+                            <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.orderId}</span>
                             <span>•</span>
                             <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                             <span>•</span>

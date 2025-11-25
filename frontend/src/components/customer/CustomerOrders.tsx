@@ -282,6 +282,34 @@ const CustomerOrders: React.FC = () => {
       newSocket.on('order-updated', (updateData) => {
         console.log('📡 Order updated received:', updateData);
         console.log('🔄 Auto-refreshing orders due to order-updated event');
+        
+        // Trigger notification immediately if we have the order data
+        if (updateData.orderId && updateData.status) {
+          const matchingOrder = orders.find(o => o.order_id === updateData.orderId);
+          if (matchingOrder) {
+            const previousStatus = statusHistoryRef.current[updateData.orderId];
+            if (previousStatus && previousStatus !== updateData.status) {
+              const updatedOrder = { ...matchingOrder, status: updateData.status as Order['status'] };
+              enqueueStatusNotification(updatedOrder, previousStatus);
+            }
+          } else {
+            // Order not in current list, create a minimal order object for notification
+            const notificationOrder: Order = {
+              id: updateData.orderId,
+              order_id: updateData.orderId,
+              customer_name: 'Your order',
+              items: [],
+              total_price: 0,
+              status: updateData.status as Order['status'],
+              payment_status: updateData.paymentStatus || 'pending',
+              order_type: 'dine_in',
+              order_time: new Date().toISOString()
+            };
+            const previousStatus = statusHistoryRef.current[updateData.orderId];
+            enqueueStatusNotification(notificationOrder, previousStatus);
+          }
+        }
+        
         // Immediately fetch fresh data
         fetchOrders();
       });
@@ -289,6 +317,23 @@ const CustomerOrders: React.FC = () => {
       newSocket.on('payment-updated', (paymentData) => {
         console.log('💳 Payment updated received:', paymentData);
         console.log('🔄 Auto-refreshing orders due to payment-updated event');
+        
+        // Trigger notification for payment updates
+        if (paymentData.orderId) {
+          const matchingOrder = orders.find(o => o.order_id === paymentData.orderId);
+          if (matchingOrder) {
+            const previousStatus = statusHistoryRef.current[paymentData.orderId];
+            const updatedOrder = { 
+              ...matchingOrder, 
+              payment_status: 'paid' as Order['payment_status'],
+              status: matchingOrder.status === 'pending_verification' ? 'preparing' as Order['status'] : matchingOrder.status
+            };
+            if (previousStatus !== updatedOrder.status) {
+              enqueueStatusNotification(updatedOrder, previousStatus);
+            }
+          }
+        }
+        
         // Immediately fetch fresh data
         fetchOrders();
       });

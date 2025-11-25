@@ -66,11 +66,15 @@ const StaffSidebar: React.FC = () => {
     
     // Filter items based on position (case-insensitive comparison)
     const normalizedPosition = userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase();
+    const normalizedPositionLower = normalizedPosition.toLowerCase();
     const filtered = allMenuItems.filter(item => {
-      if (!item.allowedPositions) return true;
-      // Case-insensitive comparison
+      // If no position restrictions, allow the item
+      if (!item.allowedPositions || item.allowedPositions.length === 0) {
+        return true;
+      }
+      // Case-insensitive comparison - check if user's position is in allowed positions
       const isAllowed = item.allowedPositions.some(pos => 
-        pos.toLowerCase() === normalizedPosition.toLowerCase()
+        pos.toLowerCase() === normalizedPositionLower
       );
       return isAllowed;
     });

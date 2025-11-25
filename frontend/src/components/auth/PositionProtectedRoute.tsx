@@ -48,23 +48,31 @@ const PositionProtectedRoute: React.FC<PositionProtectedRouteProps> = ({
     }
 
     // Admin and Manager can access everything
-    if (user.role === 'admin' || user.position === 'Manager') {
+    const userPositionLower = (user.position || '').toLowerCase();
+    if (user.role === 'admin' || userPositionLower === 'manager') {
       return true;
     }
 
     const userPosition = user.position || '';
+    // Normalize position for case-insensitive comparison
+    const normalizedUserPosition = userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase();
 
     // Check requiredPosition
     if (requiredPosition) {
       if (Array.isArray(requiredPosition)) {
-        return requiredPosition.includes(userPosition);
+        return requiredPosition.some(pos => 
+          pos.charAt(0).toUpperCase() + pos.slice(1).toLowerCase() === normalizedUserPosition
+        );
       }
-      return userPosition === requiredPosition;
+      const normalizedRequired = requiredPosition.charAt(0).toUpperCase() + requiredPosition.slice(1).toLowerCase();
+      return normalizedUserPosition === normalizedRequired;
     }
 
     // Check allowedPositions
     if (allowedPositions) {
-      return allowedPositions.includes(userPosition);
+      return allowedPositions.some(pos => 
+        pos.charAt(0).toUpperCase() + pos.slice(1).toLowerCase() === normalizedUserPosition
+      );
     }
 
     // If no position requirement specified, allow access

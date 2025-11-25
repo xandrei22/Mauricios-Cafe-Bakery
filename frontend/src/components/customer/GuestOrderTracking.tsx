@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
@@ -39,6 +39,9 @@ const GuestOrderTracking: React.FC = () => {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const previousStatusRef = useRef<string | null>(null);
+  const currentOrderIdRef = useRef<string | null>(null);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -90,6 +93,64 @@ const GuestOrderTracking: React.FC = () => {
         return 0;
     }
   };
+
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioConstructor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioConstructor();
+    }
+
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+    oscillator.start(now);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    oscillator.stop(now + 0.8);
+  }, []);
+
+  const showBrowserNotification = useCallback((message: string) => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+
+    const title = 'Order Status Updated';
+    const body = message;
+
+    const triggerNotification = () => {
+      try {
+        new Notification(title, { body });
+      } catch (error) {
+        console.warn('Unable to show notification:', error);
+      }
+    };
+
+    if (Notification.permission === 'granted') {
+      triggerNotification();
+    } else if (Notification.permission === 'default') {
+      Notification.requestPermission()
+        .then((permission) => {
+          if (permission === 'granted') {
+            triggerNotification();
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const downloadReceipt = async (orderId: string) => {
     try {
@@ -143,10 +204,17 @@ const GuestOrderTracking: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
-        setOrder(data.order);
+        const fetchedOrder = data.order;
+        setOrder(fetchedOrder);
+        // Update the current order ID ref for socket room joining
+        currentOrderIdRef.current = decoded;
+        // Store the initial status for comparison
+        previousStatusRef.current = fetchedOrder.status || null;
       } else {
         setError(data.message || 'Order not found');
         setOrder(null);
+        currentOrderIdRef.current = null;
+        previousStatusRef.current = null;
       }
     } catch (error) {
       console.error('Error fetching order:', error);
@@ -164,14 +232,32 @@ const GuestOrderTracking: React.FC = () => {
   useEffect(() => {
     if (decodedParamId) {
       setSearchOrderId(decodedParamId);
+      // Fetch order if we have a param ID
+      fetchOrder(decodedParamId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
+
+  // Rejoin socket room when order changes
+  useEffect(() => {
+    if (order && order.orderId && socket && socket.connected) {
+      const rawOrderId = decodeId(order.orderId) || order.orderId;
+      console.log('🔌 GuestOrderTracking: Rejoining socket room for order:', rawOrderId);
+      socket.emit('join-order-room', rawOrderId);
+      currentOrderIdRef.current = rawOrderId;
+    }
+  }, [order?.orderId, socket]);
 
   // Realtime updates: connect to socket and join order room
   useEffect(() => {
-    // Only attach sockets if we have an orderId being viewed
-    const activeOrderId = decodedParamId || searchOrderId;
+    // Use the order ID from the fetched order, or from params/search
+    const activeOrderId = order?.orderId || currentOrderIdRef.current || decodedParamId || searchOrderId;
     if (!activeOrderId) return;
+    
+    // Update the ref with the current order ID
+    if (order?.orderId) {
+      currentOrderIdRef.current = decodeId(order.orderId) || order.orderId;
+    }
 
     console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId);
     
@@ -190,11 +276,22 @@ const GuestOrderTracking: React.FC = () => {
     setSocket(s);
 
     // Connection event handlers
-    s.on('connect', () => {
+    const handleConnect = () => {
       console.log('🔌 GuestOrderTracking: Socket connected for order:', activeOrderId);
       setIsConnected(true);
       // Join a dedicated room for this order (backend expects 'join-order-room' with raw id)
-      s.emit('join-order-room', activeOrderId);
+      // Decode if needed to get the raw order ID
+      const rawOrderId = decodeId(activeOrderId) || activeOrderId;
+      s.emit('join-order-room', rawOrderId);
+      console.log('🔌 GuestOrderTracking: Joined order room:', `order-${rawOrderId}`);
+    };
+
+    s.on('connect', handleConnect);
+
+    // Rejoin room on reconnect
+    s.on('reconnect', () => {
+      console.log('🔌 GuestOrderTracking: Socket reconnected, rejoining room');
+      handleConnect();
     });
 
     s.on('disconnect', () => {
@@ -210,20 +307,43 @@ const GuestOrderTracking: React.FC = () => {
     const handleUpdate = (payload: any) => {
       console.log('🔔 GuestOrderTracking: Received update:', payload);
       if (!payload) return;
-      if (payload.orderId && payload.orderId !== activeOrderId) return;
+      
+      // More flexible order ID matching - check both raw and decoded versions
+      const payloadOrderId = payload.orderId || payload.order_id || payload.internalOrderId;
+      const rawActiveOrderId = decodeId(activeOrderId) || activeOrderId;
+      const decodedPayloadOrderId = payloadOrderId ? (decodeId(payloadOrderId) || payloadOrderId) : null;
+      
+      // Match if order IDs match (either raw or decoded)
+      if (payloadOrderId && 
+          payloadOrderId !== activeOrderId && 
+          payloadOrderId !== rawActiveOrderId &&
+          decodedPayloadOrderId !== activeOrderId &&
+          decodedPayloadOrderId !== rawActiveOrderId) {
+        console.log('🔔 GuestOrderTracking: Order ID mismatch, ignoring update:', {
+          payloadOrderId,
+          activeOrderId,
+          rawActiveOrderId,
+          decodedPayloadOrderId
+        });
+        return;
+      }
       
       setOrder(prev => {
+        const previousStatus = prev?.status || previousStatusRef.current;
+        const previousPaymentStatus = prev?.paymentStatus;
+        
         const base = prev || {
           orderId: activeOrderId,
-          customerName: '',
+          customerName: payload.customerName || '',
           status: payload.status || 'pending',
           paymentStatus: payload.paymentStatus || 'unpaid',
-          paymentMethod: (payload as any).paymentMethod || (prev as any)?.paymentMethod || 'cash',
-          orderTime: (prev as any)?.orderTime || new Date().toISOString(),
-          estimatedReadyTime: (prev as any)?.estimatedReadyTime || '',
-          totalPrice: (prev as any)?.totalPrice || 0,
-          tableNumber: (prev as any)?.tableNumber ?? null,
-          customerEmail: (prev as any)?.customerEmail || ''
+          paymentMethod: (payload as any).paymentMethod || 'cash',
+          orderTime: (payload as any).orderTime || (prev as any)?.orderTime || new Date().toISOString(),
+          estimatedReadyTime: (payload as any).estimatedReadyTime || (prev as any)?.estimatedReadyTime || '',
+          totalPrice: (payload as any).totalPrice || (payload as any).total_price || (prev as any)?.totalPrice || 0,
+          items: (payload as any).items || (prev as any)?.items || [],
+          tableNumber: (payload as any).tableNumber || (payload as any).table_number || (prev as any)?.tableNumber ?? null,
+          customerEmail: (payload as any).customerEmail || (prev as any)?.customerEmail || ''
         } as Order;
         
         const updatedOrder = {
@@ -231,17 +351,47 @@ const GuestOrderTracking: React.FC = () => {
           status: payload.status ?? base.status,
           paymentStatus: payload.paymentStatus ?? base.paymentStatus,
           paymentMethod: payload.paymentMethod ?? base.paymentMethod,
+          items: (payload as any).items || base.items,
+          totalPrice: (payload as any).totalPrice || (payload as any).total_price || base.totalPrice,
+          customerName: payload.customerName || base.customerName,
+          tableNumber: (payload as any).tableNumber || (payload as any).table_number ?? base.tableNumber,
         };
         
         console.log('🔔 GuestOrderTracking: Order updated:', updatedOrder);
         setLastUpdate(new Date());
         
-        // Show notification for status changes
-        if (prev && prev.status !== updatedOrder.status) {
-          setNotificationMessage(`Order status updated to: ${updatedOrder.status}`);
+        // Show notification for status changes (including initial load if status changes)
+        const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
+        const paymentStatusChanged = previousPaymentStatus && previousPaymentStatus !== updatedOrder.paymentStatus;
+        
+        if (statusChanged) {
+          const statusMessage = `Order status updated to: ${updatedOrder.status.charAt(0).toUpperCase() + updatedOrder.status.slice(1).replace(/_/g, ' ')}`;
+          setNotificationMessage(statusMessage);
           setShowNotification(true);
-          setTimeout(() => setShowNotification(false), 3000);
+          
+          // Play notification sound
+          playNotificationSound();
+          
+          // Show browser notification
+          showBrowserNotification(statusMessage);
+          
+          setTimeout(() => setShowNotification(false), 5000);
+        } else if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid') {
+          const paymentMessage = 'Payment confirmed! Your order is being processed.';
+          setNotificationMessage(paymentMessage);
+          setShowNotification(true);
+          
+          // Play notification sound
+          playNotificationSound();
+          
+          // Show browser notification
+          showBrowserNotification(paymentMessage);
+          
+          setTimeout(() => setShowNotification(false), 5000);
         }
+        
+        // Update previous status ref
+        previousStatusRef.current = updatedOrder.status;
         
         return updatedOrder;
       });
@@ -249,14 +399,27 @@ const GuestOrderTracking: React.FC = () => {
 
     s.on('order-updated', handleUpdate);
     s.on('payment-updated', handleUpdate);
+    s.on('new-order-received', handleUpdate);
 
     return () => {
       console.log('🔌 GuestOrderTracking: Cleaning up socket for order:', activeOrderId);
       s.off('order-updated', handleUpdate);
       s.off('payment-updated', handleUpdate);
+      s.off('new-order-received', handleUpdate);
+      s.off('connect', handleConnect);
+      s.off('reconnect', handleConnect);
       s.close();
     };
-  }, [orderId, searchOrderId]);
+  }, [order?.orderId, decodedParamId, searchOrderId, playNotificationSound, showBrowserNotification]);
+
+  // Cleanup audio context on unmount
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close?.().catch(() => {});
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
