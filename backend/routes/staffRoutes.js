@@ -1036,9 +1036,24 @@ router.put('/orders/:orderId/status', authenticateJWT, async(req, res) => {
         try {
             const io = req.app.get('io');
             if (io) {
+                // Get updated order to include payment status
+                const [updatedOrder] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+                const currentOrder = updatedOrder[0] || order;
+                
                 const emitId = (order && (order.order_id || order.id)) || orderId;
-                const payload = { orderId: emitId, status };
+                const payload = { 
+                    orderId: emitId, 
+                    status,
+                    paymentStatus: currentOrder.payment_status || order.payment_status,
+                    paymentMethod: currentOrder.payment_method || order.payment_method,
+                    timestamp: new Date()
+                };
+                
+                // Emit to specific order room for guest tracking
                 io.to(`order-${emitId}`).emit('order-updated', payload);
+                console.log(`📤 Staff: Emitted order-updated to order room: order-${emitId}`);
+                
+                // Emit to staff and admin rooms
                 io.to('staff-room').emit('order-updated', payload);
                 io.to('admin-room').emit('order-updated', payload);
                 

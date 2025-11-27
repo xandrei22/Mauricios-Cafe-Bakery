@@ -1022,15 +1022,19 @@ class OrderProcessingService {
 
                 // Emit real-time update
                 if (this.io) {
+                    const publicOrderId = order.order_id || orderId;
                     const updatePayload = {
-                        orderId: order.order_id || orderId,
+                        orderId: publicOrderId,
                         status: newStatus,
+                        paymentStatus: order.payment_status,
+                        paymentMethod: order.payment_method,
                         timestamp: new Date(),
                         order: order
                     };
                     
-                    // Emit to specific order room
-                    this.io.to(`order-${orderId}`).emit('order-updated', updatePayload);
+                    // Emit to specific order room using public order ID
+                    this.io.to(`order-${publicOrderId}`).emit('order-updated', updatePayload);
+                    console.log(`📤 OrderProcessingService: Emitted order-updated to order room: order-${publicOrderId}`);
                     // Emit to staff and admin rooms
                     this.io.to('staff-room').emit('order-updated', updatePayload);
                     this.io.to('admin-room').emit('order-updated', updatePayload);

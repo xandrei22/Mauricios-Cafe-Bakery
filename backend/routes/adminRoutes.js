@@ -1586,21 +1586,38 @@ router.put('/orders/:orderId/status', async(req, res) => {
         // Emit real-time update
         const io = req.app.get('io');
         if (io) {
-            io.to(`order-${order.order_id}`).emit('order-updated', {
+            // Get updated order to include payment status
+            const [updatedOrder] = await db.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+            const currentOrder = updatedOrder[0] || order;
+            
+            const updatePayload = {
                 orderId: order.order_id,
                 status,
+                paymentStatus: currentOrder.payment_status || order.payment_status,
+                paymentMethod: currentOrder.payment_method || order.payment_method,
                 timestamp: new Date()
-            });
-            io.to('staff-room').emit('order-updated', {
-                orderId: order.order_id,
-                status,
-                timestamp: new Date()
-            });
-            io.to('admin-room').emit('order-updated', {
-                orderId: order.order_id,
-                status,
-                timestamp: new Date()
-            });
+            };
+            
+            // Emit to specific order room for guest tracking
+            io.to(`order-${order.order_id}`).emit('order-updated', updatePayload);
+            console.log(`📤 Admin: Emitted order-updated to order room: order-${order.order_id}`);
+            
+            // Emit to staff and admin rooms
+            io.to('staff-room').emit('order-updated', updatePayload);
+            io.to('admin-room').emit('order-updated', updatePayload);
+            
+            // Emit to customer room if customer_id exists
+            if (order.customer_id) {
+                try {
+                    const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                    if (customer.length > 0 && customer[0].email) {
+                        io.to(`customer-${customer[0].email}`).emit('order-updated', updatePayload);
+                        console.log(`📤 Admin: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                    }
+                } catch (customerError) {
+                    console.warn('Failed to get customer email for room emission:', customerError.message);
+                }
+            }
         }
 
         res.json({
