@@ -97,35 +97,41 @@ const CustomerOrders: React.FC = () => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }, []);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback(async () => {
     if (typeof window === 'undefined') return;
     const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioConstructor) return;
 
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioConstructor();
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioConstructor();
+      }
+
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+
+      // Resume AudioContext if suspended (required for autoplay policies)
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      // Create and play sound
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+      oscillator.start(now);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+      oscillator.stop(now + 0.8);
+    } catch (error) {
+      console.warn('Failed to play notification sound:', error);
     }
-
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
-
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-    gainNode.gain.setValueAtTime(0.0001, now);
-    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
-    oscillator.start(now);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-    oscillator.stop(now + 0.8);
   }, []);
 
   const showBrowserNotification = useCallback(
@@ -217,6 +223,29 @@ const CustomerOrders: React.FC = () => {
     if (Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
+    
+    // Initialize AudioContext on user interaction to bypass autoplay restrictions
+    const initializeAudio = async () => {
+      const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioConstructor && !audioContextRef.current) {
+        audioContextRef.current = new AudioConstructor();
+        // Resume AudioContext if suspended (required for autoplay policies)
+        if (audioContextRef.current.state === 'suspended') {
+          try {
+            await audioContextRef.current.resume();
+          } catch (error) {
+            console.warn('Failed to resume AudioContext:', error);
+          }
+        }
+      }
+    };
+    
+    // Initialize on any user interaction
+    const events = ['click', 'touchstart', 'keydown'];
+    events.forEach(event => {
+      document.addEventListener(event, initializeAudio, { once: true });
+    });
+    
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close?.().catch(() => {});
@@ -226,6 +255,9 @@ const CustomerOrders: React.FC = () => {
           window.clearTimeout(timeoutId);
         });
       }
+      events.forEach(event => {
+        document.removeEventListener(event, initializeAudio);
+      });
     };
   }, []);
 
@@ -290,6 +322,8 @@ const CustomerOrders: React.FC = () => {
           
           // Play sound and show notification if status changed
           if (previousStatus && previousStatus !== updateData.status) {
+            // Play sound immediately when status changes
+            playNotificationSound();
             if (matchingOrder) {
               const updatedOrder = { ...matchingOrder, status: updateData.status as Order['status'] };
               enqueueStatusNotification(updatedOrder, previousStatus);
@@ -340,6 +374,8 @@ const CustomerOrders: React.FC = () => {
             };
             // Play sound and show notification if status changed or payment was confirmed
             if (previousStatus !== updatedOrder.status) {
+              // Play sound immediately when status changes
+              playNotificationSound();
               enqueueStatusNotification(updatedOrder, previousStatus);
             } else if (paymentData.paymentStatus === 'paid' && matchingOrder.payment_status !== 'paid') {
               // Payment was just confirmed - play sound

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search } from "lucide-react";
+import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search, CreditCard } from "lucide-react";
 import UnifiedCustomizeModal from "../customer/UnifiedCustomizeModal";
 import { toast } from "sonner";
 import { io } from "socket.io-client";
@@ -41,10 +41,11 @@ interface CustomerInfo {
 interface SimplePOSProps {
   hideSidebar?: boolean; // when true, render only menu grid (no customer/cart sidebar)
   sidebarOnly?: boolean; // when true, render only the sidebar (customer info + cart)
-  children?: React.ReactNode; // PaymentProcessor component to render under cart
+  children?: React.ReactNode; // PaymentProcessor component to render under cart (deprecated - use onOpenPaymentModal instead)
+  onOpenPaymentModal?: () => void; // Callback to open payment processing modal
 }
 
-export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, children }: SimplePOSProps) {
+export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, children, onOpenPaymentModal }: SimplePOSProps) {
 	const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 	const [cart, setCart] = useState<CartItem[]>([]);
 	const [searchTerm, setSearchTerm] = useState("");
@@ -1135,15 +1136,28 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
                             </div>
 
 						{/* Action Buttons - Always Visible */}
-						<div className="flex gap-2 mt-1 w-full">
-							<Button onClick={clearCart} variant="outline" className="h-8 flex-1 min-w-0 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2" disabled={cart.length === 0}>
-								<Trash2 className="w-3 h-3 mr-1" />
-								Clear Cart
-                                </Button>
-							<Button onClick={processOrder} disabled={cart.length === 0 || !customerInfo.name.trim() || (customerInfo.orderType === 'dine_in' && (!customerInfo.tableNumber || customerInfo.tableNumber < 1 || customerInfo.tableNumber > 6))} className="h-8 flex-1 min-w-0 bg-[#a87437] hover:bg-[#a87437]/90 text-white inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2">
-								Process Order
-                                </Button>
-                            </div>
+						<div className="flex flex-col gap-2 mt-1 w-full">
+							<div className="flex gap-2">
+								<Button onClick={clearCart} variant="outline" className="h-8 flex-1 min-w-0 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2" disabled={cart.length === 0}>
+									<Trash2 className="w-3 h-3 mr-1" />
+									Clear Cart
+	                            </Button>
+								<Button onClick={processOrder} disabled={cart.length === 0 || !customerInfo.name.trim() || (customerInfo.orderType === 'dine_in' && (!customerInfo.tableNumber || customerInfo.tableNumber < 1 || customerInfo.tableNumber > 6))} className="h-8 flex-1 min-w-0 bg-[#a87437] hover:bg-[#a87437]/90 text-white inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2">
+									Process Order
+	                            </Button>
+	                        </div>
+							{/* Payment Processing Button */}
+							{onOpenPaymentModal && (
+								<Button 
+									onClick={onOpenPaymentModal} 
+									variant="outline" 
+									className="h-8 w-full border-blue-500 text-blue-700 hover:bg-blue-50 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2"
+								>
+									<CreditCard className="w-3 h-3 mr-1" />
+									Payment Processing
+								</Button>
+							)}
+                        </div>
 							</div>
 						</div>
 
@@ -1152,8 +1166,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
                   </CardContent>
                 </Card>
 
-				{/* Payment Processor - rendered under cart */}
-				{children && (
+				{/* Payment Processor - rendered under cart (deprecated, use modal instead) */}
+				{children && !onOpenPaymentModal && (
 					<div className="mt-4 flex-1 min-h-0 overflow-y-auto">
 						{children}
 					</div>

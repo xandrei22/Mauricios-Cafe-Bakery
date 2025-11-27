@@ -22,6 +22,7 @@ interface Order {
 
 const WorkingPOS: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     // Initialize Socket.IO connection
@@ -112,13 +113,7 @@ const WorkingPOS: React.FC = () => {
           {/* Left: Take Order (menu filters + grid) under Completed */}
           <div className="space-y-4 order-1">
             <SimplePOS 
-              children={
-                <PaymentProcessor 
-                  orders={orders}
-                  onPaymentProcessed={fetchOrders}
-                  staffId="admin"
-                />
-              }
+              onOpenPaymentModal={() => setShowPaymentModal(true)}
             />
           </div>
 
@@ -127,6 +122,17 @@ const WorkingPOS: React.FC = () => {
             {/* Payment processing is now under the cart in SimplePOS */}
           </div>
         </div>
+
+        {/* Payment Processing Modal */}
+        {showPaymentModal && (
+          <PaymentProcessor 
+            orders={orders}
+            onPaymentProcessed={fetchOrders}
+            staffId="admin"
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+          />
+        )}
       </div>
     </div>
   );

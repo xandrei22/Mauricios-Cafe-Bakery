@@ -37,6 +37,7 @@ const GuestOrderTracking: React.FC = () => {
   const [searchOrderId, setSearchOrderId] = useState(decodedParamId || '');
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [statusUpdateAnimation, setStatusUpdateAnimation] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const previousStatusRef = useRef<string | null>(null);
   const currentOrderIdRef = useRef<string | null>(null);
@@ -93,34 +94,63 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   const playNotificationSound = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioConstructor) return;
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioConstructor) {
+        console.warn('AudioContext not supported');
+        return;
+      }
 
-    if (!audioContextRef.current) {
-      audioContextRef.current = new AudioConstructor();
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioConstructor();
+      }
+
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+
+      // Resume audio context if suspended (required by browser autoplay policies)
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch((err) => {
+          console.warn('Failed to resume audio context:', err);
+        });
+      }
+
+      // Create a pleasant notification sound (two-tone chime)
+      const now = ctx.currentTime;
+      
+      // First tone
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = 880; // A5 note
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.3, now + 0.1);
+      gain1.gain.linearRampToValueAtTime(0, now + 0.3);
+      osc1.start(now);
+      osc1.stop(now + 0.3);
+      
+      // Second tone (slightly higher, starts after first)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 1108; // C#6 note
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      
+      gain2.gain.setValueAtTime(0, now + 0.2);
+      gain2.gain.linearRampToValueAtTime(0.3, now + 0.3);
+      gain2.gain.linearRampToValueAtTime(0, now + 0.5);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.5);
+      
+      console.log('🔔 Notification sound played');
+    } catch (error) {
+      console.warn('Failed to play notification sound:', error);
     }
-
-    const ctx = audioContextRef.current;
-    if (!ctx) return;
-
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-    gainNode.gain.setValueAtTime(0.0001, now);
-    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
-    oscillator.start(now);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-    oscillator.stop(now + 0.8);
   }, []);
 
   const downloadReceipt = async (orderId: string) => {
@@ -255,7 +285,7 @@ const GuestOrderTracking: React.FC = () => {
       return;
     }
 
-    console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId, 'raw:', rawOrderId);
+    console.log('🔌 GuestOrderTracking: Connecting to Socket.IO for order:', activeOrderId);
     
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     const s = io(API_URL, {
@@ -311,16 +341,29 @@ const GuestOrderTracking: React.FC = () => {
       // Use the long order ID from currentOrderIdRef (from API response) or decode if needed
       const currentLongOrderId = currentOrderIdRef.current || (activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId));
       
+      // Normalize order IDs for comparison (remove any extra characters, compare base parts)
+      const normalizeOrderId = (id: string) => {
+        if (!id) return '';
+        // If it's in ORD-xxx-xxx format, use the first two parts
+        if (id.includes('ORD-')) {
+          const parts = id.split('-');
+          return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : id;
+        }
+        return id;
+      };
+      
       // Match if order IDs match (both should be in long format)
       const orderIdMatches = payloadOrderId && (
         payloadOrderId === currentLongOrderId ||
         payloadOrderId === activeOrderId ||
         currentLongOrderId === payloadOrderId ||
+        normalizeOrderId(payloadOrderId) === normalizeOrderId(currentLongOrderId) ||
         // Also check if they're the same after normalization
         (payloadOrderId.includes('ORD-') && currentLongOrderId.includes('ORD-') && 
          payloadOrderId.split('-').slice(0, 2).join('-') === currentLongOrderId.split('-').slice(0, 2).join('-'))
       );
       
+      // If we're in the order room, we should receive updates for this order
       // If payload has no orderId, assume it's for us (we're in the order room)
       if (payloadOrderId && !orderIdMatches) {
         console.log('🔔 GuestOrderTracking: Order ID mismatch, ignoring update:', {
@@ -335,7 +378,8 @@ const GuestOrderTracking: React.FC = () => {
       console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
         payloadOrderId,
         currentLongOrderId,
-        status: payload.status
+        status: payload.status,
+        paymentStatus: payload.paymentStatus
       });
       
       setOrder(prev => {
@@ -348,7 +392,7 @@ const GuestOrderTracking: React.FC = () => {
         const newPaymentStatus = payload.paymentStatus || prev?.paymentStatus || 'unpaid';
         
         const base = prev || {
-          orderId: activeOrderId,
+          orderId: currentLongOrderId || activeOrderId,
           customerName: payload.customerName || '',
           status: newStatus,
           paymentStatus: newPaymentStatus,
@@ -377,30 +421,42 @@ const GuestOrderTracking: React.FC = () => {
           newStatus: updatedOrder.status,
           previousPaymentStatus,
           newPaymentStatus: updatedOrder.paymentStatus,
-          updatedOrder
+          statusChanged: previousStatus !== updatedOrder.status,
+          paymentStatusChanged: previousPaymentStatus !== updatedOrder.paymentStatus
         });
         setLastUpdate(new Date());
         
-        // Play sound for status changes (no visual notifications for guest)
+        // Play sound for status changes - check if status actually changed
         const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
         const paymentStatusChanged = previousPaymentStatus && previousPaymentStatus !== updatedOrder.paymentStatus;
         
         if (statusChanged) {
-          console.log('🔔 GuestOrderTracking: Status changed, playing sound');
-          // Play notification sound only (no visual notification for guest)
-          playNotificationSound();
+          console.log('🔔 GuestOrderTracking: Status changed from', previousStatus, 'to', updatedOrder.status, '- playing sound');
+          // Trigger visual animation
+          setStatusUpdateAnimation(true);
+          setTimeout(() => setStatusUpdateAnimation(false), 2000);
+          // Play notification sound when status changes
+          setTimeout(() => {
+            playNotificationSound();
+          }, 100); // Small delay to ensure state is updated
         } else if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid') {
           console.log('🔔 GuestOrderTracking: Payment confirmed, playing sound');
+          // Trigger visual animation
+          setStatusUpdateAnimation(true);
+          setTimeout(() => setStatusUpdateAnimation(false), 2000);
           // Play sound when payment is confirmed
-          playNotificationSound();
+          setTimeout(() => {
+            playNotificationSound();
+          }, 100);
         } else if (!previousStatus && updatedOrder.status && updatedOrder.status !== 'pending') {
           console.log('🔔 GuestOrderTracking: First status update, playing sound');
+          // Trigger visual animation
+          setStatusUpdateAnimation(true);
+          setTimeout(() => setStatusUpdateAnimation(false), 2000);
           // First time seeing this order with a non-pending status - play sound
-          playNotificationSound();
-        } else if (payload.status && payload.status !== previousStatus) {
-          // Fallback: if payload has status and it's different, play sound
-          console.log('🔔 GuestOrderTracking: Status update detected (fallback), playing sound');
-          playNotificationSound();
+          setTimeout(() => {
+            playNotificationSound();
+          }, 100);
         }
         
         // Update previous status ref
@@ -527,12 +583,12 @@ const GuestOrderTracking: React.FC = () => {
         {order && (
           <div className="space-y-6">
             {/* Order Status */}
-            <Card>
+            <Card className={statusUpdateAnimation ? 'animate-pulse border-2 border-[#a87437]' : ''}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Order Status</span>
                   <div className="flex items-center gap-3">
-                    <Badge className={getStatusColor(order.status)}>
+                    <Badge className={`${getStatusColor(order.status)} ${statusUpdateAnimation ? 'scale-110 transition-transform duration-300' : ''}`}>
                       <span className="flex items-center gap-1">
                         {getStatusIcon(order.status)}
                         {order.status.charAt(0).toUpperCase() + order.status.slice(1)}

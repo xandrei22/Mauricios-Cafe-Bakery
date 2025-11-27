@@ -28,9 +28,11 @@ interface PaymentProcessorProps {
   onPaymentProcessed: () => void;
   staffId: string;
   children?: React.ReactNode;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentProcessed, staffId, children }) => {
+const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentProcessed, staffId, children, isOpen = true, onClose }) => {
   const API_URL = getApiUrl();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [processingPayment, setProcessingPayment] = useState(false);
@@ -324,16 +326,30 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
 
 
 
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6 w-full self-start overflow-hidden h-96">
+  // If used as a modal, render modal wrapper
+  if (isOpen === false && onClose) {
+    return null;
+  }
+
+  const content = (
+    <>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-gray-800">Payment Processing</h2>
-        <div className="flex items-center gap-2">
+        <h2 className="text-xl font-bold text-gray-800">Payment Processing</h2>
+        <div className="flex items-center gap-4">
           {lastUpdate && (
             <div className="flex items-center text-sm text-gray-500">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
               Updated {lastUpdate.toLocaleTimeString()}
             </div>
+          )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              title="Close"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
           )}
         </div>
       </div>
@@ -370,7 +386,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               Cancelled Orders ({cancelledOrders.length})
             </button>
           </div>
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto max-h-[200px] relative scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 pr-2 px-3">
+          <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto ${onClose ? 'max-h-[500px]' : 'max-h-[400px]'} relative scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 pr-2 px-3`}>
 
           {/* Pending Orders Tab */}
           {activeTab === 'pending' && (
@@ -664,7 +680,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
 
       {/* Receipt Viewing Modal */}
       {showReceiptModal && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">
@@ -750,7 +766,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
 
       {/* Reference Number Modal */}
       {showReferenceModal && selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-gray-900">
@@ -848,6 +864,35 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
           </div>
         </div>
       )}
+    </>
+  );
+
+  // If onClose is provided, render as modal; otherwise render as regular component
+  if (onClose) {
+    return (
+      <>
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              onClose();
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 overflow-y-auto flex-1">
+              {content}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Render as regular component (backward compatibility)
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6 w-full self-start overflow-hidden h-96">
+      {content}
     </div>
   );
 };

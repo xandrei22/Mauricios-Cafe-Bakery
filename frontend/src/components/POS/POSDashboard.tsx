@@ -36,6 +36,7 @@ const POSDashboard: React.FC = () => {
     completedOrders: 0,
     totalRevenue: 0
   });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const location = useLocation();
   const isAdminRoute = String(location.pathname || '').startsWith('/admin');
 
@@ -325,15 +326,20 @@ const POSDashboard: React.FC = () => {
         {/* Unified SimplePOS instance renders menu + sidebar sharing a single cart */}
         <div className="mb-6">
           <SimplePOS 
-            children={
-              <PaymentProcessor 
-                orders={orders}
-                onPaymentProcessed={fetchOrders}
-                staffId={isAdminRoute ? 'admin' : 'staff'}
-              />
-            }
+            onOpenPaymentModal={() => setShowPaymentModal(true)}
           />
         </div>
+
+        {/* Payment Processing Modal */}
+        {showPaymentModal && (
+          <PaymentProcessor 
+            orders={orders}
+            onPaymentProcessed={fetchOrders}
+            staffId={isAdminRoute ? 'admin' : 'staff'}
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+          />
+        )}
 
       </div>
     </div>
