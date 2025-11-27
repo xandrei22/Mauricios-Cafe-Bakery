@@ -45,7 +45,10 @@ const GuestOrderTracking: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'pending':
+      case 'pending_verification':
         return 'bg-yellow-100 text-yellow-800';
+      case 'payment_confirmed':
+        return 'bg-blue-100 text-blue-800';
       case 'preparing':
         return 'bg-blue-100 text-blue-800';
       case 'ready':
@@ -62,7 +65,10 @@ const GuestOrderTracking: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
       case 'pending':
+      case 'pending_verification':
         return <Clock className="h-4 w-4" />;
+      case 'payment_confirmed':
+        return <CheckCircle className="h-4 w-4" />;
       case 'preparing':
         return <Loader2 className="h-4 w-4 animate-spin" />;
       case 'ready':
@@ -76,19 +82,26 @@ const GuestOrderTracking: React.FC = () => {
     }
   };
 
-  const getProgressPercentage = (status: string) => {
+  const getProgressPercentage = (status: string, paymentStatus?: string) => {
     switch (status.toLowerCase()) {
       case 'pending':
-        return 25;
+      case 'pending_verification':
+        return 20;
+      case 'payment_confirmed':
+        return 40;
       case 'preparing':
-        return 50;
+        return 60;
       case 'ready':
-        return 75;
+        return 80;
       case 'completed':
         return 100;
       case 'cancelled':
         return 0;
       default:
+        // If payment is paid but status is still pending, show payment confirmed progress
+        if (paymentStatus === 'paid' && (status === 'pending' || status === 'pending_verification')) {
+          return 40;
+        }
         return 0;
     }
   };
@@ -681,7 +694,7 @@ const GuestOrderTracking: React.FC = () => {
               <CardContent>
                 {/* Progress Bar */}
                 {(() => {
-                  const progressPercentage = getProgressPercentage(order.status);
+                  const progressPercentage = getProgressPercentage(order.status, order.paymentStatus);
                   const progressWidth = `${progressPercentage}%`;
                   const ariaLabel = `Order progress: ${progressPercentage}%`;
                   const ariaValueNow = progressPercentage;
@@ -724,28 +737,53 @@ const GuestOrderTracking: React.FC = () => {
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'pending' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed'
+                        order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid'
                           ? 'bg-[#a87437] text-white' 
                           : 'bg-gray-300 text-gray-600'
                       }`}>
                         <CheckCircle className="h-4 w-4" />
                       </div>
-                      {order.status !== 'pending' && order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && (
+                      {(order.status !== 'pending' && order.status !== 'pending_verification' && order.status !== 'payment_confirmed' && order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && order.paymentStatus !== 'paid') && (
                         <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                       )}
                     </div>
                     <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                      <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
                         Order Received
                       </p>
                       <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
                     </div>
                   </div>
 
+                  {/* Payment Confirmed */}
+                  <div className="flex items-center">
+                    <div className="flex flex-col items-center">
+                      {(order.status === 'pending' || order.status === 'pending_verification') && order.paymentStatus !== 'paid' && (
+                        <div className="w-0.5 h-6 bg-gray-300"></div>
+                      )}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification')
+                          ? 'bg-[#a87437] text-white' 
+                          : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        <CheckCircle className="h-4 w-4" />
+                      </div>
+                      {order.status !== 'payment_confirmed' && order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && !(order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') && (
+                        <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
+                      )}
+                    </div>
+                    <div className="ml-4 flex-1">
+                      <p className={`text-sm font-medium ${order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                        Payment Confirmed
+                      </p>
+                      <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
+                    </div>
+                  </div>
+
                   {/* Preparing */}
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
-                      {order.status === 'pending' && (
+                      {(order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed') && (
                         <div className="w-0.5 h-6 bg-gray-300"></div>
                       )}
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${

@@ -652,14 +652,21 @@ const CustomerOrders: React.FC = () => {
       // When order is ready, show 90% progress (not 100% until completed)
       return 90;
     }
+    if (status === 'payment_confirmed') {
+      return 40; // Payment confirmed but not yet preparing
+    }
     if (status === 'preparing' || status === 'processing' || status === 'confirmed') {
       const prepElapsed = Math.max(0, elapsedSec - pendingWindow);
-      const pct = 20 + Math.min(1, prepElapsed / preparingWindow) * 60;
+      const pct = 60 + Math.min(1, prepElapsed / preparingWindow) * 20; // Start from 60% (after payment confirmed)
       return Math.round(pct);
     }
     if (status === 'pending' || status === 'pending_verification') {
       const pct = Math.min(1, elapsedSec / pendingWindow) * 20;
       return Math.round(pct);
+    }
+    // If payment is paid but status is still pending, show payment confirmed progress
+    if (order.paymentStatus === 'paid' && (status === 'pending' || status === 'pending_verification')) {
+      return 40;
     }
     if (status === 'cancelled') return 0;
     return 0;
@@ -2105,12 +2112,16 @@ const CustomerOrders: React.FC = () => {
                   <div className="flex items-center">
                     <div className={`p-2 rounded-full ${
                       selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
-                      selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
+                      selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                      selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' ||
+                      selectedOrderForDetails.paymentStatus === 'paid'
                       ? 'bg-amber-100' : 'bg-gray-100'
                     }`}>
                       <CheckCircle className={`w-5 h-5 ${
                         selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
-                        selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
+                        selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                        selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' ||
+                        selectedOrderForDetails.paymentStatus === 'paid'
                         ? 'text-amber-600' : 'text-gray-400'
                       }`} />
                     </div>
@@ -2118,7 +2129,9 @@ const CustomerOrders: React.FC = () => {
                       <p className="font-bold text-gray-900">Order Confirmed</p>
                       <p className="text-sm text-gray-500">
                         {selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
-                         selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
+                         selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                         selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' ||
+                         selectedOrderForDetails.paymentStatus === 'paid'
                           ? 'Confirmed' : 'Pending'}
                       </p>
                     </div>
@@ -2127,12 +2140,37 @@ const CustomerOrders: React.FC = () => {
                   <div className="flex items-center">
                     <div className={`p-2 rounded-full ${
                       selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
-                      selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
+                      selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                      (selectedOrderForDetails.paymentStatus === 'paid' && selectedOrderForDetails.status !== 'pending' && selectedOrderForDetails.status !== 'pending_verification')
+                      ? 'bg-amber-100' : 'bg-gray-100'
+                    }`}>
+                      <CheckCircle className={`w-5 h-5 ${
+                        selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
+                        selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                        (selectedOrderForDetails.paymentStatus === 'paid' && selectedOrderForDetails.status !== 'pending' && selectedOrderForDetails.status !== 'pending_verification')
+                        ? 'text-amber-600' : 'text-gray-400'
+                      }`} />
+                    </div>
+                    <div className="ml-4">
+                      <p className="font-bold text-gray-900">Payment Confirmed</p>
+                      <p className="text-sm text-gray-500">
+                        {selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
+                         selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'payment_confirmed' ||
+                         (selectedOrderForDetails.paymentStatus === 'paid' && selectedOrderForDetails.status !== 'pending' && selectedOrderForDetails.status !== 'pending_verification')
+                          ? 'Payment verified' : 'Waiting for payment confirmation'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center">
+                    <div className={`p-2 rounded-full ${
+                      selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
+                      selectedOrderForDetails.status === 'preparing'
                       ? 'bg-amber-100' : 'bg-gray-100'
                     }`}>
                       <Utensils className={`w-5 h-5 ${
                         selectedOrderForDetails.status === 'completed' || selectedOrderForDetails.status === 'ready' || 
-                        selectedOrderForDetails.status === 'preparing' || selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
+                        selectedOrderForDetails.status === 'preparing'
                         ? 'text-amber-600' : 'text-gray-400'
                       }`} />
                     </div>
@@ -2143,8 +2181,7 @@ const CustomerOrders: React.FC = () => {
                           ? 'Completed' : 
                           selectedOrderForDetails.status === 'preparing' 
                           ? 'In Progress....' : 
-                          selectedOrderForDetails.status === 'pending' || selectedOrderForDetails.status === 'pending_verification' 
-                          ? 'Confirmed' : 'Pending'}
+                          'Waiting for payment confirmation'}
                       </p>
                     </div>
                   </div>
