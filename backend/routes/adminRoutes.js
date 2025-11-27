@@ -1510,6 +1510,14 @@ router.put('/orders/:orderId/status', async(req, res) => {
 
         const order = orderResult[0];
 
+        // Validate: Cannot move to 'preparing' unless payment is confirmed
+        if (status === 'preparing' && order.payment_status !== 'paid') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot move order to preparing status. Payment must be confirmed first.'
+            });
+        }
+
         // Update order status
         let updateQuery = 'UPDATE orders SET status = ?, updated_at = NOW()';
         let updateParams = [status];
@@ -1589,7 +1597,7 @@ router.put('/orders/:orderId/status', async(req, res) => {
             // Get updated order to include payment status
             const [updatedOrder] = await db.query('SELECT * FROM orders WHERE id = ?', [orderId]);
             const currentOrder = updatedOrder[0] || order;
-            
+
             const updatePayload = {
                 orderId: order.order_id,
                 status,
@@ -1597,15 +1605,15 @@ router.put('/orders/:orderId/status', async(req, res) => {
                 paymentMethod: currentOrder.payment_method || order.payment_method,
                 timestamp: new Date()
             };
-            
+
             // Emit to specific order room for guest tracking
             io.to(`order-${order.order_id}`).emit('order-updated', updatePayload);
             console.log(`📤 Admin: Emitted order-updated to order room: order-${order.order_id}`);
-            
+
             // Emit to staff and admin rooms
             io.to('staff-room').emit('order-updated', updatePayload);
             io.to('admin-room').emit('order-updated', updatePayload);
-            
+
             // Emit to customer room if customer_id exists
             if (order.customer_id) {
                 try {
@@ -1672,12 +1680,12 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
 
             // Note: Ingredient deduction now happens when order is marked as 'ready', not during payment verification
 
-            // Update payment status and move to preparing status
+            // Update payment status and move to payment_confirmed status (not preparing yet)
             await connection.query(`
                 UPDATE orders 
                 SET payment_status = 'paid', 
                     payment_method = ?,
-                    status = 'preparing',
+                    status = 'payment_confirmed',
                     updated_at = NOW() 
                 WHERE order_id = ? OR id = ?
             `, [paymentMethod || 'cash', orderId, orderId]);
@@ -1720,15 +1728,18 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                 console.log('  - Customer name:', order.customer_name);
 
                 const payload = {
-                    orderId,
-                    status: 'preparing',
+                    orderId: order.order_id || orderId,
+                    status: 'payment_confirmed',
                     paymentStatus: 'paid',
                     paymentMethod: paymentMethod || 'cash',
                     verifiedBy: verifiedBy || 'admin',
                     timestamp: new Date()
                 };
 
-                io.to(`order-${orderId}`).emit('order-updated', payload);
+                // Emit to specific order room for guest tracking
+                io.to(`order-${payload.orderId}`).emit('order-updated', payload);
+                console.log(`📤 Admin: Emitted payment_confirmed to order room: order-${payload.orderId}`);
+                
                 io.to('admin-room').emit('order-updated', payload);
                 io.to('staff-room').emit('order-updated', payload);
                 io.to('admin-room').emit('payment-updated', payload);
@@ -1745,7 +1756,7 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                 success: true,
                 message: 'Payment verified successfully',
                 orderId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid'
             });
 

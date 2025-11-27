@@ -914,6 +914,14 @@ router.put('/orders/:orderId/status', authenticateJWT, async(req, res) => {
             });
         }
 
+        // Validate: Cannot move to 'preparing' unless payment is confirmed
+        if (status === 'preparing' && order.payment_status !== 'paid') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot move order to preparing status. Payment must be confirmed first.'
+            });
+        }
+
         // If cancelling, record additional cancellation details
         if (status === 'cancelled') {
             await db.query(`
@@ -1319,15 +1327,15 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
             });
         }
 
-        // Update payment status and move to preparing status
-        await db.query('UPDATE orders SET payment_status = ?, payment_method = ?, status = ? WHERE id = ?', ['paid', paymentMethod || 'cash', 'preparing', order.id]);
+        // Update payment status and move to payment_confirmed status (not preparing yet)
+        await db.query('UPDATE orders SET payment_status = ?, payment_method = ?, status = ? WHERE id = ?', ['paid', paymentMethod || 'cash', 'payment_confirmed', order.id]);
 
         // Emit real-time update (canonical: confirmed + paid)
         const io = req.app.get('io');
         if (io) {
             const payload = {
                 orderId: order.order_id,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 paymentMethod: paymentMethod || 'cash',
                 timestamp: new Date()
@@ -1386,7 +1394,7 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
         if (io) {
             const finalPayload = {
                 orderId: order.order_id || orderId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 paymentMethod: paymentMethod || 'cash',
                 verifiedBy: verifiedBy || 'staff',
@@ -1406,7 +1414,7 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
             success: true,
             message: 'Payment verified successfully',
             orderId,
-            status: 'preparing'
+            status: 'payment_confirmed'
         });
 
     } catch (error) {

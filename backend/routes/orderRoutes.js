@@ -1026,10 +1026,10 @@ router.post('/:orderId/verify-payment', async(req, res) => {
             return res.status(404).json({ success: false, error: 'Order not found' });
         }
 
-        // Update payment status and move to preparing status
+        // Update payment status and move to payment_confirmed status (not preparing yet)
         await db.query(`
             UPDATE orders 
-            SET payment_status = 'paid', status = 'preparing' 
+            SET payment_status = 'paid', status = 'payment_confirmed' 
             WHERE order_id = ?
         `, [internalId]);
 
@@ -1081,28 +1081,28 @@ router.post('/:orderId/verify-payment', async(req, res) => {
             io.to(`order-${publicId}`).emit('order-updated', {
                 orderId: publicId,
                 internalOrderId: internalId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('staff-room').emit('order-updated', {
                 orderId: publicId,
                 internalOrderId: internalId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('admin-room').emit('order-updated', {
                 orderId: publicId,
                 internalOrderId: internalId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.emit('order-updated', {
                 orderId: publicId,
                 internalOrderId: internalId,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
