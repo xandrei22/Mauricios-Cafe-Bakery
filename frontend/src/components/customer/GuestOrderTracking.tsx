@@ -47,6 +47,7 @@ const GuestOrderTracking: React.FC = () => {
       case 'pending':
       case 'pending_verification':
         return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed':
       case 'payment_confirmed':
         return 'bg-blue-100 text-blue-800';
       case 'preparing':
@@ -67,6 +68,7 @@ const GuestOrderTracking: React.FC = () => {
       case 'pending':
       case 'pending_verification':
         return <Clock className="h-4 w-4" />;
+      case 'confirmed':
       case 'payment_confirmed':
         return <CheckCircle className="h-4 w-4" />;
       case 'preparing':
@@ -87,8 +89,10 @@ const GuestOrderTracking: React.FC = () => {
       case 'pending':
       case 'pending_verification':
         return 20;
+      case 'confirmed':
       case 'payment_confirmed':
         return 40;
+      case 'processing':
       case 'preparing':
         return 60;
       case 'ready':
@@ -165,6 +169,30 @@ const GuestOrderTracking: React.FC = () => {
       console.warn('Failed to play notification sound:', error);
     }
   }, []);
+
+  // Ensure audio is unlocked on first user interaction (required on mobile browsers)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const enableSoundOnce = () => {
+      try {
+        playNotificationSound();
+      } catch (e) {
+        console.warn('Failed to enable sound on first interaction:', e);
+      }
+    };
+
+    const events: Array<keyof DocumentEventMap> = ['click', 'touchstart', 'keydown'];
+    events.forEach(event =>
+      document.addEventListener(event, enableSoundOnce as EventListener, { once: true })
+    );
+
+    return () => {
+      events.forEach(event =>
+        document.removeEventListener(event, enableSoundOnce as EventListener)
+      );
+    };
+  }, [playNotificationSound]);
 
   const downloadReceipt = async (orderId: string) => {
     try {
