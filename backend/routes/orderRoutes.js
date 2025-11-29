@@ -89,8 +89,10 @@ function resolveOrderIdentifiers(order, fallback) {
         };
     }
 
+    // Always treat the long ORD-... value as the canonical "orderId"
+    // and never substitute the 5-character display code for sockets/APIs.
     const internalId = order.order_id || order.id || fallbackId;
-    const publicId = order.order_number || order.shortOrderCode || internalId;
+    const publicId = internalId;
 
     return {
         internalId,
