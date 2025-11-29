@@ -507,8 +507,9 @@ class OrderProcessingService {
             const nameLikeFromLocal = emailLocal.replace(/[._-]+/g, ' ').trim();
 
             // First, try to get customer_id from email for more accurate matching
+            // Use full_name (aliased as name) for compatibility with older code
             const [customerResult] = await connection.query(
-                'SELECT id, email, name FROM customers WHERE LOWER(email) = LOWER(?)',
+                'SELECT id, email, full_name AS name FROM customers WHERE LOWER(email) = LOWER(?)',
                 [customerEmail]
             );
             
@@ -543,7 +544,7 @@ class OrderProcessingService {
                    OR LOWER(o.customer_name) = LOWER(?)
                    OR LOWER(o.customer_name) LIKE LOWER(?)
                    OR (LENGTH(?) > 0 AND LOWER(o.customer_name) LIKE LOWER(?))
-                   OR (? IS NOT NULL AND LOWER(c.name) = LOWER(?))
+                   OR (? IS NOT NULL AND LOWER(c.full_name) = LOWER(?))
                 ORDER BY o.order_time DESC
             `, [
                 customerId, customerId,  // customer_id match (most accurate)
