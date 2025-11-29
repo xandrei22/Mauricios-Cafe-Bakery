@@ -43,7 +43,8 @@ const StaffSidebar: React.FC = () => {
   }, []);
 
   // Get user position and filter menu items accordingly
-  const userPosition = storedStaff?.position || '';
+  // Normalize position: always treat as trimmed string
+  const userPosition = (storedStaff?.position ?? '').toString().trim();
   const filteredMenuItems = React.useMemo(() => {
     // Debug: Log position for troubleshooting
     console.log('🔍 Staff Sidebar Debug:', {
@@ -53,7 +54,7 @@ const StaffSidebar: React.FC = () => {
     });
     
     // If user is admin or manager, show all items
-    if (storedStaff?.role === 'admin' || userPosition?.toLowerCase() === 'manager') {
+    if (storedStaff?.role === 'admin' || userPosition.toLowerCase() === 'manager') {
       console.log('✅ Admin/Manager - showing all items');
       return allMenuItems;
     }
@@ -65,7 +66,10 @@ const StaffSidebar: React.FC = () => {
     }
     
     // Filter items based on position (case-insensitive comparison)
-    const normalizedPosition = userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase();
+    const normalizedPosition =
+      userPosition.length > 0
+        ? userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase()
+        : '';
     const normalizedPositionLower = normalizedPosition.toLowerCase();
     const filtered = allMenuItems.filter(item => {
       // If no position restrictions, allow the item

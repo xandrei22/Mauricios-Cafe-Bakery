@@ -42,30 +42,42 @@ const PositionProtectedRoute: React.FC<PositionProtectedRouteProps> = ({
   // Check if user has required position
   const checkPosition = () => {
     const user = getStaffUser();
-    
+    // Normalize position safely (trim + case-insensitive)
+    const rawPosition = (user?.position ?? '').toString();
+    const trimmedPosition = rawPosition.trim();
+
     if (!user) {
       return false;
     }
 
     // Admin and Manager can access everything
-    const userPositionLower = (user.position || '').toLowerCase();
+    const userPositionLower = trimmedPosition.toLowerCase();
     if (user.role === 'admin' || userPositionLower === 'manager') {
       return true;
     }
 
-    const userPosition = user.position || '';
+    const userPosition = trimmedPosition;
     // Normalize position for case-insensitive comparison
-    const normalizedUserPosition = userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase();
+    const normalizedUserPosition =
+      userPosition.length > 0
+        ? userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase()
+        : '';
 
     // Check requiredPosition
     if (requiredPosition) {
       if (Array.isArray(requiredPosition)) {
         return requiredPosition.some(pos => 
-          pos.charAt(0).toUpperCase() + pos.slice(1).toLowerCase() === normalizedUserPosition
+          (pos || '')
+            .toString()
+            .trim()
+            .replace(/^./, c => c.toUpperCase())
+            .toLowerCase() === normalizedUserPosition.toLowerCase()
         );
       }
-      const normalizedRequired = requiredPosition.charAt(0).toUpperCase() + requiredPosition.slice(1).toLowerCase();
-      return normalizedUserPosition === normalizedRequired;
+      const normalizedRequired = (requiredPosition || '')
+        .toString()
+        .trim();
+      return normalizedUserPosition.toLowerCase() === normalizedRequired.toLowerCase();
     }
 
     // Check allowedPositions
