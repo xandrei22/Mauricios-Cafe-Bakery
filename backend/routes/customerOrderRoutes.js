@@ -659,8 +659,8 @@ router.get('/orders', async(req, res) => {
     }
 });
 
-// Get customer dashboard data
-router.get('/orders/:customerEmail/dashboard', async(req, res) => {
+// Get all orders for a specific customer by email (used by customer portal)
+router.get('/orders/:customerEmail', async (req, res) => {
     try {
         const { customerEmail } = req.params;
 
@@ -671,14 +671,14 @@ router.get('/orders/:customerEmail/dashboard', async(req, res) => {
             });
         }
 
-        const result = await orderProcessingService.getCustomerDashboard(customerEmail);
+        const result = await orderProcessingService.getCustomerOrders(customerEmail);
         res.json(result);
 
     } catch (error) {
-        console.error('Get customer dashboard error:', error);
+        console.error('Get customer orders error:', error);
         res.status(500).json({
             success: false,
-            message: error.message || 'Failed to get customer dashboard'
+            message: error.message || 'Failed to get customer orders'
         });
     }
 });
