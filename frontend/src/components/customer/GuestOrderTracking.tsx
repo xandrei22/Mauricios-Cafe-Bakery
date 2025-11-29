@@ -250,6 +250,14 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   const handleSearch = () => {
+    // Prime/unlock audio on an explicit user action so that
+    // subsequent status-change sounds are allowed by browser
+    // autoplay policies.
+    try {
+      playNotificationSound();
+    } catch (e) {
+      console.warn('Failed to prime notification sound:', e);
+    }
     fetchOrder(searchOrderId);
   };
 
@@ -349,8 +357,14 @@ const GuestOrderTracking: React.FC = () => {
       console.log('🔔 GuestOrderTracking: Received update:', payload);
       if (!payload) return;
       
-      // Order ID matching - backend sends long format (ORD-xxx-xxx)
-      const payloadOrderId = payload.orderId || payload.order_id || payload.internalOrderId;
+      // Order ID matching
+      // Backend currently sends:
+      // - publicId (short display code) as `orderId`
+      // - internal DB/order_id (long ORD-... value) as `internalOrderId`
+      // The guest tracker uses the long ORD-... ID everywhere, so we MUST
+      // prefer `internalOrderId` when matching updates to this page.
+      const payloadOrderId =
+        payload.internalOrderId || payload.orderId || payload.order_id;
       // Use the long order ID from currentOrderIdRef (from API response) or decode if needed
       const currentLongOrderId = currentOrderIdRef.current || (activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId));
       

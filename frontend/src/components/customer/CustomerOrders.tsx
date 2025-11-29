@@ -218,34 +218,43 @@ const CustomerOrders: React.FC = () => {
     fetchOrders(); // Refresh orders data
   };
 
+  // Ask for browser notification permission (if supported)
   useEffect(() => {
     if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
     if (Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
-    
-    // Initialize AudioContext on user interaction to bypass autoplay restrictions
+  }, []);
+
+  // Prepare audio so sounds can play after the first user interaction, even on mobile
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const initializeAudio = async () => {
       const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioConstructor && !audioContextRef.current) {
-        audioContextRef.current = new AudioConstructor();
-        // Resume AudioContext if suspended (required for autoplay policies)
-        if (audioContextRef.current.state === 'suspended') {
-          try {
-            await audioContextRef.current.resume();
-          } catch (error) {
-            console.warn('Failed to resume AudioContext:', error);
+        try {
+          audioContextRef.current = new AudioConstructor();
+          // Resume AudioContext if suspended (required for autoplay policies)
+          if (audioContextRef.current.state === 'suspended') {
+            try {
+              await audioContextRef.current.resume();
+            } catch (error) {
+              console.warn('Failed to resume AudioContext:', error);
+            }
           }
+        } catch (error) {
+          console.warn('Failed to create AudioContext:', error);
         }
       }
     };
-    
+
     // Initialize on any user interaction
     const events = ['click', 'touchstart', 'keydown'];
     events.forEach(event => {
       document.addEventListener(event, initializeAudio, { once: true });
     });
-    
+
     return () => {
       if (audioContextRef.current) {
         audioContextRef.current.close?.().catch(() => {});
