@@ -169,35 +169,15 @@ const GuestOrderTracking: React.FC = () => {
   const downloadReceipt = async (orderId: string) => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      // Generate and download JPEG receipt from backend
-      const receiptUrl = `${API_URL}/api/receipts/download-jpeg/${orderId}`;
-      
-      // Fetch the receipt to ensure it's generated
-      const response = await fetch(receiptUrl, {
-        method: 'GET',
-        credentials: 'omit'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to generate receipt');
+      // Open printable HTML receipt in a new tab instead of generating JPEG
+      const receiptUrl = `${API_URL}/api/receipts/generate/${orderId}`;
+      const win = window.open(receiptUrl, '_blank');
+      if (!win) {
+        throw new Error('Please allow pop-ups to view the receipt.');
       }
-
-      // Get the blob from the response
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `receipt_${orderId}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading receipt:', error);
-      alert(error instanceof Error ? error.message : 'Error downloading receipt. Please try again.');
+      console.error('Error opening receipt:', error);
+      alert(error instanceof Error ? error.message : 'Error opening receipt. Please try again.');
     }
   };
 

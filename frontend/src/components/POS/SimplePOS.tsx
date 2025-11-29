@@ -918,7 +918,9 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				{/* Customer Information */}
 				<Card className="mb-2 bg-white border shadow-lg">
 					<CardHeader className="pt-0 pb-0 px-3 -mt-3 overflow-visible">
-						<CardTitle className="text-sm text-[#3f3532] -mb-4 overflow-visible whitespace-nowrap">Customer Information</CardTitle>
+						<CardTitle className="text-sm text-[#3f3532] -mb-4 overflow-visible">
+							Customer Information
+						</CardTitle>
 					</CardHeader>
 					<CardContent className="px-3 pb-0 pt-0 -mb-2">
 						<div className="grid grid-cols-1 sm:grid-cols-2 gap-1">

@@ -220,17 +220,15 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
 
   const downloadReceipt = async (orderId: string) => {
     try {
-      // Download JPEG receipt for customers
-      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/download-jpeg/${orderId}`;
-      const link = document.createElement('a');
-      link.href = receiptUrl;
-      link.download = `receipt_${orderId}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Open printable HTML receipt in a new tab instead of generating JPEG
+      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/generate/${orderId}`;
+      const win = window.open(receiptUrl, '_blank');
+      if (!win) {
+        throw new Error('Please allow pop-ups to view the receipt.');
+      }
     } catch (error) {
-      console.error('Error downloading receipt:', error);
-      alert('Error downloading receipt. Please try again.');
+      console.error('Error opening receipt:', error);
+      alert('Error opening receipt. Please try again.');
     }
   };
 

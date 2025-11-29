@@ -166,7 +166,11 @@ function App() {
             </PositionProtectedRoute>
           } />
           <Route path="loyalty" element={<StaffLoyalty />} />
-          <Route path="sales" element={<StaffSales />} />
+          <Route path="sales" element={
+            <PositionProtectedRoute allowedPositions={['Cashier', 'Manager', 'Admin']}>
+              <StaffSales />
+            </PositionProtectedRoute>
+          } />
           <Route path="activity-logs" element={<StaffActivityLogs />} />
           <Route path="settings" element={<StaffSettings />} />
         </Route>

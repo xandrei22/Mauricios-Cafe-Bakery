@@ -835,68 +835,15 @@ const CustomerOrders: React.FC = () => {
   const downloadReceipt = async (orderId: string) => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      // Generate and download JPEG receipt from backend
-      const receiptUrl = `${API_URL}/api/receipts/download-jpeg/${orderId}`;
-      
-      // Fetch the receipt to ensure it's generated
-      const response = await fetch(receiptUrl, {
-        method: 'GET',
-        credentials: 'omit'
-      });
-
-      // Check content type from headers (doesn't consume body)
-      const contentType = response.headers.get('content-type') || '';
-      
-      if (!response.ok) {
-        // Response is an error - try to get error message from JSON
-        let errorMessage = 'Failed to generate receipt';
-        try {
-          // Clone response to read as JSON without consuming original
-          const clonedResponse = response.clone();
-          const errorData = await clonedResponse.json();
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        } catch (e) {
-          // If response is not JSON, use status text
-          errorMessage = response.statusText || `Server returned ${response.status}`;
-        }
-        throw new Error(errorMessage);
+      // Open printable HTML receipt in a new tab instead of generating JPEG
+      const receiptUrl = `${API_URL}/api/receipts/generate/${orderId}`;
+      const win = window.open(receiptUrl, '_blank');
+      if (!win) {
+        throw new Error('Please allow pop-ups to view the receipt.');
       }
-
-      // Response is ok - check if it's actually an image
-      if (!contentType.includes('image/jpeg') && !contentType.includes('image/')) {
-        // Not an image - try to read as JSON for error message
-        try {
-          const clonedResponse = response.clone();
-          const errorData = await clonedResponse.json();
-          throw new Error(errorData.message || errorData.error || 'Invalid response format from server');
-        } catch (e) {
-          if (e instanceof Error) {
-            throw e;
-          }
-          throw new Error('Server returned invalid content type. Expected image/jpeg.');
-        }
-      }
-
-      // Get the blob from the response
-      const blob = await response.blob();
-      
-      // Verify blob is not empty
-      if (blob.size === 0) {
-        throw new Error('Received empty receipt file');
-      }
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `receipt_${orderId}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading receipt:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error downloading receipt. Please try again.';
+      console.error('Error opening receipt:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error opening receipt. Please try again.';
       alert(errorMessage);
     }
   };
