@@ -252,6 +252,12 @@ const GuestOrderTracking: React.FC = () => {
 
       if (data.success) {
         const fetchedOrder = data.order;
+        console.log('🔍 GuestOrderTracking: Fetched order from API:', {
+          orderId: fetchedOrder.orderId,
+          status: fetchedOrder.status,
+          paymentStatus: fetchedOrder.paymentStatus,
+          paymentMethod: fetchedOrder.paymentMethod
+        });
         setOrder(fetchedOrder);
         // Use the orderId directly from the API response (long format like ORD-1764039875901-qb6xvn1fj)
         // This is the format the backend uses for socket rooms
@@ -454,8 +460,17 @@ const GuestOrderTracking: React.FC = () => {
         
         // Always update status if provided in payload, otherwise keep previous status
         // Never default to 'pending' as that would reset progress
-        const newStatus = payload.status !== undefined ? payload.status : prev.status;
-        const newPaymentStatus = payload.paymentStatus !== undefined ? payload.paymentStatus : prev.paymentStatus;
+        const newStatus = payload.status !== undefined && payload.status !== null ? payload.status : prev.status;
+        const newPaymentStatus = payload.paymentStatus !== undefined && payload.paymentStatus !== null ? payload.paymentStatus : prev.paymentStatus;
+        
+        console.log('🔔 GuestOrderTracking: Updating order with:', {
+          payloadStatus: payload.status,
+          payloadPaymentStatus: payload.paymentStatus,
+          prevStatus: prev.status,
+          prevPaymentStatus: prev.paymentStatus,
+          newStatus,
+          newPaymentStatus
+        });
         
         // Ensure we never lose the order data - always preserve existing values
         const updatedOrder = {
@@ -476,20 +491,43 @@ const GuestOrderTracking: React.FC = () => {
           customerEmail: (payload as any).customerEmail || prev.customerEmail,
         };
         
+        // If payment was just verified, refetch the order to get the latest state
+        if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
+          console.log('🔔 GuestOrderTracking: Payment verified, refetching order to get latest state');
+          // Refetch after a short delay to ensure backend has updated
+          setTimeout(() => {
+            if (updatedOrder.orderId) {
+              fetchOrder(updatedOrder.orderId);
+            }
+          }, 500);
+        }
+        
+        // Check if payment status changed before logging
+        const paymentStatusChanged = previousPaymentStatus !== updatedOrder.paymentStatus;
+        const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
+        
         console.log('🔔 GuestOrderTracking: Order updated:', {
           previousStatus,
           newStatus: updatedOrder.status,
           previousPaymentStatus,
           newPaymentStatus: updatedOrder.paymentStatus,
-          statusChanged: previousStatus !== updatedOrder.status,
-          paymentStatusChanged: previousPaymentStatus !== updatedOrder.paymentStatus
+          statusChanged,
+          paymentStatusChanged
         });
         setLastUpdate(new Date());
         
-        // Play sound for status changes - check if status actually changed
-        const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
-        const paymentStatusChanged = previousPaymentStatus && previousPaymentStatus !== updatedOrder.paymentStatus;
+        // If payment was just verified, refetch the order to get the latest state
+        if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
+          console.log('🔔 GuestOrderTracking: Payment verified, refetching order to get latest state');
+          // Refetch after a short delay to ensure backend has updated
+          setTimeout(() => {
+            if (updatedOrder.orderId) {
+              fetchOrder(updatedOrder.orderId);
+            }
+          }, 500);
+        }
         
+        // Play sound for status changes - check if status actually changed
         if (statusChanged) {
           console.log('🔔 GuestOrderTracking: Status changed from', previousStatus, 'to', updatedOrder.status, '- playing sound');
           // Trigger visual animation
@@ -807,7 +845,11 @@ const GuestOrderTracking: React.FC = () => {
                     <div className="flex items-center">
                       <div className="relative z-10">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification')
+                          order.status === 'payment_confirmed' || 
+                          order.status === 'preparing' || 
+                          order.status === 'ready' || 
+                          order.status === 'completed' || 
+                          order.paymentStatus === 'paid'
                             ? 'bg-[#a87437] text-white' 
                             : 'bg-gray-300 text-gray-600'
                         }`}>
@@ -815,7 +857,14 @@ const GuestOrderTracking: React.FC = () => {
                         </div>
                       </div>
                       <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                        <p className={`text-sm font-medium ${
+                          order.status === 'payment_confirmed' || 
+                          order.status === 'preparing' || 
+                          order.status === 'ready' || 
+                          order.status === 'completed' || 
+                          order.paymentStatus === 'paid'
+                            ? 'text-[#a87437]' : 'text-gray-600'
+                        }`}>
                           Payment Confirmed
                         </p>
                         <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
@@ -826,7 +875,9 @@ const GuestOrderTracking: React.FC = () => {
                     <div className="flex items-center">
                       <div className="relative z-10">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'preparing' || order.status === 'ready' || order.status === 'completed'
+                          order.status === 'preparing' || 
+                          order.status === 'ready' || 
+                          order.status === 'completed'
                             ? 'bg-[#a87437] text-white' 
                             : 'bg-gray-300 text-gray-600'
                         }`}>
@@ -834,7 +885,12 @@ const GuestOrderTracking: React.FC = () => {
                         </div>
                       </div>
                       <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                        <p className={`text-sm font-medium ${
+                          order.status === 'preparing' || 
+                          order.status === 'ready' || 
+                          order.status === 'completed'
+                            ? 'text-[#a87437]' : 'text-gray-600'
+                        }`}>
                           Preparing
                         </p>
                         <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>

@@ -1130,7 +1130,7 @@ router.post('/:orderId/verify-payment', async(req, res) => {
                         io.to(`customer-${customer[0].email}`).emit('order-updated', {
                             orderId: publicId,
                             internalOrderId: internalId,
-                            status: 'preparing',
+                            status: 'payment_confirmed',
                             paymentStatus: 'paid',
                             timestamp: new Date()
                         });
@@ -1152,7 +1152,7 @@ router.post('/:orderId/verify-payment', async(req, res) => {
                 io.to(`customer-${order.customer_email}`).emit('order-updated', {
                     orderId: publicId,
                     internalOrderId: internalId,
-                    status: 'preparing',
+                    status: 'payment_confirmed',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
