@@ -1255,10 +1255,12 @@ const CustomerOrders: React.FC = () => {
                            }`}>
                              <CheckCircle className="h-4 w-4" />
                            </div>
-                           {getCurrentOrder()?.status !== 'payment_confirmed' && getCurrentOrder()?.status !== 'preparing' && 
-                            getCurrentOrder()?.status !== 'ready' && getCurrentOrder()?.status !== 'completed' && 
-                            !(getCurrentOrder()?.payment_status === 'paid' && 
-                              getCurrentOrder()?.status !== 'pending' && getCurrentOrder()?.status !== 'pending_verification') && (
+                           {(getCurrentOrder()?.status === 'payment_confirmed' || 
+                             getCurrentOrder()?.status === 'preparing' || 
+                             getCurrentOrder()?.status === 'ready' || 
+                             getCurrentOrder()?.status === 'completed' ||
+                             (getCurrentOrder()?.payment_status === 'paid' && 
+                              getCurrentOrder()?.status !== 'pending' && getCurrentOrder()?.status !== 'pending_verification')) && (
                              <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                            )}
                          </div>
@@ -1280,7 +1282,10 @@ const CustomerOrders: React.FC = () => {
                        <div className="flex items-center">
                          <div className="flex flex-col items-center">
                            {(getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification' || 
-                             getCurrentOrder()?.status === 'payment_confirmed') && (
+                             getCurrentOrder()?.status === 'payment_confirmed' || 
+                             getCurrentOrder()?.status === 'preparing' || getCurrentOrder()?.status === 'ready' || 
+                             getCurrentOrder()?.status === 'completed' ||
+                             (getCurrentOrder()?.payment_status === 'paid')) && (
                              <div className="w-0.5 h-6 bg-gray-300"></div>
                            )}
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
