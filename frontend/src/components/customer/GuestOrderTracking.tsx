@@ -85,7 +85,36 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   const getProgressPercentage = (status: string, paymentStatus?: string) => {
-    switch (status.toLowerCase()) {
+    if (!status) return 0;
+    
+    const normalizedStatus = status.toLowerCase().trim();
+    const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
+    
+    // Check payment status first - if paid, we're at least at payment confirmed (40%)
+    if (normalizedPaymentStatus === 'paid') {
+      switch (normalizedStatus) {
+        case 'pending':
+        case 'pending_verification':
+          return 40; // Payment confirmed but status not updated yet
+        case 'confirmed':
+        case 'payment_confirmed':
+          return 40; // Payment confirmed
+        case 'processing':
+        case 'preparing':
+          return 60; // Preparing
+        case 'ready':
+          return 80; // Ready
+        case 'completed':
+          return 100; // Completed
+        case 'cancelled':
+          return 0;
+        default:
+          return 40; // If paid but status unknown, assume payment confirmed
+      }
+    }
+    
+    // If payment not paid yet, use status only
+    switch (normalizedStatus) {
       case 'pending':
       case 'pending_verification':
         return 20;
@@ -102,10 +131,6 @@ const GuestOrderTracking: React.FC = () => {
       case 'cancelled':
         return 0;
       default:
-        // If payment is paid but status is still pending, show payment confirmed progress
-        if (paymentStatus === 'paid' && (status === 'pending' || status === 'pending_verification')) {
-          return 40;
-        }
         return 0;
     }
   };
@@ -754,107 +779,104 @@ const GuestOrderTracking: React.FC = () => {
                 })()}
 
                 {/* Progress Steps */}
-                <div className="space-y-4">
-                  {/* Order Received */}
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid'
-                          ? 'bg-[#a87437] text-white' 
-                          : 'bg-gray-300 text-gray-600'
-                      }`}>
-                        <CheckCircle className="h-4 w-4" />
+                <div className="relative">
+                  {/* Single continuous vertical line */}
+                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-300"></div>
+                  
+                  <div className="space-y-4 relative">
+                    {/* Order Received */}
+                    <div className="flex items-center">
+                      <div className="relative z-10">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid'
+                            ? 'bg-[#a87437] text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          <CheckCircle className="h-4 w-4" />
+                        </div>
                       </div>
-                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
+                      <div className="ml-4 flex-1">
+                        <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                          Order Received
+                        </p>
+                        <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
+                      </div>
                     </div>
-                    <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                        Order Received
-                      </p>
-                      <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
-                    </div>
-                  </div>
 
-                  {/* Payment Confirmed */}
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-0.5 h-6 bg-gray-300"></div>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification')
-                          ? 'bg-[#a87437] text-white' 
-                          : 'bg-gray-300 text-gray-600'
-                      }`}>
-                        <CheckCircle className="h-4 w-4" />
+                    {/* Payment Confirmed */}
+                    <div className="flex items-center">
+                      <div className="relative z-10">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification')
+                            ? 'bg-[#a87437] text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          <CheckCircle className="h-4 w-4" />
+                        </div>
                       </div>
-                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
+                      <div className="ml-4 flex-1">
+                        <p className={`text-sm font-medium ${order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                          Payment Confirmed
+                        </p>
+                        <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
+                      </div>
                     </div>
-                    <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                        Payment Confirmed
-                      </p>
-                      <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
-                    </div>
-                  </div>
 
-                  {/* Preparing */}
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-0.5 h-6 bg-gray-300"></div>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'preparing' || order.status === 'ready' || order.status === 'completed'
-                          ? 'bg-[#a87437] text-white' 
-                          : 'bg-gray-300 text-gray-600'
-                      }`}>
-                        <Loader2 className={`h-4 w-4 ${order.status === 'preparing' ? 'animate-spin' : ''}`} />
+                    {/* Preparing */}
+                    <div className="flex items-center">
+                      <div className="relative z-10">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          order.status === 'preparing' || order.status === 'ready' || order.status === 'completed'
+                            ? 'bg-[#a87437] text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          <Loader2 className={`h-4 w-4 ${order.status === 'preparing' ? 'animate-spin' : ''}`} />
+                        </div>
                       </div>
-                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
+                      <div className="ml-4 flex-1">
+                        <p className={`text-sm font-medium ${order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                          Preparing
+                        </p>
+                        <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
+                      </div>
                     </div>
-                    <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                        Preparing
-                      </p>
-                      <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
-                    </div>
-                  </div>
 
-                  {/* Ready for Pickup */}
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-0.5 h-6 bg-gray-300"></div>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'ready' || order.status === 'completed'
-                          ? 'bg-[#a87437] text-white' 
-                          : 'bg-gray-300 text-gray-600'
-                      }`}>
-                        <Package className="h-4 w-4" />
+                    {/* Ready for Pickup */}
+                    <div className="flex items-center">
+                      <div className="relative z-10">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          order.status === 'ready' || order.status === 'completed'
+                            ? 'bg-[#a87437] text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          <Package className="h-4 w-4" />
+                        </div>
                       </div>
-                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
+                      <div className="ml-4 flex-1">
+                        <p className={`text-sm font-medium ${order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                          Ready for Pickup
+                        </p>
+                        <p className="text-xs text-gray-500">Your order is ready for pickup</p>
+                      </div>
                     </div>
-                    <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                        Ready for Pickup
-                      </p>
-                      <p className="text-xs text-gray-500">Your order is ready for pickup</p>
-                    </div>
-                  </div>
 
-                  {/* Completed */}
-                  <div className="flex items-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-0.5 h-6 bg-gray-300"></div>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        order.status === 'completed'
-                          ? 'bg-[#a87437] text-white' 
-                          : 'bg-gray-300 text-gray-600'
-                      }`}>
-                        <CheckCircle className="h-4 w-4" />
+                    {/* Completed */}
+                    <div className="flex items-center">
+                      <div className="relative z-10">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          order.status === 'completed'
+                            ? 'bg-[#a87437] text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          <CheckCircle className="h-4 w-4" />
+                        </div>
                       </div>
-                    </div>
-                    <div className="ml-4 flex-1">
-                      <p className={`text-sm font-medium ${order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                        Completed
-                      </p>
-                      <p className="text-xs text-gray-500">Order has been completed successfully</p>
+                      <div className="ml-4 flex-1">
+                        <p className={`text-sm font-medium ${order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                          Completed
+                        </p>
+                        <p className="text-xs text-gray-500">Order has been completed successfully</p>
+                      </div>
                     </div>
                   </div>
                 </div>
