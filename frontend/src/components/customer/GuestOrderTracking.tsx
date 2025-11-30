@@ -443,37 +443,37 @@ const GuestOrderTracking: React.FC = () => {
       });
       
       setOrder(prev => {
-        const previousStatus = prev?.status || previousStatusRef.current;
-        const previousPaymentStatus = prev?.paymentStatus;
+        // Don't update if we don't have a previous order - this prevents resetting
+        if (!prev) {
+          console.log('🔔 GuestOrderTracking: No previous order state, ignoring update to prevent reset');
+          return prev;
+        }
         
-        // Always update status if provided in payload, even if it's the same
-        // This ensures the UI updates even if the status hasn't technically "changed"
-        const newStatus = payload.status || prev?.status || 'pending';
-        const newPaymentStatus = payload.paymentStatus || prev?.paymentStatus || 'unpaid';
+        const previousStatus = prev.status || previousStatusRef.current;
+        const previousPaymentStatus = prev.paymentStatus;
         
-        const base = prev || {
-          orderId: currentLongOrderId || activeOrderId,
-          customerName: payload.customerName || '',
-          status: newStatus,
-          paymentStatus: newPaymentStatus,
-          paymentMethod: (payload as any).paymentMethod || 'cash',
-          orderTime: (payload as any).orderTime || (prev as any)?.orderTime || new Date().toISOString(),
-          estimatedReadyTime: (payload as any).estimatedReadyTime || (prev as any)?.estimatedReadyTime || '',
-          totalPrice: (payload as any).totalPrice || (payload as any).total_price || (prev as any)?.totalPrice || 0,
-          items: (payload as any).items || (prev as any)?.items || [],
-          tableNumber: ((payload as any).tableNumber || (payload as any).table_number || (prev as any)?.tableNumber) ?? null,
-          customerEmail: (payload as any).customerEmail || (prev as any)?.customerEmail || ''
-        } as Order;
+        // Always update status if provided in payload, otherwise keep previous status
+        // Never default to 'pending' as that would reset progress
+        const newStatus = payload.status !== undefined ? payload.status : prev.status;
+        const newPaymentStatus = payload.paymentStatus !== undefined ? payload.paymentStatus : prev.paymentStatus;
         
+        // Ensure we never lose the order data - always preserve existing values
         const updatedOrder = {
-          ...base,
-          status: newStatus, // Always use the new status from payload
-          paymentStatus: newPaymentStatus, // Always use the new payment status from payload
-          paymentMethod: payload.paymentMethod ?? base.paymentMethod,
-          items: (payload as any).items || base.items,
-          totalPrice: (payload as any).totalPrice || (payload as any).total_price || base.totalPrice,
-          customerName: payload.customerName || base.customerName,
-          tableNumber: ((payload as any).tableNumber || (payload as any).table_number) ?? base.tableNumber,
+          ...prev,
+          // Only update fields that are explicitly provided in payload
+          status: newStatus || prev.status,
+          paymentStatus: newPaymentStatus || prev.paymentStatus,
+          paymentMethod: payload.paymentMethod !== undefined ? payload.paymentMethod : prev.paymentMethod,
+          // Only update these if provided, otherwise keep existing
+          items: (payload as any).items || prev.items,
+          totalPrice: (payload as any).totalPrice || (payload as any).total_price || prev.totalPrice,
+          customerName: payload.customerName || prev.customerName,
+          tableNumber: ((payload as any).tableNumber || (payload as any).table_number) !== undefined 
+            ? ((payload as any).tableNumber || (payload as any).table_number) 
+            : prev.tableNumber,
+          estimatedReadyTime: (payload as any).estimatedReadyTime || prev.estimatedReadyTime,
+          orderTime: (payload as any).orderTime || prev.orderTime,
+          customerEmail: (payload as any).customerEmail || prev.customerEmail,
         };
         
         console.log('🔔 GuestOrderTracking: Order updated:', {
