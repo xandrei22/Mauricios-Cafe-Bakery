@@ -361,9 +361,11 @@ io.on('connection', (socket) => {
     // Handle customer room join
     socket.on('join-customer-room', (data) => {
         if (data && data.customerEmail) {
-            const roomName = `customer-${data.customerEmail}`;
+            // Normalize email to lowercase for consistent room naming
+            const customerEmail = String(data.customerEmail).toLowerCase().trim();
+            const roomName = `customer-${customerEmail}`;
             socket.join(roomName);
-            console.log(`✅ Socket ${socket.id} joined ${roomName}`);
+            console.log(`✅ Socket ${socket.id} joined ${roomName} (original email: ${data.customerEmail})`);
         }
     });
 

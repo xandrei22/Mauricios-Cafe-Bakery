@@ -1127,20 +1127,24 @@ router.post('/:orderId/verify-payment', async(req, res) => {
                 try {
                     const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
                     if (customer.length > 0 && customer[0].email) {
-                        io.to(`customer-${customer[0].email}`).emit('order-updated', {
+                        const customerEmail = String(customer[0].email).toLowerCase().trim();
+                        const customerRoom = `customer-${customerEmail}`;
+                        const updatePayload = {
                             orderId: publicId,
                             internalOrderId: internalId,
                             status: 'payment_confirmed',
                             paymentStatus: 'paid',
+                            paymentMethod: paymentMethod || 'cash',
                             timestamp: new Date()
-                        });
-                        io.to(`customer-${customer[0].email}`).emit('payment-updated', {
+                        };
+                        io.to(customerRoom).emit('order-updated', updatePayload);
+                        io.to(customerRoom).emit('payment-updated', {
                             orderId: publicId,
                             verifiedBy,
                             paymentMethod,
                             timestamp: new Date()
                         });
-                        console.log(`📤 OrderRoutes: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                        console.log(`📤 OrderRoutes: Emitted order-updated to customer room: ${customerRoom}`);
                     }
                 } catch (customerError) {
                     console.warn('Failed to get customer email for room emission:', customerError.message);
@@ -1149,21 +1153,34 @@ router.post('/:orderId/verify-payment', async(req, res) => {
             
             // Also emit to customer room using customer_email if available (for guest orders with email)
             if (order && order.customer_email) {
-                io.to(`customer-${order.customer_email}`).emit('order-updated', {
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                const updatePayload = {
                     orderId: publicId,
                     internalOrderId: internalId,
                     status: 'payment_confirmed',
                     paymentStatus: 'paid',
+                    paymentMethod: paymentMethod || 'cash',
                     timestamp: new Date()
-                });
-                io.to(`customer-${order.customer_email}`).emit('payment-updated', {
+                };
+                io.to(customerRoom).emit('order-updated', updatePayload);
+                io.to(customerRoom).emit('payment-updated', {
                     orderId: publicId,
                     verifiedBy,
                     paymentMethod,
                     timestamp: new Date()
                 });
-                console.log(`📤 OrderRoutes: Emitted order-updated to customer room: customer-${order.customer_email}`);
+                console.log(`📤 OrderRoutes: Emitted order-updated to customer room: ${customerRoom}`);
             }
+            
+            // Broadcast to all as final fallback
+            io.emit('order-updated', {
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
+                paymentStatus: 'paid',
+                timestamp: new Date()
+            });
         }
 
         res.json({ success: true, message: 'Payment verified and order processed' });

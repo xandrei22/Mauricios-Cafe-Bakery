@@ -1724,11 +1724,13 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
             if (io) {
                 console.log('📡 Emitting payment verification updates...');
                 console.log('  - Order ID:', orderId);
+                console.log('  - Order order_id:', order.order_id);
                 console.log('  - Customer email:', order.customer_email);
                 console.log('  - Customer name:', order.customer_name);
 
                 const payload = {
                     orderId: order.order_id || orderId,
+                    internalOrderId: order.order_id || order.id,
                     status: 'payment_confirmed',
                     paymentStatus: 'paid',
                     paymentMethod: paymentMethod || 'cash',
@@ -1738,6 +1740,7 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
 
                 // Emit to specific order room for guest tracking
                 io.to(`order-${payload.orderId}`).emit('order-updated', payload);
+                io.to(`order-${orderId}`).emit('order-updated', payload);
                 console.log(`📤 Admin: Emitted payment_confirmed to order room: order-${payload.orderId}`);
                 
                 io.to('admin-room').emit('order-updated', payload);
@@ -1745,11 +1748,26 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                 io.to('admin-room').emit('payment-updated', payload);
                 io.to('staff-room').emit('payment-updated', payload);
 
-                const customerRoom = `customer-${order.customer_email || order.customer_name}`;
-                io.to(customerRoom).emit('order-updated', payload);
+                // Emit to customer room using customer_email (normalized to lowercase for consistency)
                 if (order.customer_email) {
-                    io.to(`customer-${order.customer_email}`).emit('order-updated', payload);
+                    const customerEmail = String(order.customer_email).toLowerCase().trim();
+                    const customerRoom = `customer-${customerEmail}`;
+                    io.to(customerRoom).emit('order-updated', payload);
+                    io.to(customerRoom).emit('payment-updated', payload);
+                    console.log(`📤 Admin: Emitted order-updated to customer room: ${customerRoom}`);
                 }
+                
+                // Also emit to customer room using customer_name as fallback
+                if (order.customer_name && !order.customer_email) {
+                    const customerName = String(order.customer_name).toLowerCase().trim();
+                    const customerRoom = `customer-${customerName}`;
+                    io.to(customerRoom).emit('order-updated', payload);
+                    io.to(customerRoom).emit('payment-updated', payload);
+                    console.log(`📤 Admin: Emitted order-updated to customer room (name fallback): ${customerRoom}`);
+                }
+                
+                // Broadcast to all as final fallback
+                io.emit('order-updated', payload);
             }
 
             res.json({

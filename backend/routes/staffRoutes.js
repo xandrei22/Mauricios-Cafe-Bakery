@@ -1394,6 +1394,7 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
         if (io) {
             const finalPayload = {
                 orderId: order.order_id || orderId,
+                internalOrderId: order.order_id || order.id,
                 status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 paymentMethod: paymentMethod || 'cash',
@@ -1401,13 +1402,24 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
                 timestamp: new Date()
             };
             io.to(`order-${finalPayload.orderId}`).emit('order-updated', finalPayload);
+            io.to(`order-${orderId}`).emit('order-updated', finalPayload);
             io.to('staff-room').emit('order-updated', finalPayload);
             io.to('admin-room').emit('order-updated', finalPayload);
+            
+            // Emit to customer room using customer_email (normalized to lowercase)
             if (order.customer_email) {
-                io.to(`customer-${order.customer_email}`).emit('order-updated', finalPayload);
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                io.to(customerRoom).emit('order-updated', finalPayload);
+                io.to(customerRoom).emit('payment-updated', finalPayload);
+                console.log(`📤 Staff: Emitted order-updated to customer room: ${customerRoom}`);
             }
+            
             io.to('staff-room').emit('payment-updated', finalPayload);
             io.to('admin-room').emit('payment-updated', finalPayload);
+            
+            // Broadcast to all as final fallback
+            io.emit('order-updated', finalPayload);
         }
 
         res.json({
