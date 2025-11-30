@@ -765,9 +765,7 @@ const GuestOrderTracking: React.FC = () => {
                       }`}>
                         <CheckCircle className="h-4 w-4" />
                       </div>
-                      {(order.status !== 'pending' && order.status !== 'pending_verification' && order.status !== 'payment_confirmed' && order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && order.paymentStatus !== 'paid') && (
-                        <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                     </div>
                     <div className="ml-4 flex-1">
                       <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
@@ -780,9 +778,7 @@ const GuestOrderTracking: React.FC = () => {
                   {/* Payment Confirmed */}
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
-                      {(order.status === 'pending' || order.status === 'pending_verification') && order.paymentStatus !== 'paid' && (
-                        <div className="w-0.5 h-6 bg-gray-300"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300"></div>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                         order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification')
                           ? 'bg-[#a87437] text-white' 
@@ -790,9 +786,7 @@ const GuestOrderTracking: React.FC = () => {
                       }`}>
                         <CheckCircle className="h-4 w-4" />
                       </div>
-                      {order.status !== 'payment_confirmed' && order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && !(order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') && (
-                        <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                     </div>
                     <div className="ml-4 flex-1">
                       <p className={`text-sm font-medium ${order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || (order.paymentStatus === 'paid' && order.status !== 'pending' && order.status !== 'pending_verification') ? 'text-[#a87437]' : 'text-gray-600'}`}>
@@ -805,9 +799,7 @@ const GuestOrderTracking: React.FC = () => {
                   {/* Preparing */}
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
-                      {(order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed') && (
-                        <div className="w-0.5 h-6 bg-gray-300"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300"></div>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                         order.status === 'preparing' || order.status === 'ready' || order.status === 'completed'
                           ? 'bg-[#a87437] text-white' 
@@ -815,9 +807,7 @@ const GuestOrderTracking: React.FC = () => {
                       }`}>
                         <Loader2 className={`h-4 w-4 ${order.status === 'preparing' ? 'animate-spin' : ''}`} />
                       </div>
-                      {order.status !== 'preparing' && order.status !== 'ready' && order.status !== 'completed' && (
-                        <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                     </div>
                     <div className="ml-4 flex-1">
                       <p className={`text-sm font-medium ${order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
@@ -830,9 +820,7 @@ const GuestOrderTracking: React.FC = () => {
                   {/* Ready for Pickup */}
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
-                      {order.status === 'preparing' && (
-                        <div className="w-0.5 h-6 bg-gray-300"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300"></div>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                         order.status === 'ready' || order.status === 'completed'
                           ? 'bg-[#a87437] text-white' 
@@ -840,9 +828,7 @@ const GuestOrderTracking: React.FC = () => {
                       }`}>
                         <Package className="h-4 w-4" />
                       </div>
-                      {order.status !== 'ready' && order.status !== 'completed' && (
-                        <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                     </div>
                     <div className="ml-4 flex-1">
                       <p className={`text-sm font-medium ${order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
@@ -855,9 +841,7 @@ const GuestOrderTracking: React.FC = () => {
                   {/* Completed */}
                   <div className="flex items-center">
                     <div className="flex flex-col items-center">
-                      {order.status === 'ready' && (
-                        <div className="w-0.5 h-6 bg-gray-300"></div>
-                      )}
+                      <div className="w-0.5 h-6 bg-gray-300"></div>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                         order.status === 'completed'
                           ? 'bg-[#a87437] text-white' 

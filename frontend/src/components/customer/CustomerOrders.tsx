@@ -1218,12 +1218,7 @@ const CustomerOrders: React.FC = () => {
                            }`}>
                              <CheckCircle className="h-4 w-4" />
                            </div>
-                           {!(getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification' || 
-                              getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.status === 'preparing' || 
-                              getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed' || 
-                              getCurrentOrder()?.payment_status === 'paid') && (
-                             <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                          </div>
                          <div className="ml-4 flex-1">
                            <p className={`text-sm font-medium ${
@@ -1241,10 +1236,7 @@ const CustomerOrders: React.FC = () => {
                        {/* Payment Confirmed */}
                        <div className="flex items-center">
                          <div className="flex flex-col items-center">
-                           {(getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification') && 
-                            getCurrentOrder()?.payment_status !== 'paid' && (
-                             <div className="w-0.5 h-6 bg-gray-300"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300"></div>
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                              getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.status === 'preparing' || 
                              getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed' || 
@@ -1255,14 +1247,7 @@ const CustomerOrders: React.FC = () => {
                            }`}>
                              <CheckCircle className="h-4 w-4" />
                            </div>
-                           {(getCurrentOrder()?.status === 'payment_confirmed' || 
-                             getCurrentOrder()?.status === 'preparing' || 
-                             getCurrentOrder()?.status === 'ready' || 
-                             getCurrentOrder()?.status === 'completed' ||
-                             (getCurrentOrder()?.payment_status === 'paid' && 
-                              getCurrentOrder()?.status !== 'pending' && getCurrentOrder()?.status !== 'pending_verification')) && (
-                             <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                          </div>
                          <div className="ml-4 flex-1">
                            <p className={`text-sm font-medium ${
@@ -1281,13 +1266,7 @@ const CustomerOrders: React.FC = () => {
                        {/* Preparing */}
                        <div className="flex items-center">
                          <div className="flex flex-col items-center">
-                           {(getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification' || 
-                             getCurrentOrder()?.status === 'payment_confirmed' || 
-                             getCurrentOrder()?.status === 'preparing' || getCurrentOrder()?.status === 'ready' || 
-                             getCurrentOrder()?.status === 'completed' ||
-                             (getCurrentOrder()?.payment_status === 'paid')) && (
-                             <div className="w-0.5 h-6 bg-gray-300"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300"></div>
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                              getCurrentOrder()?.status === 'preparing' || getCurrentOrder()?.status === 'ready' || 
                              getCurrentOrder()?.status === 'completed'
@@ -1296,10 +1275,7 @@ const CustomerOrders: React.FC = () => {
                            }`}>
                              <Loader2 className={`h-4 w-4 ${getCurrentOrder()?.status === 'preparing' ? 'animate-spin' : ''}`} />
                            </div>
-                           {getCurrentOrder()?.status !== 'preparing' && getCurrentOrder()?.status !== 'ready' && 
-                            getCurrentOrder()?.status !== 'completed' && (
-                             <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                          </div>
                          <div className="ml-4 flex-1">
                            <p className={`text-sm font-medium ${
@@ -1315,9 +1291,7 @@ const CustomerOrders: React.FC = () => {
                        {/* Ready for Pickup */}
                        <div className="flex items-center">
                          <div className="flex flex-col items-center">
-                           {getCurrentOrder()?.status === 'preparing' && (
-                             <div className="w-0.5 h-6 bg-gray-300"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300"></div>
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                              getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed'
                                ? 'bg-[#a87437] text-white' 
@@ -1325,9 +1299,7 @@ const CustomerOrders: React.FC = () => {
                            }`}>
                              <Package className="h-4 w-4" />
                            </div>
-                           {getCurrentOrder()?.status !== 'ready' && getCurrentOrder()?.status !== 'completed' && (
-                             <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300 mt-2"></div>
                          </div>
                          <div className="ml-4 flex-1">
                            <p className={`text-sm font-medium ${
@@ -1343,9 +1315,7 @@ const CustomerOrders: React.FC = () => {
                        {/* Completed */}
                        <div className="flex items-center">
                          <div className="flex flex-col items-center">
-                           {getCurrentOrder()?.status === 'ready' && (
-                             <div className="w-0.5 h-6 bg-gray-300"></div>
-                           )}
+                           <div className="w-0.5 h-6 bg-gray-300"></div>
                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                              getCurrentOrder()?.status === 'completed'
                                ? 'bg-[#a87437] text-white' 
