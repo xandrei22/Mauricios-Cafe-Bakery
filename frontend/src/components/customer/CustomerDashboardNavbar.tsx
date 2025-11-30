@@ -391,8 +391,8 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
         clearCart();
         setShowCart(false);
         
-        // Show success message with 5-character order code
-        const displayOrderId = result.orderNumber || result.orderId;
+        // Always show the long order ID for consistency
+        const displayOrderId = result.orderId || result.orderNumber;
         alert(`Order placed successfully! Order ID: ${displayOrderId}`);
         
         // Redirect to orders page without full reload

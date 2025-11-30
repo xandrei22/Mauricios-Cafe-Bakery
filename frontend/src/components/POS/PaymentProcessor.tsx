@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { CheckCircle, CreditCard, FileImage, X, Download, Printer } from 'lucide-react';
 import CashPaymentModal from './CashPaymentModal';
@@ -503,7 +504,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
               <div className="bg-gray-50 rounded-lg p-3 mb-3">
                 <h4 className="font-semibold text-gray-800 mb-2 text-sm">Order Details</h4>
                 <div className="space-y-1 text-sm text-gray-600">
-                  <p><strong>Order ID:</strong> {toShortId(selectedOrder.orderId)}</p>
+                  <p><strong>Order ID:</strong> {selectedOrder.orderId}</p>
                   <p><strong>Customer:</strong> {selectedOrder.customerName}</p>
                   <p><strong>{selectedOrder.tableNumber === 0 ? 'Takeout' : 'Table'}:</strong> {selectedOrder.tableNumber === 0 ? '' : selectedOrder.tableNumber}</p>
                   <p><strong>Total:</strong> ₱{selectedOrder.totalPrice}</p>

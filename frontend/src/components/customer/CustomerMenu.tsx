@@ -754,8 +754,8 @@ const CustomerMenu: React.FC = () => {
               if (result.success) {
                 clearCart();
                 closeCartModal();
-                // Show 5-character order code if available
-                const displayOrderId = result.orderNumber || result.orderId;
+                // Always show the long order ID for consistency
+                const displayOrderId = result.orderId || result.orderNumber;
                 alert(`Order placed successfully! Order ID: ${displayOrderId}`);
                 
                 // Trigger a custom event to refresh orders data without page reload
