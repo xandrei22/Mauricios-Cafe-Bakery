@@ -393,8 +393,9 @@ const GuestOrderTracking: React.FC = () => {
     });
 
     const handleUpdate = (payload: any) => {
-      console.log('🔔 GuestOrderTracking: Received update:', payload);
-      if (!payload) return;
+      try {
+        console.log('🔔 GuestOrderTracking: Received update:', payload);
+        if (!payload) return;
       
       // Order ID matching
       // Backend currently sends:
@@ -491,18 +492,7 @@ const GuestOrderTracking: React.FC = () => {
           customerEmail: (payload as any).customerEmail || prev.customerEmail,
         };
         
-        // If payment was just verified, refetch the order to get the latest state
-        if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
-          console.log('🔔 GuestOrderTracking: Payment verified, refetching order to get latest state');
-          // Refetch after a short delay to ensure backend has updated
-          setTimeout(() => {
-            if (updatedOrder.orderId) {
-              fetchOrder(updatedOrder.orderId);
-            }
-          }, 500);
-        }
-        
-        // Check if payment status changed before logging
+        // Check if payment status and order status changed (calculate BEFORE using)
         const paymentStatusChanged = previousPaymentStatus !== updatedOrder.paymentStatus;
         const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
         
@@ -562,6 +552,11 @@ const GuestOrderTracking: React.FC = () => {
         
         return updatedOrder;
       });
+      } catch (error) {
+        console.error('🔔 GuestOrderTracking: Error processing update:', error);
+        // Don't crash the component - just log the error
+        // The component will continue to work and can refetch on next update
+      }
     };
 
     s.on('order-updated', handleUpdate);

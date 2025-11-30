@@ -333,7 +333,16 @@ const CustomerOrders: React.FC = () => {
 
       // Join customer room for real-time updates
       console.log('🔌 Joining customer room with email:', user.email);
-      const joinRoom = () => newSocket.emit('join-customer-room', { customerEmail: user.email });
+      const joinRoom = () => {
+        if (newSocket.connected && user.email) {
+          // Normalize email to lowercase for consistent room naming
+          const normalizedEmail = String(user.email).toLowerCase().trim();
+          newSocket.emit('join-customer-room', { customerEmail: normalizedEmail });
+          console.log('🔌 Emitted join-customer-room with normalized email:', normalizedEmail);
+        } else {
+          console.warn('🔌 Cannot join room - socket not connected or no email');
+        }
+      };
       joinRoom();
 
       // Listen for real-time updates - automatic refresh
@@ -349,8 +358,20 @@ const CustomerOrders: React.FC = () => {
         // Optimistically update the order in state if we have the data
         if (updateData.orderId && (updateData.status || updateData.paymentStatus)) {
           setOrders(prevOrders => {
-            return prevOrders.map(order => {
-              if (order.order_id === updateData.orderId || order.id === updateData.orderId) {
+            let updated = false;
+            const updatedOrders = prevOrders.map(order => {
+              // Match by order_id, id, or internalOrderId
+              const matches = 
+                order.order_id === updateData.orderId || 
+                order.id === updateData.orderId ||
+                order.order_id === updateData.internalOrderId ||
+                order.id === updateData.internalOrderId ||
+                String(order.order_id).includes(String(updateData.orderId)) ||
+                String(order.id).includes(String(updateData.orderId));
+              
+              if (matches) {
+                updated = true;
+                console.log('✅ Updating order in state:', order.order_id, '->', updateData.status);
                 return {
                   ...order,
                   status: updateData.status || order.status,
@@ -360,6 +381,14 @@ const CustomerOrders: React.FC = () => {
               }
               return order;
             });
+            
+            if (updated) {
+              console.log('✅ Order state updated optimistically');
+            } else {
+              console.warn('⚠️ No matching order found for update:', updateData.orderId);
+            }
+            
+            return updatedOrders;
           });
         }
         
@@ -380,8 +409,20 @@ const CustomerOrders: React.FC = () => {
         // Optimistically update the order in state if we have the data
         if (paymentData.orderId && (paymentData.status || paymentData.paymentStatus)) {
           setOrders(prevOrders => {
-            return prevOrders.map(order => {
-              if (order.order_id === paymentData.orderId || order.id === paymentData.orderId) {
+            let updated = false;
+            const updatedOrders = prevOrders.map(order => {
+              // Match by order_id, id, or internalOrderId
+              const matches = 
+                order.order_id === paymentData.orderId || 
+                order.id === paymentData.orderId ||
+                order.order_id === paymentData.internalOrderId ||
+                order.id === paymentData.internalOrderId ||
+                String(order.order_id).includes(String(paymentData.orderId)) ||
+                String(order.id).includes(String(paymentData.orderId));
+              
+              if (matches) {
+                updated = true;
+                console.log('✅ Updating order payment in state:', order.order_id, '->', paymentData.paymentStatus);
                 return {
                   ...order,
                   status: paymentData.status || order.status,
@@ -391,6 +432,14 @@ const CustomerOrders: React.FC = () => {
               }
               return order;
             });
+            
+            if (updated) {
+              console.log('✅ Order payment state updated optimistically');
+            } else {
+              console.warn('⚠️ No matching order found for payment update:', paymentData.orderId);
+            }
+            
+            return updatedOrders;
           });
         }
         
@@ -439,6 +488,17 @@ const CustomerOrders: React.FC = () => {
 
       // Initial fetch
       fetchOrders();
+      
+      // Set up polling fallback in case socket connection fails
+      const pollingInterval = setInterval(() => {
+        if (newSocket && !newSocket.connected) {
+          console.log('⚠️ Socket not connected, using polling fallback');
+          fetchOrders();
+        }
+      }, 10000); // Poll every 10 seconds if socket is disconnected
+      
+      // Store interval ID for cleanup
+      (newSocket as any).pollingInterval = pollingInterval;
     } else if (loading) {
       console.log('⏳ Still loading authentication...');
     } else {
@@ -447,6 +507,10 @@ const CustomerOrders: React.FC = () => {
 
     return () => {
       if (socket) {
+        // Clear polling interval if it exists
+        if ((socket as any).pollingInterval) {
+          clearInterval((socket as any).pollingInterval);
+        }
         try { socket.removeAllListeners && socket.removeAllListeners(); } catch {}
         socket.close();
       }
