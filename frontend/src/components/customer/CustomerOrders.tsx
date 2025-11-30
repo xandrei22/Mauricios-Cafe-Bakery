@@ -179,26 +179,43 @@ const CustomerOrders: React.FC = () => {
 
   const enqueueStatusNotification = useCallback(
     (order: Order, previousStatus?: Order['status']) => {
-      const notificationId = `${order.order_id}-${Date.now()}`;
-      setStatusNotifications((prev) => [
-        ...prev,
-        {
+      // Deduplication: Check if we already have a notification for this order+status combination
+      // Only show one notification per status change
+      setStatusNotifications((prev) => {
+        // Check if a notification with the same order_id and status already exists
+        const existingNotification = prev.find(
+          (n) => n.orderId === order.order_id && n.status === order.status
+        );
+        
+        // If a notification for this exact status already exists, don't add another one
+        if (existingNotification) {
+          console.log('🔔 Notification already exists for order', order.order_id, 'status', order.status);
+          return prev;
+        }
+        
+        // Otherwise, add the new notification
+        const notificationId = `${order.order_id}-${order.status}-${Date.now()}`;
+        const newNotification = {
           id: notificationId,
           orderId: order.order_id,
           orderNumber: order.order_number || order.order_id,
           status: order.status,
           previousStatus,
           timestamp: Date.now()
+        };
+        
+        // Play sound and show browser notification for the new notification
+        playNotificationSound();
+        showBrowserNotification(order, previousStatus);
+        
+        // Set timeout to remove notification
+        if (typeof window !== 'undefined') {
+          const timeoutId = window.setTimeout(() => removeNotification(notificationId), 8000);
+          notificationTimeoutsRef.current[notificationId] = timeoutId;
         }
-      ]);
-
-      playNotificationSound();
-      showBrowserNotification(order, previousStatus);
-
-      if (typeof window !== 'undefined') {
-        const timeoutId = window.setTimeout(() => removeNotification(notificationId), 8000);
-        notificationTimeoutsRef.current[notificationId] = timeoutId;
-      }
+        
+        return [...prev, newNotification];
+      });
     },
     [playNotificationSound, showBrowserNotification, removeNotification]
   );
@@ -324,46 +341,12 @@ const CustomerOrders: React.FC = () => {
         console.log('📡 Order updated received:', updateData);
         console.log('🔄 Auto-refreshing orders due to order-updated event');
         
-        // Trigger notification immediately if we have the order data
+        // Update status history for tracking changes
         if (updateData.orderId && updateData.status) {
-          const matchingOrder = orders.find(o => o.order_id === updateData.orderId);
-          const previousStatus = statusHistoryRef.current[updateData.orderId];
-          
-          // Play sound and show notification if status changed
-          if (previousStatus && previousStatus !== updateData.status) {
-            // Play sound immediately when status changes
-            playNotificationSound();
-            if (matchingOrder) {
-              const updatedOrder = { ...matchingOrder, status: updateData.status as Order['status'] };
-              enqueueStatusNotification(updatedOrder, previousStatus);
-            } else {
-              // Order not in current list, create a minimal order object for notification
-              const notificationOrder: Order = {
-                id: updateData.orderId,
-                order_id: updateData.orderId,
-                customer_name: 'Your order',
-                items: [],
-                total_price: 0,
-                status: updateData.status as Order['status'],
-                payment_status: updateData.paymentStatus || 'pending',
-                order_type: 'dine_in',
-                order_time: new Date().toISOString()
-              };
-              enqueueStatusNotification(notificationOrder, previousStatus);
-            }
-          } else if (!previousStatus && updateData.status) {
-            // First time seeing this order with a status - play sound if status is not pending
-            if (updateData.status !== 'pending' && updateData.status !== 'pending_verification') {
-              playNotificationSound();
-              if (matchingOrder) {
-                const updatedOrder = { ...matchingOrder, status: updateData.status as Order['status'] };
-                enqueueStatusNotification(updatedOrder, undefined);
-              }
-            }
-          }
+          statusHistoryRef.current[updateData.orderId] = updateData.status as Order['status'];
         }
         
-        // Immediately fetch fresh data
+        // Immediately fetch fresh data - notifications will be handled by the useEffect that watches orders
         fetchOrders();
       });
 
@@ -371,30 +354,16 @@ const CustomerOrders: React.FC = () => {
         console.log('💳 Payment updated received:', paymentData);
         console.log('🔄 Auto-refreshing orders due to payment-updated event');
         
-        // Trigger notification for payment updates
+        // Update status history for tracking changes
         if (paymentData.orderId) {
           const matchingOrder = orders.find(o => o.order_id === paymentData.orderId);
           if (matchingOrder) {
-            const previousStatus = statusHistoryRef.current[paymentData.orderId];
-            const updatedOrder = { 
-              ...matchingOrder, 
-              payment_status: 'paid' as Order['payment_status'],
-              status: matchingOrder.status === 'pending_verification' ? 'preparing' as Order['status'] : matchingOrder.status
-            };
-            // Play sound and show notification if status changed or payment was confirmed
-            if (previousStatus !== updatedOrder.status) {
-              // Play sound immediately when status changes
-              playNotificationSound();
-              enqueueStatusNotification(updatedOrder, previousStatus);
-            } else if (paymentData.paymentStatus === 'paid' && matchingOrder.payment_status !== 'paid') {
-              // Payment was just confirmed - play sound
-              playNotificationSound();
-              enqueueStatusNotification(updatedOrder, previousStatus);
-            }
+            const newStatus = matchingOrder.status === 'pending_verification' ? 'preparing' as Order['status'] : matchingOrder.status;
+            statusHistoryRef.current[paymentData.orderId] = newStatus;
           }
         }
         
-        // Immediately fetch fresh data
+        // Immediately fetch fresh data - notifications will be handled by the useEffect that watches orders
         fetchOrders();
       });
 
@@ -2278,6 +2247,19 @@ const CustomerOrders: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Completion Time - Only shown for completed orders */}
+              {selectedOrderForDetails.completed_time && selectedOrderForDetails.status === 'completed' && (
+                <div className="p-6 border-t border-gray-100">
+                  <div className="text-sm text-gray-500 text-center">
+                    Order completed on {new Date(selectedOrderForDetails.completed_time).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })} at {formatOrderTime(selectedOrderForDetails.completed_time)}
+                  </div>
+                </div>
+              )}
 
               {/* Total Amount */}
               <div className="p-6 border-t border-gray-100">

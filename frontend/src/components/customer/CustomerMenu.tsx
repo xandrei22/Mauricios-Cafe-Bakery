@@ -343,13 +343,14 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         <div className="space-y-4 sm:space-y-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Menu</h1>
-            <p className="text-sm sm:text-base text-gray-600 mt-1">Explore our delicious selection of coffee and beverages</p>
-          </div>
+          {/* Header */}
+          <div className="space-y-4 sm:space-y-6">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Menu</h1>
+              <p className="text-sm sm:text-base text-gray-600 mt-1">Explore our delicious selection of coffee and beverages</p>
+            </div>
           
           {/* Table Number Display */}
           {hasValidTableAccess && (
@@ -379,10 +380,10 @@ const CustomerMenu: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-row flex-wrap items-center gap-3 justify-end w-full">
+          {/* Search and Filters */}
+          <div className="flex flex-row flex-wrap items-center gap-3 justify-end w-full">
         {/* Search Input - Full width on mobile, fixed width on larger screens */}
         <div className="relative w-full sm:w-96 md:w-[28rem]">
           <Input
@@ -466,10 +467,9 @@ const CustomerMenu: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardContent className="p-6 text-center">
             <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
@@ -494,10 +494,10 @@ const CustomerMenu: React.FC = () => {
             <div className="text-sm text-gray-600">Categories</div>
           </CardContent>
         </Card>
-      </div>
+          </div>
 
-      {/* Menu Items by Category */}
-      {filteredItems.length === 0 ? (
+          {/* Menu Items by Category */}
+          {filteredItems.length === 0 ? (
         <Card className="border-2 border-[#a87437] shadow-xl">
           <CardContent className="text-center py-16">
             <Coffee className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -628,7 +628,8 @@ const CustomerMenu: React.FC = () => {
           })()}
         </div>
       )}
-
+        </div>
+      </div>
 
       {/* Cart Modal */}
       <CustomerCartModal 
