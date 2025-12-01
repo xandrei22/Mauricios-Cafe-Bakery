@@ -1193,7 +1193,26 @@ router.post('/:orderId/verify-payment', async(req, res) => {
         res.json({ success: true, message: 'Payment verified and order processed' });
     } catch (error) {
         console.error('Error verifying payment:', error);
-        res.status(500).json({ success: false, error: 'Failed to verify payment' });
+
+        // If the only problem is a missing payment_transactions table, still
+        // treat the verification as successful because the order has already
+        // been marked as paid above.
+        if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_TABLE_ERROR')) {
+            const msg = String(error.sqlMessage || error.message || '').toLowerCase();
+            if (msg.includes('payment_transactions')) {
+                console.warn('⚠️ payment_transactions table missing — treating verification as success');
+                return res.json({
+                    success: true,
+                    message: 'Payment verified (transaction log table missing on server)'
+                });
+            }
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Failed to verify payment',
+            details: error && (error.message || error.sqlMessage || error.code || null)
+        });
     }
 });
 
