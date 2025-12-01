@@ -85,6 +85,7 @@ const CustomerOrders: React.FC = () => {
   const [uploadingReceiptForModal, setUploadingReceiptForModal] = useState(false);
   const [statusNotifications, setStatusNotifications] = useState<StatusNotification[]>([]);
   const statusHistoryRef = useRef<Record<string, Order['status']>>({});
+  const paymentStatusHistoryRef = useRef<Record<string, Order['payment_status']>>({});
   const notificationsInitializedRef = useRef(false);
   const notificationTimeoutsRef = useRef<Record<string, number>>({});
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -97,12 +98,15 @@ const CustomerOrders: React.FC = () => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }, []);
 
-  const playNotificationSound = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioConstructor) return;
-
+  const playNotificationSound = useCallback(() => {
     try {
+      if (typeof window === 'undefined') return;
+      const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioConstructor) {
+        console.warn('AudioContext not supported');
+        return;
+      }
+
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioConstructor();
       }
@@ -110,25 +114,45 @@ const CustomerOrders: React.FC = () => {
       const ctx = audioContextRef.current;
       if (!ctx) return;
 
-      // Resume AudioContext if suspended (required for autoplay policies)
+      // Resume audio context if suspended (required by browser autoplay policies)
       if (ctx.state === 'suspended') {
-        await ctx.resume();
+        ctx.resume().catch((err) => {
+          console.warn('Failed to resume audio context:', err);
+        });
       }
 
-      // Create and play sound
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 880;
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
+      // Create a pleasant notification sound (two-tone chime) - matching guest tracking
       const now = ctx.currentTime;
-      gainNode.gain.setValueAtTime(0.0001, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
-      oscillator.start(now);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-      oscillator.stop(now + 0.8);
+      
+      // First tone
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = 880; // A5 note
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      
+      gain1.gain.setValueAtTime(0, now);
+      gain1.gain.linearRampToValueAtTime(0.3, now + 0.1);
+      gain1.gain.linearRampToValueAtTime(0, now + 0.3);
+      osc1.start(now);
+      osc1.stop(now + 0.3);
+      
+      // Second tone (slightly higher, starts after first)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 1108; // C#6 note
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      
+      gain2.gain.setValueAtTime(0, now + 0.2);
+      gain2.gain.linearRampToValueAtTime(0.3, now + 0.3);
+      gain2.gain.linearRampToValueAtTime(0, now + 0.5);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.5);
+      
+      console.log('🔔 Notification sound played');
     } catch (error) {
       console.warn('Failed to play notification sound:', error);
     }
@@ -294,10 +318,30 @@ const CustomerOrders: React.FC = () => {
 
     orders.forEach((order) => {
       const previousStatus = statusHistoryRef.current[order.order_id];
+      const previousPaymentStatus = paymentStatusHistoryRef.current[order.order_id];
+      const currentPaymentStatus = order.payment_status;
+      
+      // Track status changes
       if (previousStatus && previousStatus !== order.status) {
         updates.push({ order, previousStatus });
       }
+      
+      // Track payment status changes - trigger notification when payment is verified
+      if (previousPaymentStatus !== currentPaymentStatus) {
+        // If payment just changed to 'paid', trigger notification even if status hasn't changed
+        if (currentPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
+          // Only add if we haven't already added a status change notification for this order
+          const hasStatusUpdate = updates.some(u => u.order.order_id === order.order_id);
+          if (!hasStatusUpdate) {
+            updates.push({ order, previousStatus });
+          }
+          // Play sound for payment verification
+          playNotificationSound();
+        }
+      }
+      
       statusHistoryRef.current[order.order_id] = order.status;
+      paymentStatusHistoryRef.current[order.order_id] = currentPaymentStatus;
     });
 
     if (!notificationsInitializedRef.current) {
@@ -306,7 +350,7 @@ const CustomerOrders: React.FC = () => {
     }
 
     updates.forEach(({ order, previousStatus }) => enqueueStatusNotification(order, previousStatus));
-  }, [orders, enqueueStatusNotification]);
+  }, [orders, enqueueStatusNotification, playNotificationSound]);
 
   useEffect(() => {
     console.log('🔍 CustomerOrders useEffect triggered:');
@@ -351,8 +395,14 @@ const CustomerOrders: React.FC = () => {
         console.log('🔄 Auto-refreshing orders due to order-updated event');
         
         // Update status history for tracking changes
-        if (updateData.orderId && updateData.status) {
-          statusHistoryRef.current[updateData.orderId] = updateData.status as Order['status'];
+        if (updateData.orderId) {
+          if (updateData.status) {
+            statusHistoryRef.current[updateData.orderId] = updateData.status as Order['status'];
+          }
+          // Also track payment status changes
+          if (updateData.paymentStatus) {
+            paymentStatusHistoryRef.current[updateData.orderId] = updateData.paymentStatus as Order['payment_status'];
+          }
         }
         
         // Optimistically update the order in state if we have the data
@@ -404,6 +454,10 @@ const CustomerOrders: React.FC = () => {
         if (paymentData.orderId) {
           const newStatus = (paymentData.status || 'payment_confirmed') as Order['status'];
           statusHistoryRef.current[paymentData.orderId] = newStatus;
+          // Also track payment status changes
+          if (paymentData.paymentStatus) {
+            paymentStatusHistoryRef.current[paymentData.orderId] = paymentData.paymentStatus as Order['payment_status'];
+          }
         }
         
         // Optimistically update the order in state if we have the data
@@ -711,32 +765,61 @@ const CustomerOrders: React.FC = () => {
   const getRealtimeProgress = (order: Order | null | undefined) => {
     if (!order) return 0;
     const status = String(order.status || 'pending');
-    const paymentStatus = String((order as any).payment_status || 'pending');
+    const paymentStatus = String((order as any).payment_status || (order as any).paymentStatus || 'pending');
 
-    // Match guest order tracking progress calculation
-    switch (status.toLowerCase()) {
-      case 'pending':
-      case 'pending_verification':
-        return 20; // Order Received
-      case 'confirmed':
-      case 'payment_confirmed':
-        return 40; // Payment Confirmed
-      case 'processing':
-      case 'preparing':
-        return 60; // Preparing
-      case 'ready':
-        return 80; // Ready for Pickup
-      case 'completed':
-        return 100; // Completed
-      case 'cancelled':
-        return 0;
-      default:
-        // If payment is paid but status is still pending, show payment confirmed progress
-        if (paymentStatus === 'paid' && (status === 'pending' || status === 'pending_verification')) {
-          return 40;
-        }
-        return 0;
+    const normalizedStatus = status.toLowerCase().trim();
+    const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
+
+    // Handle cancelled orders first
+    if (normalizedStatus === 'cancelled') {
+      return 0;
     }
+
+    // Progress calculation based on order status and payment status
+    // The flow should be: Order Received (20%) → Payment Confirmed (40%) → Preparing (60%) → Ready (80%) → Completed (100%)
+
+    // Step 1: Order Received (20%)
+    // Order is placed but payment not yet verified
+    if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
+      // If payment is already paid, we're at payment confirmed stage (40%)
+      if (normalizedPaymentStatus === 'paid') {
+        return 40;
+      }
+      // Otherwise, order is just received (20%)
+      return 20;
+    }
+
+    // Step 2: Payment Confirmed (40%)
+    // Payment has been verified
+    if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+      return 40;
+    }
+
+    // Step 3: Preparing (60%)
+    // Order is being prepared
+    if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+      return 60;
+    }
+
+    // Step 4: Ready (80%)
+    // Order is ready for pickup
+    if (normalizedStatus === 'ready') {
+      return 80;
+    }
+
+    // Step 5: Completed (100%)
+    // Order is completed
+    if (normalizedStatus === 'completed') {
+      return 100;
+    }
+
+    // Default: if payment is paid, assume we're at payment confirmed (40%)
+    // Otherwise, assume order is just received (20%)
+    if (normalizedPaymentStatus === 'paid') {
+      return 40;
+    }
+
+    return 20; // Default to order received
   };
 
   // Pagination logic for completed orders
