@@ -86,21 +86,35 @@ const GuestOrderTracking: React.FC = () => {
     }
   };
 
-  // Compute display status with delay between payment confirmed and preparing
+  // Compute display status with automatic transition from payment confirmed to preparing
   const getDisplayStatus = (status: string, paymentStatus?: string): string => {
     if (!status) return status;
     
     const normalizedStatus = status.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
     
-    // If status is ready but payment was just confirmed, show preparing for 3-5 seconds
-    if (normalizedStatus === 'ready' && paymentConfirmedTime) {
+    // Only apply automatic transition if payment was just confirmed
+    if (paymentConfirmedTime && normalizedPaymentStatus === 'paid') {
       const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
-      const delayDuration = 4000; // 4 seconds delay
+      const transitionDelay = 4000; // 4 seconds before automatically transitioning to preparing
       
-      // If less than 4 seconds have passed since payment confirmation, show preparing
-      if (timeSincePaymentConfirmed < delayDuration) {
-        return 'preparing';
+      // If status is payment_confirmed or confirmed, check if we should transition to preparing
+      if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
+        // After 4 seconds, automatically transition to preparing
+        if (timeSincePaymentConfirmed >= transitionDelay) {
+          return 'preparing';
+        }
+        // Before 4 seconds, still show payment_confirmed
+        return status;
+      }
+      
+      // If status is already preparing or ready, and we're still within the transition period
+      // Keep showing preparing until the transition period is over
+      if ((normalizedStatus === 'preparing' || normalizedStatus === 'ready' || normalizedStatus === 'processing')) {
+        // If less than 4 seconds have passed, force show preparing
+        if (timeSincePaymentConfirmed < transitionDelay) {
+          return 'preparing';
+        }
       }
     }
     

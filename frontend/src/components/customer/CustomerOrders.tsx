@@ -1071,22 +1071,43 @@ const CustomerOrders: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Compute display status with delay between payment confirmed and preparing
+  // Compute display status with automatic transition from payment confirmed to preparing
   const getDisplayStatus = (order: Order | null | undefined): string => {
     if (!order) return 'pending';
     const status = String(order.status || 'pending');
     const orderId = order.order_id || (order as any).orderId || '';
+    const paymentStatus = String(
+      order.payment_status || 
+      (order as any).payment_status || 
+      (order as any).paymentStatus || 
+      'pending'
+    );
     
     const normalizedStatus = status.toLowerCase().trim();
+    const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
     
-    // If status is ready but payment was just confirmed, show preparing for 3-5 seconds
-    if (normalizedStatus === 'ready' && paymentConfirmedTimes[orderId]) {
+    // Only apply automatic transition if payment was just confirmed
+    if (paymentConfirmedTimes[orderId] && normalizedPaymentStatus === 'paid') {
       const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTimes[orderId].getTime();
-      const delayDuration = 4000; // 4 seconds delay
+      const transitionDelay = 4000; // 4 seconds before transitioning to preparing
       
-      // If less than 4 seconds have passed since payment confirmation, show preparing
-      if (timeSincePaymentConfirmed < delayDuration) {
-        return 'preparing';
+      // If status is payment_confirmed or confirmed, check if we should transition to preparing
+      if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
+        // After 4 seconds, automatically transition to preparing
+        if (timeSincePaymentConfirmed >= transitionDelay) {
+          return 'preparing';
+        }
+        // Before 4 seconds, still show payment_confirmed
+        return status;
+      }
+      
+      // If status is already preparing or ready, and we're still within the transition period
+      // Keep showing preparing until the transition period is over
+      if ((normalizedStatus === 'preparing' || normalizedStatus === 'ready' || normalizedStatus === 'processing')) {
+        // If less than 4 seconds have passed, force show preparing
+        if (timeSincePaymentConfirmed < transitionDelay) {
+          return 'preparing';
+        }
       }
     }
     
