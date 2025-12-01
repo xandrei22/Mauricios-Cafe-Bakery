@@ -518,24 +518,27 @@ const CustomerOrders: React.FC = () => {
               
               if (matches) {
                 updated = true;
-                const newPaymentStatus = updateData.paymentStatus !== undefined ? updateData.paymentStatus : order.payment_status;
                 const oldPaymentStatus = order.payment_status;
-                console.log('✅ Updating order in state:', {
+                // IMPORTANT: Always use updateData.paymentStatus if provided, otherwise keep existing
+                const newPaymentStatus = updateData.paymentStatus !== undefined && updateData.paymentStatus !== null 
+                                       ? updateData.paymentStatus 
+                                       : order.payment_status;
+                console.log('✅ Updating order in state (order-updated):', {
                   order_id: order.order_id,
                   old_status: order.status,
                   new_status: updateData.status,
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   updateData_paymentStatus: updateData.paymentStatus,
+                  updateData_paymentStatus_type: typeof updateData.paymentStatus,
                   paymentStatusChanged: oldPaymentStatus !== newPaymentStatus
                 });
-                // Force update payment_status if it's being set to 'paid'
-                const finalPaymentStatus = updateData.paymentStatus !== undefined ? updateData.paymentStatus : 
-                                          (updateData.paymentStatus === 'paid' ? 'paid' : order.payment_status);
                 return {
                   ...order,
                   status: updateData.status !== undefined ? updateData.status : order.status,
-                  payment_status: finalPaymentStatus,
+                  payment_status: newPaymentStatus,
+                  // Also set paymentStatus alias for compatibility
+                  paymentStatus: newPaymentStatus,
                   payment_method: updateData.paymentMethod !== undefined ? updateData.paymentMethod : order.payment_method
                 };
               }
@@ -604,6 +607,8 @@ const CustomerOrders: React.FC = () => {
                   ...order,
                   status: paymentData.status !== undefined ? paymentData.status : order.status,
                   payment_status: newPaymentStatus,
+                  // Also set paymentStatus alias for compatibility
+                  paymentStatus: newPaymentStatus,
                   payment_method: paymentData.paymentMethod !== undefined ? paymentData.paymentMethod : order.payment_method
                 };
               }
@@ -824,10 +829,23 @@ const CustomerOrders: React.FC = () => {
           });
           
           // Ensure payment_status is properly mapped for all orders
-          const ordersWithPaymentStatus = sortedOrders.map((order: any) => ({
-            ...order,
-            payment_status: order.payment_status || order.paymentStatus || (order.payment_status === 'paid' ? 'paid' : 'pending')
-          }));
+          const ordersWithPaymentStatus = sortedOrders.map((order: any) => {
+            // Check multiple possible field names for payment_status
+            // Priority: payment_status > paymentStatus > default to 'pending'
+            const paymentStatus = order.payment_status || order.paymentStatus || 'pending';
+            console.log('🔍 Mapping payment_status for order:', {
+              order_id: order.order_id,
+              payment_status: order.payment_status,
+              paymentStatus: order.paymentStatus,
+              final_payment_status: paymentStatus
+            });
+            return {
+              ...order,
+              payment_status: paymentStatus,
+              // Also ensure paymentStatus alias exists for compatibility
+              paymentStatus: paymentStatus
+            };
+          });
           
           console.log('🔍 Orders with payment_status:', ordersWithPaymentStatus.map((o: any) => ({
             order_id: o.order_id,
@@ -1516,12 +1534,17 @@ const CustomerOrders: React.FC = () => {
                       <ProgressBar 
                         value={(() => {
                           const currentOrder = getCurrentOrder();
+                          // Ensure we're reading payment_status from the order object
+                          const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus || 'pending';
                           const progress = getRealtimeProgress(currentOrder);
                           console.log('🔍 Progress calculation:', {
                             orderId: currentOrder?.order_id,
                             status: currentOrder?.status,
-                            payment_status: currentOrder?.payment_status,
-                            progress
+                            payment_status: paymentStatus,
+                            payment_status_raw: currentOrder?.payment_status,
+                            paymentStatus_alt: (currentOrder as any)?.paymentStatus,
+                            progress,
+                            orderObject: currentOrder
                           });
                           return progress;
                         })()}
