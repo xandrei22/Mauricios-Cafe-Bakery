@@ -228,8 +228,8 @@ const CustomerOrders: React.FC = () => {
           timestamp: Date.now()
         };
         
-        // Play sound and show browser notification for the new notification
-        playNotificationSound();
+        // Show browser notification for the new notification
+        // Note: Sound is played in the useEffect that processes updates to avoid duplicates
         showBrowserNotification(order, previousStatus);
         
         // Set timeout to remove notification
@@ -330,13 +330,19 @@ const CustomerOrders: React.FC = () => {
       if (previousPaymentStatus !== currentPaymentStatus) {
         // If payment just changed to 'paid', trigger notification even if status hasn't changed
         if (currentPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
-          // Only add if we haven't already added a status change notification for this order
+          // Always add payment verification notification, even if status update exists
+          // This ensures users are notified when payment is verified
           const hasStatusUpdate = updates.some(u => u.order.order_id === order.order_id);
           if (!hasStatusUpdate) {
             updates.push({ order, previousStatus });
+          } else {
+            // If status update exists, still add payment notification separately
+            // Create a modified order object to indicate payment verification
+            updates.push({ 
+              order: { ...order, status: order.status || 'payment_confirmed' as Order['status'] }, 
+              previousStatus 
+            });
           }
-          // Play sound for payment verification
-          playNotificationSound();
         }
       }
       
@@ -349,7 +355,12 @@ const CustomerOrders: React.FC = () => {
       return;
     }
 
-    updates.forEach(({ order, previousStatus }) => enqueueStatusNotification(order, previousStatus));
+    // Process all updates and play sound for each
+    updates.forEach(({ order, previousStatus }) => {
+      // Play sound for each status change
+      playNotificationSound();
+      enqueueStatusNotification(order, previousStatus);
+    });
   }, [orders, enqueueStatusNotification, playNotificationSound]);
 
   useEffect(() => {
@@ -421,12 +432,20 @@ const CustomerOrders: React.FC = () => {
               
               if (matches) {
                 updated = true;
-                console.log('✅ Updating order in state:', order.order_id, '->', updateData.status);
+                const newPaymentStatus = updateData.paymentStatus !== undefined ? updateData.paymentStatus : order.payment_status;
+                console.log('✅ Updating order in state:', {
+                  order_id: order.order_id,
+                  old_status: order.status,
+                  new_status: updateData.status,
+                  old_payment_status: order.payment_status,
+                  new_payment_status: newPaymentStatus,
+                  updateData_paymentStatus: updateData.paymentStatus
+                });
                 return {
                   ...order,
-                  status: updateData.status || order.status,
-                  payment_status: updateData.paymentStatus || order.payment_status,
-                  payment_method: updateData.paymentMethod || order.payment_method
+                  status: updateData.status !== undefined ? updateData.status : order.status,
+                  payment_status: newPaymentStatus,
+                  payment_method: updateData.paymentMethod !== undefined ? updateData.paymentMethod : order.payment_method
                 };
               }
               return order;
@@ -476,12 +495,20 @@ const CustomerOrders: React.FC = () => {
               
               if (matches) {
                 updated = true;
-                console.log('✅ Updating order payment in state:', order.order_id, '->', paymentData.paymentStatus);
+                const newPaymentStatus = paymentData.paymentStatus !== undefined ? paymentData.paymentStatus : order.payment_status;
+                console.log('✅ Updating order payment in state:', {
+                  order_id: order.order_id,
+                  old_payment_status: order.payment_status,
+                  new_payment_status: newPaymentStatus,
+                  paymentData_paymentStatus: paymentData.paymentStatus,
+                  old_status: order.status,
+                  new_status: paymentData.status
+                });
                 return {
                   ...order,
-                  status: paymentData.status || order.status,
-                  payment_status: paymentData.paymentStatus || 'paid',
-                  payment_method: paymentData.paymentMethod || order.payment_method
+                  status: paymentData.status !== undefined ? paymentData.status : order.status,
+                  payment_status: newPaymentStatus,
+                  payment_method: paymentData.paymentMethod !== undefined ? paymentData.paymentMethod : order.payment_method
                 };
               }
               return order;
@@ -1367,16 +1394,31 @@ const CustomerOrders: React.FC = () => {
                        </div>
                      </div>
 
-                     {/* Progress Bar */}
-                     <div className="mb-4">
-                       <div className="w-full bg-gray-200 rounded-full h-2">
-                       <ProgressBar 
-                         value={getRealtimeProgress(getCurrentOrder())}
-                         variant="amber"
-                       />
-                       </div>
-                       <p className="text-sm text-gray-600 mt-1">{getRealtimeProgress(getCurrentOrder())}% Complete</p>
-                     </div>
+                    {/* Progress Bar */}
+                    <div className="mb-4">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <ProgressBar 
+                        value={(() => {
+                          const currentOrder = getCurrentOrder();
+                          const progress = getRealtimeProgress(currentOrder);
+                          console.log('🔍 Progress calculation:', {
+                            orderId: currentOrder?.order_id,
+                            status: currentOrder?.status,
+                            payment_status: currentOrder?.payment_status,
+                            progress
+                          });
+                          return progress;
+                        })()}
+                        variant="amber"
+                      />
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {(() => {
+                          const currentOrder = getCurrentOrder();
+                          return getRealtimeProgress(currentOrder);
+                        })()}% Complete
+                      </p>
+                    </div>
                    </div>
 
                    {/* Order Progress Steps */}
