@@ -86,6 +86,7 @@ const CustomerOrders: React.FC = () => {
   const [statusNotifications, setStatusNotifications] = useState<StatusNotification[]>([]);
   const statusHistoryRef = useRef<Record<string, Order['status']>>({});
   const paymentStatusHistoryRef = useRef<Record<string, Order['payment_status']>>({});
+  const progressHistoryRef = useRef<Record<string, number>>({});
   const notificationsInitializedRef = useRef(false);
   const notificationTimeoutsRef = useRef<Record<string, number>>({});
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -315,11 +316,55 @@ const CustomerOrders: React.FC = () => {
     if (!orders || orders.length === 0) return;
 
     const updates: Array<{ order: Order; previousStatus?: Order['status'] }> = [];
+    const progressUpdates: Array<{ orderId: string; oldProgress: number; newProgress: number }> = [];
 
     orders.forEach((order) => {
       const previousStatus = statusHistoryRef.current[order.order_id];
       const previousPaymentStatus = paymentStatusHistoryRef.current[order.order_id];
-      const currentPaymentStatus = order.payment_status;
+      const currentPaymentStatus = order.payment_status || (order as any).payment_status;
+      
+      // Calculate current progress using the same logic as getRealtimeProgress
+      const status = String(order.status || 'pending');
+      const paymentStatus = String(currentPaymentStatus || 'pending');
+      const normalizedStatus = status.toLowerCase().trim();
+      const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
+      
+      let currentProgress = 0;
+      if (normalizedStatus === 'cancelled') {
+        currentProgress = 0;
+      } else if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
+        currentProgress = normalizedPaymentStatus === 'paid' ? 40 : 20;
+      } else if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+        currentProgress = 40;
+      } else if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+        currentProgress = 60;
+      } else if (normalizedStatus === 'ready') {
+        currentProgress = 80;
+      } else if (normalizedStatus === 'completed') {
+        currentProgress = 100;
+      } else if (normalizedPaymentStatus === 'paid') {
+        currentProgress = 40;
+      } else {
+        currentProgress = 20;
+      }
+      
+      const previousProgress = progressHistoryRef.current[order.order_id] ?? 0;
+      
+      // Track progress changes - play sound when progress increases (IMPORTANT)
+      if (currentProgress !== previousProgress && currentProgress > previousProgress) {
+        progressUpdates.push({
+          orderId: order.order_id,
+          oldProgress: previousProgress,
+          newProgress: currentProgress
+        });
+        console.log('📊 Progress changed:', {
+          orderId: order.order_id,
+          oldProgress: previousProgress,
+          newProgress: currentProgress,
+          status: order.status,
+          payment_status: currentPaymentStatus
+        });
+      }
       
       // Track status changes
       if (previousStatus && previousStatus !== order.status) {
@@ -348,17 +393,41 @@ const CustomerOrders: React.FC = () => {
       
       statusHistoryRef.current[order.order_id] = order.status;
       paymentStatusHistoryRef.current[order.order_id] = currentPaymentStatus;
+      progressHistoryRef.current[order.order_id] = currentProgress;
     });
+
+    // Play sound for progress changes (IMPORTANT - this is what the user wants)
+    // Play sound even on first initialization if progress > 0 (for new orders)
+    if (progressUpdates.length > 0) {
+      progressUpdates.forEach(({ orderId, oldProgress, newProgress }) => {
+        console.log('🔔 Playing sound for progress change:', orderId, oldProgress, '->', newProgress);
+        // Small delay to ensure audio context is ready
+        setTimeout(() => {
+          playNotificationSound();
+        }, 100);
+      });
+    }
 
     if (!notificationsInitializedRef.current) {
       notificationsInitializedRef.current = true;
+      // For new orders, play sound if progress > 0
+      orders.forEach((order) => {
+        const progress = progressHistoryRef.current[order.order_id] || 0;
+        if (progress > 0) {
+          setTimeout(() => {
+            playNotificationSound();
+          }, 200);
+        }
+      });
       return;
     }
 
     // Process all updates and play sound for each
     updates.forEach(({ order, previousStatus }) => {
       // Play sound for each status change
-      playNotificationSound();
+      setTimeout(() => {
+        playNotificationSound();
+      }, 100);
       enqueueStatusNotification(order, previousStatus);
     });
   }, [orders, enqueueStatusNotification, playNotificationSound]);
@@ -677,7 +746,11 @@ const CustomerOrders: React.FC = () => {
                 console.log('  - Test endpoint response:', testData);
                 if (testData.success && testData.orders.length > 0) {
                   console.log('  - Test endpoint found orders:', testData.orders.length);
-                  setOrders(testData.orders);
+                  const ordersWithPaymentStatus = testData.orders.map((order: any) => ({
+                    ...order,
+                    payment_status: order.payment_status || order.paymentStatus || 'pending'
+                  }));
+                  setOrders(ordersWithPaymentStatus);
                   return;
                 }
               }
@@ -698,7 +771,11 @@ const CustomerOrders: React.FC = () => {
                   );
                   console.log('  - Alternative orders found:', filteredOrders.length);
                   if (filteredOrders.length > 0) {
-                    setOrders(filteredOrders);
+                    const ordersWithPaymentStatus = filteredOrders.map((order: any) => ({
+                      ...order,
+                      payment_status: order.payment_status || order.paymentStatus || 'pending'
+                    }));
+                    setOrders(ordersWithPaymentStatus);
                     return;
                   }
                 }
@@ -719,7 +796,19 @@ const CustomerOrders: React.FC = () => {
             console.log(`🔍 CustomerOrders - Order ${index + 1} isRecent:`, isRecentOrder(order.order_time));
           });
           
-          setOrders(sortedOrders);
+          // Ensure payment_status is properly mapped for all orders
+          const ordersWithPaymentStatus = sortedOrders.map((order: any) => ({
+            ...order,
+            payment_status: order.payment_status || order.paymentStatus || (order.payment_status === 'paid' ? 'paid' : 'pending')
+          }));
+          
+          console.log('🔍 Orders with payment_status:', ordersWithPaymentStatus.map((o: any) => ({
+            order_id: o.order_id,
+            status: o.status,
+            payment_status: o.payment_status
+          })));
+          
+          setOrders(ordersWithPaymentStatus);
           
           // Only update selectedOrder when it actually changes
           const currentOrders = sortedOrders.filter((order: Order) => {
