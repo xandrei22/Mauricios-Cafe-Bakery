@@ -375,6 +375,7 @@ const CustomerOrders: React.FC = () => {
       if (previousPaymentStatus !== currentPaymentStatus) {
         // If payment just changed to 'paid', trigger notification even if status hasn't changed
         if (currentPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
+          console.log('💳 Payment verified for order:', order.order_id, 'Previous:', previousPaymentStatus, 'Current:', currentPaymentStatus);
           // Always add payment verification notification, even if status update exists
           // This ensures users are notified when payment is verified
           const hasStatusUpdate = updates.some(u => u.order.order_id === order.order_id);
@@ -386,6 +387,22 @@ const CustomerOrders: React.FC = () => {
             updates.push({ 
               order: { ...order, status: order.status || 'payment_confirmed' as Order['status'] }, 
               previousStatus 
+            });
+          }
+          // IMPORTANT: Also trigger progress update sound for payment verification
+          // When payment changes to 'paid', progress should go from 20% to 40%
+          const progressBeforePayment = previousPaymentStatus === 'paid' ? 40 : 20;
+          const progressAfterPayment = 40;
+          if (progressAfterPayment > progressBeforePayment) {
+            progressUpdates.push({
+              orderId: order.order_id,
+              oldProgress: progressBeforePayment,
+              newProgress: progressAfterPayment
+            });
+            console.log('💳 Payment verification progress update:', {
+              orderId: order.order_id,
+              oldProgress: progressBeforePayment,
+              newProgress: progressAfterPayment
             });
           }
         }
@@ -502,18 +519,23 @@ const CustomerOrders: React.FC = () => {
               if (matches) {
                 updated = true;
                 const newPaymentStatus = updateData.paymentStatus !== undefined ? updateData.paymentStatus : order.payment_status;
+                const oldPaymentStatus = order.payment_status;
                 console.log('✅ Updating order in state:', {
                   order_id: order.order_id,
                   old_status: order.status,
                   new_status: updateData.status,
-                  old_payment_status: order.payment_status,
+                  old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
-                  updateData_paymentStatus: updateData.paymentStatus
+                  updateData_paymentStatus: updateData.paymentStatus,
+                  paymentStatusChanged: oldPaymentStatus !== newPaymentStatus
                 });
+                // Force update payment_status if it's being set to 'paid'
+                const finalPaymentStatus = updateData.paymentStatus !== undefined ? updateData.paymentStatus : 
+                                          (updateData.paymentStatus === 'paid' ? 'paid' : order.payment_status);
                 return {
                   ...order,
                   status: updateData.status !== undefined ? updateData.status : order.status,
-                  payment_status: newPaymentStatus,
+                  payment_status: finalPaymentStatus,
                   payment_method: updateData.paymentMethod !== undefined ? updateData.paymentMethod : order.payment_method
                 };
               }
@@ -564,14 +586,19 @@ const CustomerOrders: React.FC = () => {
               
               if (matches) {
                 updated = true;
-                const newPaymentStatus = paymentData.paymentStatus !== undefined ? paymentData.paymentStatus : order.payment_status;
+                const oldPaymentStatus = order.payment_status;
+                // IMPORTANT: Always use paymentData.paymentStatus if provided, otherwise keep existing
+                const newPaymentStatus = paymentData.paymentStatus !== undefined && paymentData.paymentStatus !== null 
+                                       ? paymentData.paymentStatus 
+                                       : order.payment_status;
                 console.log('✅ Updating order payment in state:', {
                   order_id: order.order_id,
-                  old_payment_status: order.payment_status,
+                  old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   paymentData_paymentStatus: paymentData.paymentStatus,
                   old_status: order.status,
-                  new_status: paymentData.status
+                  new_status: paymentData.status,
+                  paymentStatusChanged: oldPaymentStatus !== newPaymentStatus
                 });
                 return {
                   ...order,
