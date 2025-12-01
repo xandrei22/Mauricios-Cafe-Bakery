@@ -85,6 +85,7 @@ const CustomerOrders: React.FC = () => {
   const [receiptPreviewForModal, setReceiptPreviewForModal] = useState<string | null>(null);
   const [uploadingReceiptForModal, setUploadingReceiptForModal] = useState(false);
   const [statusNotifications, setStatusNotifications] = useState<StatusNotification[]>([]);
+  const [paymentConfirmedTimes, setPaymentConfirmedTimes] = useState<Record<string, Date>>({});
   const statusHistoryRef = useRef<Record<string, Order['status']>>({});
   const paymentStatusHistoryRef = useRef<Record<string, Order['payment_status']>>({});
   const progressHistoryRef = useRef<Record<string, number>>({});
@@ -584,6 +585,14 @@ const CustomerOrders: React.FC = () => {
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   console.log('💳 CRITICAL: Payment verified - IMMEDIATELY updating to 40% progress');
+                  // Track payment confirmation time for delay logic
+                  const orderIdKey = updateOrderId || order.order_id || order.id;
+                  if (orderIdKey) {
+                    setPaymentConfirmedTimes(prev => ({
+                      ...prev,
+                      [String(orderIdKey)]: new Date()
+                    }));
+                  }
                   // Force component re-render to update progress bar
                   setTimeout(() => {
                     setForceUpdate(prev => prev + 1);
@@ -684,6 +693,14 @@ const CustomerOrders: React.FC = () => {
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   console.log('💳 CRITICAL: Payment verified via payment-updated - IMMEDIATELY updating to 40% progress');
+                  // Track payment confirmation time for delay logic
+                  const orderIdKey = updateOrderId || order.order_id || order.id;
+                  if (orderIdKey) {
+                    setPaymentConfirmedTimes(prev => ({
+                      ...prev,
+                      [String(orderIdKey)]: new Date()
+                    }));
+                  }
                   // Force component re-render to update progress bar
                   setTimeout(() => {
                     setForceUpdate(prev => prev + 1);
@@ -803,6 +820,34 @@ const CustomerOrders: React.FC = () => {
       window.removeEventListener('orderPlaced', handleOrderPlaced as EventListener);
     };
   }, [loading, authenticated, user?.email]); // Changed from 'user' to 'user?.email'
+
+  // Clear payment confirmed times after delay period and force re-renders
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setPaymentConfirmedTimes(prev => {
+        const updated: Record<string, Date> = {};
+        let hasChanges = false;
+        
+        Object.entries(prev).forEach(([orderId, confirmedTime]) => {
+          const timeSincePaymentConfirmed = now - confirmedTime.getTime();
+          if (timeSincePaymentConfirmed < 4000) {
+            updated[orderId] = confirmedTime;
+          } else {
+            hasChanges = true;
+          }
+        });
+        
+        if (hasChanges) {
+          setForceUpdate(prev => prev + 1);
+        }
+        
+        return Object.keys(updated).length > 0 ? updated : {};
+      });
+    }, 100); // Update every 100ms for smooth transition
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Watch for order changes and update selected order automatically
   useEffect(() => {
@@ -1026,9 +1071,34 @@ const CustomerOrders: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Compute display status with delay between payment confirmed and preparing
+  const getDisplayStatus = (order: Order | null | undefined): string => {
+    if (!order) return 'pending';
+    const status = String(order.status || 'pending');
+    const orderId = order.order_id || (order as any).orderId || '';
+    
+    const normalizedStatus = status.toLowerCase().trim();
+    
+    // If status is ready but payment was just confirmed, show preparing for 3-5 seconds
+    if (normalizedStatus === 'ready' && paymentConfirmedTimes[orderId]) {
+      const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTimes[orderId].getTime();
+      const delayDuration = 4000; // 4 seconds delay
+      
+      // If less than 4 seconds have passed since payment confirmation, show preparing
+      if (timeSincePaymentConfirmed < delayDuration) {
+        return 'preparing';
+      }
+    }
+    
+    return status;
+  };
+
   const getRealtimeProgress = (order: Order | null | undefined) => {
     if (!order) return 0;
-    const status = String(order.status || 'pending');
+    
+    // Use display status to ensure proper progression
+    const displayStatus = getDisplayStatus(order);
+    const status = displayStatus;
     // Try multiple ways to access payment_status to ensure we get it
     const paymentStatus = String(
       order.payment_status || 

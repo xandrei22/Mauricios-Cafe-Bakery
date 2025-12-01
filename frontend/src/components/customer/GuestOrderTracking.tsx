@@ -38,8 +38,10 @@ const GuestOrderTracking: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [statusUpdateAnimation, setStatusUpdateAnimation] = useState(false);
+  const [paymentConfirmedTime, setPaymentConfirmedTime] = useState<Date | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const previousStatusRef = useRef<string | null>(null);
+  const previousPaymentStatusRef = useRef<string | null>(null);
   const currentOrderIdRef = useRef<string | null>(null);
 
   const getStatusColor = (status: string) => {
@@ -84,10 +86,33 @@ const GuestOrderTracking: React.FC = () => {
     }
   };
 
+  // Compute display status with delay between payment confirmed and preparing
+  const getDisplayStatus = (status: string, paymentStatus?: string): string => {
+    if (!status) return status;
+    
+    const normalizedStatus = status.toLowerCase().trim();
+    const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
+    
+    // If status is ready but payment was just confirmed, show preparing for 3-5 seconds
+    if (normalizedStatus === 'ready' && paymentConfirmedTime) {
+      const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
+      const delayDuration = 4000; // 4 seconds delay
+      
+      // If less than 4 seconds have passed since payment confirmation, show preparing
+      if (timeSincePaymentConfirmed < delayDuration) {
+        return 'preparing';
+      }
+    }
+    
+    return status;
+  };
+
   const getProgressPercentage = (status: string, paymentStatus?: string) => {
     if (!status) return 0;
     
-    const normalizedStatus = status.toLowerCase().trim();
+    // Use display status to ensure proper progression
+    const displayStatus = getDisplayStatus(status, paymentStatus);
+    const normalizedStatus = displayStatus.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
     
     // Handle cancelled orders first
@@ -513,9 +538,10 @@ const GuestOrderTracking: React.FC = () => {
         });
         setLastUpdate(new Date());
         
-        // If payment was just verified, refetch the order to get the latest state
+        // If payment was just verified, track the confirmation time for delay logic
         if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
-          console.log('🔔 GuestOrderTracking: Payment verified, refetching order to get latest state');
+          console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for delay');
+          setPaymentConfirmedTime(new Date());
           // Refetch after a short delay to ensure backend has updated
           setTimeout(() => {
             if (updatedOrder.orderId) {
@@ -554,8 +580,9 @@ const GuestOrderTracking: React.FC = () => {
           }, 100);
         }
         
-        // Update previous status ref
+        // Update previous status refs
         previousStatusRef.current = updatedOrder.status;
+        previousPaymentStatusRef.current = updatedOrder.paymentStatus;
         
         return updatedOrder;
       });
@@ -582,6 +609,22 @@ const GuestOrderTracking: React.FC = () => {
     // Only recreate socket when the order ID changes (from URL params or search), not when order status updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedParamId, searchOrderId, playNotificationSound]);
+
+  // Clear payment confirmed time after delay period and force re-renders
+  useEffect(() => {
+    if (paymentConfirmedTime) {
+      const interval = setInterval(() => {
+        const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
+        if (timeSincePaymentConfirmed >= 4000) {
+          setPaymentConfirmedTime(null);
+          clearInterval(interval);
+        }
+        // Force re-render by updating a dummy state
+        setLastUpdate(new Date());
+      }, 100); // Update every 100ms for smooth transition
+      return () => clearInterval(interval);
+    }
+  }, [paymentConfirmedTime]);
 
   // Cleanup audio context on unmount
   useEffect(() => {
@@ -688,10 +731,10 @@ const GuestOrderTracking: React.FC = () => {
                 <CardTitle className="flex items-center justify-between">
                   <span>Order Status</span>
                   <div className="flex items-center gap-3">
-                    <Badge className={`${getStatusColor(order.status)} ${statusUpdateAnimation ? 'scale-110 transition-transform duration-300' : ''}`}>
+                    <Badge className={`${getStatusColor(getDisplayStatus(order.status, order.paymentStatus))} ${statusUpdateAnimation ? 'scale-110 transition-transform duration-300' : ''}`}>
                       <span className="flex items-center gap-1">
-                        {getStatusIcon(order.status)}
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                        {getStatusIcon(getDisplayStatus(order.status, order.paymentStatus))}
+                        {getDisplayStatus(order.status, order.paymentStatus).charAt(0).toUpperCase() + getDisplayStatus(order.status, order.paymentStatus).slice(1)}
                       </span>
                     </Badge>
                     {/* Download Receipt Button - Only shown after payment is verified */}
@@ -781,7 +824,8 @@ const GuestOrderTracking: React.FC = () => {
               <CardContent>
                 {/* Progress Bar */}
                 {(() => {
-                  const progressPercentage = getProgressPercentage(order.status, order.paymentStatus);
+                  const displayStatus = getDisplayStatus(order.status, order.paymentStatus);
+                  const progressPercentage = getProgressPercentage(displayStatus, order.paymentStatus);
                   const progressWidth = `${progressPercentage}%`;
                   const ariaLabel = `Order progress: ${progressPercentage}%`;
                   const ariaValueNow = progressPercentage;
@@ -819,125 +863,130 @@ const GuestOrderTracking: React.FC = () => {
                 })()}
 
                 {/* Progress Steps */}
-                <div className="relative">
-                  {/* Single continuous vertical line */}
-                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-300"></div>
-                  
-                  <div className="space-y-4 relative">
-                    {/* Order Received */}
-                    <div className="flex items-center">
-                      <div className="relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid'
-                            ? 'bg-[#a87437] text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          <CheckCircle className="h-4 w-4" />
+                {(() => {
+                  const displayStatus = getDisplayStatus(order.status, order.paymentStatus);
+                  return (
+                    <div className="relative">
+                      {/* Single continuous vertical line */}
+                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-300"></div>
+                      
+                      <div className="space-y-4 relative">
+                        {/* Order Received */}
+                        <div className="flex items-center">
+                          <div className="relative z-10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'payment_confirmed' || displayStatus === 'preparing' || displayStatus === 'ready' || displayStatus === 'completed' || order.paymentStatus === 'paid'
+                                ? 'bg-[#a87437] text-white' 
+                                : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              <CheckCircle className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <p className={`text-sm font-medium ${displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'payment_confirmed' || displayStatus === 'preparing' || displayStatus === 'ready' || displayStatus === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                              Order Received
+                            </p>
+                            <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${order.status === 'pending' || order.status === 'pending_verification' || order.status === 'payment_confirmed' || order.status === 'preparing' || order.status === 'ready' || order.status === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                          Order Received
-                        </p>
-                        <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
-                      </div>
-                    </div>
 
-                    {/* Payment Confirmed */}
-                    <div className="flex items-center">
-                      <div className="relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'payment_confirmed' || 
-                          order.status === 'preparing' || 
-                          order.status === 'ready' || 
-                          order.status === 'completed' || 
-                          order.paymentStatus === 'paid'
-                            ? 'bg-[#a87437] text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          <CheckCircle className="h-4 w-4" />
+                        {/* Payment Confirmed */}
+                        <div className="flex items-center">
+                          <div className="relative z-10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              displayStatus === 'payment_confirmed' || 
+                              displayStatus === 'preparing' || 
+                              displayStatus === 'ready' || 
+                              displayStatus === 'completed' || 
+                              order.paymentStatus === 'paid'
+                                ? 'bg-[#a87437] text-white' 
+                                : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              <CheckCircle className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <p className={`text-sm font-medium ${
+                              displayStatus === 'payment_confirmed' || 
+                              displayStatus === 'preparing' || 
+                              displayStatus === 'ready' || 
+                              displayStatus === 'completed' || 
+                              order.paymentStatus === 'paid'
+                                ? 'text-[#a87437]' : 'text-gray-600'
+                            }`}>
+                              Payment Confirmed
+                            </p>
+                            <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${
-                          order.status === 'payment_confirmed' || 
-                          order.status === 'preparing' || 
-                          order.status === 'ready' || 
-                          order.status === 'completed' || 
-                          order.paymentStatus === 'paid'
-                            ? 'text-[#a87437]' : 'text-gray-600'
-                        }`}>
-                          Payment Confirmed
-                        </p>
-                        <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
-                      </div>
-                    </div>
 
-                    {/* Preparing */}
-                    <div className="flex items-center">
-                      <div className="relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'preparing' || 
-                          order.status === 'ready' || 
-                          order.status === 'completed'
-                            ? 'bg-[#a87437] text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          <Loader2 className={`h-4 w-4 ${order.status === 'preparing' ? 'animate-spin' : ''}`} />
+                        {/* Preparing */}
+                        <div className="flex items-center">
+                          <div className="relative z-10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              displayStatus === 'preparing' || 
+                              displayStatus === 'ready' || 
+                              displayStatus === 'completed'
+                                ? 'bg-[#a87437] text-white' 
+                                : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              <Loader2 className={`h-4 w-4 ${displayStatus === 'preparing' ? 'animate-spin' : ''}`} />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <p className={`text-sm font-medium ${
+                              displayStatus === 'preparing' || 
+                              displayStatus === 'ready' || 
+                              displayStatus === 'completed'
+                                ? 'text-[#a87437]' : 'text-gray-600'
+                            }`}>
+                              Preparing
+                            </p>
+                            <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${
-                          order.status === 'preparing' || 
-                          order.status === 'ready' || 
-                          order.status === 'completed'
-                            ? 'text-[#a87437]' : 'text-gray-600'
-                        }`}>
-                          Preparing
-                        </p>
-                        <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
-                      </div>
-                    </div>
 
-                    {/* Ready for Pickup */}
-                    <div className="flex items-center">
-                      <div className="relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'ready' || order.status === 'completed'
-                            ? 'bg-[#a87437] text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          <Package className="h-4 w-4" />
+                        {/* Ready for Pickup */}
+                        <div className="flex items-center">
+                          <div className="relative z-10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              displayStatus === 'ready' || displayStatus === 'completed'
+                                ? 'bg-[#a87437] text-white' 
+                                : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              <Package className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <p className={`text-sm font-medium ${displayStatus === 'ready' || displayStatus === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                              Ready for Pickup
+                            </p>
+                            <p className="text-xs text-gray-500">Your order is ready for pickup</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${order.status === 'ready' || order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                          Ready for Pickup
-                        </p>
-                        <p className="text-xs text-gray-500">Your order is ready for pickup</p>
-                      </div>
-                    </div>
 
-                    {/* Completed */}
-                    <div className="flex items-center">
-                      <div className="relative z-10">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          order.status === 'completed'
-                            ? 'bg-[#a87437] text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          <CheckCircle className="h-4 w-4" />
+                        {/* Completed */}
+                        <div className="flex items-center">
+                          <div className="relative z-10">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              displayStatus === 'completed'
+                                ? 'bg-[#a87437] text-white' 
+                                : 'bg-gray-300 text-gray-600'
+                            }`}>
+                              <CheckCircle className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="ml-4 flex-1">
+                            <p className={`text-sm font-medium ${displayStatus === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                              Completed
+                            </p>
+                            <p className="text-xs text-gray-500">Order has been completed successfully</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-1">
-                        <p className={`text-sm font-medium ${order.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                          Completed
-                        </p>
-                        <p className="text-xs text-gray-500">Order has been completed successfully</p>
-                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </CardContent>
             </Card>
 
