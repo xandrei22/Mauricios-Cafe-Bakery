@@ -19,7 +19,8 @@ const allMenuItems = [
   { label: "Manage Inventory", path: "/staff/inventory", icon: "/images/inventory.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
   { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png", allowedPositions: ['Barista', 'Manager', 'Admin'] },
   { label: "POS System", path: "/staff/pos", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
-  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  // Loyalty: visible to Cashier, Manager, Admin (not Barista)
+  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
   // Sales: visible to Cashier, Manager, Admin (not Barista)
   { label: "Sales", path: "/staff/sales", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
   { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
