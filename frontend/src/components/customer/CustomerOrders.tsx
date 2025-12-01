@@ -416,12 +416,12 @@ const CustomerOrders: React.FC = () => {
     // Play sound for progress changes (IMPORTANT - this is what the user wants)
     // Play sound even on first initialization if progress > 0 (for new orders)
     if (progressUpdates.length > 0) {
-      progressUpdates.forEach(({ orderId, oldProgress, newProgress }) => {
+      progressUpdates.forEach(({ orderId, oldProgress, newProgress }, index) => {
         console.log('🔔 Playing sound for progress change:', orderId, oldProgress, '->', newProgress);
-        // Small delay to ensure audio context is ready
+        // Small delay to ensure audio context is ready, with staggered delays for multiple updates
         setTimeout(() => {
           playNotificationSound();
-        }, 100);
+        }, 100 + (index * 50));
       });
     }
 
@@ -1110,7 +1110,18 @@ const CustomerOrders: React.FC = () => {
   const getCurrentOrder = () => {
     const currentOrders = getCurrentOrders();
     const result = currentOrders.length > 0 ? currentOrders[0] : null;
-    console.log('🔍 getCurrentOrder result:', result ? { id: result.order_id, status: result.status } : 'null');
+    if (result) {
+      const paymentStatus = result.payment_status || (result as any).paymentStatus;
+      console.log('🔍 getCurrentOrder result:', { 
+        id: result.order_id, 
+        status: result.status,
+        payment_status: paymentStatus,
+        payment_status_raw: result.payment_status,
+        paymentStatus_alt: (result as any).paymentStatus
+      });
+    } else {
+      console.log('🔍 getCurrentOrder result: null');
+    }
     return result;
   };
 
@@ -1569,61 +1580,82 @@ const CustomerOrders: React.FC = () => {
                        
                        <div className="space-y-4 relative">
                          {/* Order Received */}
-                         <div className="flex items-center">
-                           <div className="relative z-10">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                               getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification' || 
-                               getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.status === 'preparing' || 
-                               getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed' || 
-                               getCurrentOrder()?.payment_status === 'paid'
-                                 ? 'bg-[#a87437] text-white' 
-                                 : 'bg-gray-300 text-gray-600'
-                             }`}>
-                               <CheckCircle className="h-4 w-4" />
+                         {(() => {
+                           const currentOrder = getCurrentOrder();
+                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
+                           const isOrderReceived = 
+                             currentOrder?.status === 'pending' || 
+                             currentOrder?.status === 'pending_verification' || 
+                             currentOrder?.status === 'payment_confirmed' || 
+                             currentOrder?.status === 'preparing' || 
+                             currentOrder?.status === 'ready' || 
+                             currentOrder?.status === 'completed' || 
+                             paymentStatus === 'paid';
+                           
+                           return (
+                             <div className="flex items-center">
+                               <div className="relative z-10">
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                   isOrderReceived
+                                     ? 'bg-[#a87437] text-white' 
+                                     : 'bg-gray-300 text-gray-600'
+                                 }`}>
+                                   <CheckCircle className="h-4 w-4" />
+                                 </div>
+                               </div>
+                               <div className="ml-4 flex-1">
+                                 <p className={`text-sm font-medium ${
+                                   isOrderReceived ? 'text-[#a87437]' : 'text-gray-600'
+                                 }`}>
+                                   Order Received
+                                 </p>
+                                 <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="ml-4 flex-1">
-                             <p className={`text-sm font-medium ${
-                               getCurrentOrder()?.status === 'pending' || getCurrentOrder()?.status === 'pending_verification' || 
-                               getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.status === 'preparing' || 
-                               getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed' || 
-                               getCurrentOrder()?.payment_status === 'paid' ? 'text-[#a87437]' : 'text-gray-600'
-                             }`}>
-                               Order Received
-                             </p>
-                             <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
-                           </div>
-                         </div>
+                           );
+                         })()}
 
                          {/* Payment Confirmed */}
-                         <div className="flex items-center">
-                           <div className="relative z-10">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                               getCurrentOrder()?.status === 'payment_confirmed' || 
-                               getCurrentOrder()?.status === 'preparing' || 
-                               getCurrentOrder()?.status === 'ready' || 
-                               getCurrentOrder()?.status === 'completed' || 
-                               getCurrentOrder()?.payment_status === 'paid'
-                                 ? 'bg-[#a87437] text-white' 
-                                 : 'bg-gray-300 text-gray-600'
-                             }`}>
-                               <CheckCircle className="h-4 w-4" />
+                         {(() => {
+                           const currentOrder = getCurrentOrder();
+                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
+                           const isPaymentConfirmed = 
+                             currentOrder?.status === 'payment_confirmed' || 
+                             currentOrder?.status === 'preparing' || 
+                             currentOrder?.status === 'ready' || 
+                             currentOrder?.status === 'completed' || 
+                             paymentStatus === 'paid';
+                           
+                           console.log('🔍 Payment Confirmed step check:', {
+                             orderId: currentOrder?.order_id,
+                             status: currentOrder?.status,
+                             payment_status: paymentStatus,
+                             isPaymentConfirmed
+                           });
+                           
+                           return (
+                             <div className="flex items-center">
+                               <div className="relative z-10">
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                   isPaymentConfirmed
+                                     ? 'bg-[#a87437] text-white' 
+                                     : 'bg-gray-300 text-gray-600'
+                                 }`}>
+                                   <CheckCircle className="h-4 w-4" />
+                                 </div>
+                               </div>
+                               <div className="ml-4 flex-1">
+                                 <p className={`text-sm font-medium ${
+                                   isPaymentConfirmed
+                                     ? 'text-[#a87437]' : 'text-gray-600'
+                                 }`}>
+                                   Payment Confirmed
+                                 </p>
+                                 <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="ml-4 flex-1">
-                             <p className={`text-sm font-medium ${
-                               getCurrentOrder()?.status === 'payment_confirmed' || 
-                               getCurrentOrder()?.status === 'preparing' || 
-                               getCurrentOrder()?.status === 'ready' || 
-                               getCurrentOrder()?.status === 'completed' || 
-                               getCurrentOrder()?.payment_status === 'paid'
-                                 ? 'text-[#a87437]' : 'text-gray-600'
-                             }`}>
-                               Payment Confirmed
-                             </p>
-                             <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
-                           </div>
-                         </div>
+                           );
+                         })()}
 
                          {/* Preparing */}
                          <div className="flex items-center">
