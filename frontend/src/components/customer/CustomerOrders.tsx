@@ -63,6 +63,7 @@ const CustomerOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -538,6 +539,7 @@ const CustomerOrders: React.FC = () => {
         }
         
         // Optimistically update the order in state if we have the data
+        // IMPORTANT: This immediate update ensures the UI updates instantly, matching guest tracking behavior
         if (updateData.orderId && (updateData.status || updateData.paymentStatus)) {
           setOrders(prevOrders => {
             let updated = false;
@@ -558,6 +560,8 @@ const CustomerOrders: React.FC = () => {
                 const newPaymentStatus = updateData.paymentStatus !== undefined && updateData.paymentStatus !== null 
                                        ? updateData.paymentStatus 
                                        : order.payment_status;
+                const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
+                
                 console.log('✅ Updating order in state (order-updated):', {
                   order_id: order.order_id,
                   old_status: order.status,
@@ -566,8 +570,16 @@ const CustomerOrders: React.FC = () => {
                   new_payment_status: newPaymentStatus,
                   updateData_paymentStatus: updateData.paymentStatus,
                   updateData_paymentStatus_type: typeof updateData.paymentStatus,
-                  paymentStatusChanged: oldPaymentStatus !== newPaymentStatus
+                  paymentStatusChanged
                 });
+                
+                // If payment status changed to 'paid', this is a critical update
+                if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
+                  console.log('💳 CRITICAL: Payment verified - order will show 40% progress');
+                  // Force component re-render to update progress bar
+                  setForceUpdate(prev => prev + 1);
+                }
+                
                 return {
                   ...order,
                   status: updateData.status !== undefined ? updateData.status : order.status,
@@ -581,7 +593,7 @@ const CustomerOrders: React.FC = () => {
             });
             
             if (updated) {
-              console.log('✅ Order state updated optimistically');
+              console.log('✅ Order state updated optimistically - component should re-render');
             } else {
               console.warn('⚠️ No matching order found for update:', updateData.orderId);
             }
@@ -590,8 +602,12 @@ const CustomerOrders: React.FC = () => {
           });
         }
         
-        // Immediately fetch fresh data - notifications will be handled by the useEffect that watches orders
-        fetchOrders();
+        // IMPORTANT: Don't immediately fetch - let the optimistic update take effect first
+        // Then fetch after a delay to ensure backend has updated and we get the latest state
+        // This matches the guest tracking behavior which directly updates state
+        setTimeout(() => {
+          fetchOrders();
+        }, 500);
       });
 
       newSocket.on('payment-updated', (paymentData) => {
@@ -629,15 +645,25 @@ const CustomerOrders: React.FC = () => {
                 const newPaymentStatus = paymentData.paymentStatus !== undefined && paymentData.paymentStatus !== null 
                                        ? paymentData.paymentStatus 
                                        : order.payment_status;
-                console.log('✅ Updating order payment in state:', {
+                const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
+                
+                console.log('✅ Updating order payment in state (payment-updated):', {
                   order_id: order.order_id,
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   paymentData_paymentStatus: paymentData.paymentStatus,
                   old_status: order.status,
                   new_status: paymentData.status,
-                  paymentStatusChanged: oldPaymentStatus !== newPaymentStatus
+                  paymentStatusChanged
                 });
+                
+                // If payment status changed to 'paid', this is a critical update
+                if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
+                  console.log('💳 CRITICAL: Payment verified via payment-updated event - order will show 40% progress');
+                  // Force component re-render to update progress bar
+                  setForceUpdate(prev => prev + 1);
+                }
+                
                 return {
                   ...order,
                   status: paymentData.status !== undefined ? paymentData.status : order.status,
@@ -651,7 +677,15 @@ const CustomerOrders: React.FC = () => {
             });
             
             if (updated) {
-              console.log('✅ Order payment state updated optimistically');
+              console.log('✅ Order payment state updated optimistically - component should re-render');
+              // If payment was verified, log it
+              const paymentChanged = updatedOrders.find(o => 
+                (o.order_id === paymentData.orderId || o.id === paymentData.orderId) &&
+                o.payment_status === 'paid'
+              );
+              if (paymentChanged) {
+                console.log('💳 CRITICAL: Payment verified - progress should update to 40%');
+              }
             } else {
               console.warn('⚠️ No matching order found for payment update:', paymentData.orderId);
             }
@@ -660,8 +694,12 @@ const CustomerOrders: React.FC = () => {
           });
         }
         
-        // Immediately fetch fresh data - notifications will be handled by the useEffect that watches orders
-        fetchOrders();
+        // IMPORTANT: Don't immediately fetch - let the optimistic update take effect first
+        // Then fetch after a delay to ensure backend has updated and we get the latest state
+        // This matches the guest tracking behavior which directly updates state
+        setTimeout(() => {
+          fetchOrders();
+        }, 500);
       });
 
       // Listen for new order events
@@ -1636,7 +1674,7 @@ const CustomerOrders: React.FC = () => {
                           return progress;
                         })()}
                         variant="amber"
-                        key={`progress-${getCurrentOrder()?.order_id}-${getCurrentOrder()?.payment_status}-${nowTs}`}
+                        key={`progress-${getCurrentOrder()?.order_id}-${getCurrentOrder()?.payment_status}-${nowTs}-${forceUpdate}`}
                       />
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
