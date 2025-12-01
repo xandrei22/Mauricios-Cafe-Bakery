@@ -90,49 +90,56 @@ const GuestOrderTracking: React.FC = () => {
     const normalizedStatus = status.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
     
-    // Check payment status first - if paid, we're at least at payment confirmed (40%)
-    if (normalizedPaymentStatus === 'paid') {
-      switch (normalizedStatus) {
-        case 'pending':
-        case 'pending_verification':
-          return 40; // Payment confirmed but status not updated yet
-        case 'confirmed':
-        case 'payment_confirmed':
-          return 40; // Payment confirmed
-        case 'processing':
-        case 'preparing':
-          return 60; // Preparing
-        case 'ready':
-          return 80; // Ready
-        case 'completed':
-          return 100; // Completed
-        case 'cancelled':
-          return 0;
-        default:
-          return 40; // If paid but status unknown, assume payment confirmed
-      }
+    // Handle cancelled orders first
+    if (normalizedStatus === 'cancelled') {
+      return 0;
     }
     
-    // If payment not paid yet, use status only
-    switch (normalizedStatus) {
-      case 'pending':
-      case 'pending_verification':
-        return 20;
-      case 'confirmed':
-      case 'payment_confirmed':
+    // Progress calculation based on order status and payment status
+    // The flow should be: Order Received (20%) → Payment Confirmed (40%) → Preparing (60%) → Ready (80%) → Completed (100%)
+    
+    // Step 1: Order Received (20%)
+    // Order is placed but payment not yet verified
+    if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
+      // If payment is already paid, we're at payment confirmed stage (40%)
+      if (normalizedPaymentStatus === 'paid') {
         return 40;
-      case 'processing':
-      case 'preparing':
-        return 60;
-      case 'ready':
-        return 80;
-      case 'completed':
-        return 100;
-      case 'cancelled':
-        return 0;
-      default:
-        return 0;
+      }
+      // Otherwise, order is just received (20%)
+      return 20;
     }
+    
+    // Step 2: Payment Confirmed (40%)
+    // Payment has been verified
+    if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+      return 40;
+    }
+    
+    // Step 3: Preparing (60%)
+    // Order is being prepared
+    if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+      return 60;
+    }
+    
+    // Step 4: Ready (80%)
+    // Order is ready for pickup
+    if (normalizedStatus === 'ready') {
+      return 80;
+    }
+    
+    // Step 5: Completed (100%)
+    // Order is completed
+    if (normalizedStatus === 'completed') {
+      return 100;
+    }
+    
+    // Default: if payment is paid, assume we're at payment confirmed (40%)
+    // Otherwise, assume order is just received (20%)
+    if (normalizedPaymentStatus === 'paid') {
+      return 40;
+    }
+    
+    return 20; // Default to order received
   };
 
   const playNotificationSound = useCallback(() => {
