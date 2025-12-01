@@ -525,59 +525,69 @@ const CustomerOrders: React.FC = () => {
       // Listen for real-time updates - automatic refresh
       newSocket.on('order-updated', (updateData) => {
         console.log('📡 Order updated received:', updateData);
-        console.log('🔄 Auto-refreshing orders due to order-updated event');
+        console.log('🔄 Processing order-updated event - updating state immediately');
         
         // Update status history for tracking changes
-        if (updateData.orderId) {
+        if (updateData.orderId || updateData.internalOrderId) {
+          const orderIdKey = updateData.orderId || updateData.internalOrderId;
           if (updateData.status) {
-            statusHistoryRef.current[updateData.orderId] = updateData.status as Order['status'];
+            statusHistoryRef.current[orderIdKey] = updateData.status as Order['status'];
           }
           // Also track payment status changes
           if (updateData.paymentStatus) {
-            paymentStatusHistoryRef.current[updateData.orderId] = updateData.paymentStatus as Order['payment_status'];
+            paymentStatusHistoryRef.current[orderIdKey] = updateData.paymentStatus as Order['payment_status'];
           }
         }
         
-        // Optimistically update the order in state if we have the data
-        // IMPORTANT: This immediate update ensures the UI updates instantly, matching guest tracking behavior
-        if (updateData.orderId && (updateData.status || updateData.paymentStatus)) {
+        // CRITICAL: Optimistically update the order in state IMMEDIATELY
+        // This matches guest tracking behavior - update state first, then optionally refetch
+        if ((updateData.orderId || updateData.internalOrderId) && (updateData.status || updateData.paymentStatus)) {
           setOrders(prevOrders => {
             let updated = false;
             const updatedOrders = prevOrders.map(order => {
-              // Match by order_id, id, or internalOrderId
+              // Enhanced matching: try multiple ID formats
+              const updateOrderId = updateData.orderId || updateData.internalOrderId;
               const matches = 
-                order.order_id === updateData.orderId || 
+                order.order_id === updateOrderId || 
+                order.id === updateOrderId ||
+                order.order_id === updateData.orderId ||
                 order.id === updateData.orderId ||
                 order.order_id === updateData.internalOrderId ||
                 order.id === updateData.internalOrderId ||
-                String(order.order_id).includes(String(updateData.orderId)) ||
-                String(order.id).includes(String(updateData.orderId));
+                String(order.order_id).includes(String(updateOrderId)) ||
+                String(order.id).includes(String(updateOrderId)) ||
+                String(order.order_id).includes(String(updateData.orderId || '')) ||
+                String(order.id).includes(String(updateData.orderId || ''));
               
               if (matches) {
                 updated = true;
-                const oldPaymentStatus = order.payment_status;
+                const oldPaymentStatus = order.payment_status || (order as any).paymentStatus;
                 // IMPORTANT: Always use updateData.paymentStatus if provided, otherwise keep existing
                 const newPaymentStatus = updateData.paymentStatus !== undefined && updateData.paymentStatus !== null 
                                        ? updateData.paymentStatus 
-                                       : order.payment_status;
+                                       : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
                 
-                console.log('✅ Updating order in state (order-updated):', {
+                console.log('✅ IMMEDIATELY updating order in state (order-updated):', {
                   order_id: order.order_id,
+                  updateOrderId: updateOrderId,
+                  updateData_orderId: updateData.orderId,
+                  updateData_internalOrderId: updateData.internalOrderId,
                   old_status: order.status,
                   new_status: updateData.status,
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   updateData_paymentStatus: updateData.paymentStatus,
-                  updateData_paymentStatus_type: typeof updateData.paymentStatus,
                   paymentStatusChanged
                 });
                 
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
-                  console.log('💳 CRITICAL: Payment verified - order will show 40% progress');
+                  console.log('💳 CRITICAL: Payment verified - IMMEDIATELY updating to 40% progress');
                   // Force component re-render to update progress bar
-                  setForceUpdate(prev => prev + 1);
+                  setTimeout(() => {
+                    setForceUpdate(prev => prev + 1);
+                  }, 50);
                 }
                 
                 return {
@@ -593,9 +603,13 @@ const CustomerOrders: React.FC = () => {
             });
             
             if (updated) {
-              console.log('✅ Order state updated optimistically - component should re-render');
+              console.log('✅ Order state updated optimistically - UI should update IMMEDIATELY');
             } else {
-              console.warn('⚠️ No matching order found for update:', updateData.orderId);
+              console.warn('⚠️ No matching order found for update:', {
+                updateData_orderId: updateData.orderId,
+                updateData_internalOrderId: updateData.internalOrderId,
+                availableOrderIds: prevOrders.map(o => ({ order_id: o.order_id, id: o.id }))
+              });
             }
             
             return updatedOrders;
@@ -603,52 +617,62 @@ const CustomerOrders: React.FC = () => {
         }
         
         // IMPORTANT: Don't immediately fetch - let the optimistic update take effect first
-        // Then fetch after a delay to ensure backend has updated and we get the latest state
-        // This matches the guest tracking behavior which directly updates state
+        // Only refetch after a delay to sync with backend, but the UI should already be updated
         setTimeout(() => {
+          console.log('🔄 Refetching orders to sync with backend (UI already updated)');
           fetchOrders();
-        }, 500);
+        }, 1000);
       });
 
       newSocket.on('payment-updated', (paymentData) => {
         console.log('💳 Payment updated received:', paymentData);
-        console.log('🔄 Auto-refreshing orders due to payment-updated event');
+        console.log('🔄 Processing payment-updated event - updating state IMMEDIATELY');
         
         // Update status history for tracking changes
-        if (paymentData.orderId) {
+        if (paymentData.orderId || paymentData.internalOrderId) {
+          const orderIdKey = paymentData.orderId || paymentData.internalOrderId;
           const newStatus = (paymentData.status || 'payment_confirmed') as Order['status'];
-          statusHistoryRef.current[paymentData.orderId] = newStatus;
+          statusHistoryRef.current[orderIdKey] = newStatus;
           // Also track payment status changes
           if (paymentData.paymentStatus) {
-            paymentStatusHistoryRef.current[paymentData.orderId] = paymentData.paymentStatus as Order['payment_status'];
+            paymentStatusHistoryRef.current[orderIdKey] = paymentData.paymentStatus as Order['payment_status'];
           }
         }
         
-        // Optimistically update the order in state if we have the data
-        if (paymentData.orderId && (paymentData.status || paymentData.paymentStatus)) {
+        // CRITICAL: Optimistically update the order in state IMMEDIATELY
+        // This matches guest tracking behavior - update state first, then optionally refetch
+        if ((paymentData.orderId || paymentData.internalOrderId) && (paymentData.status || paymentData.paymentStatus)) {
           setOrders(prevOrders => {
             let updated = false;
             const updatedOrders = prevOrders.map(order => {
-              // Match by order_id, id, or internalOrderId
+              // Enhanced matching: try multiple ID formats
+              const updateOrderId = paymentData.orderId || paymentData.internalOrderId;
               const matches = 
-                order.order_id === paymentData.orderId || 
+                order.order_id === updateOrderId || 
+                order.id === updateOrderId ||
+                order.order_id === paymentData.orderId ||
                 order.id === paymentData.orderId ||
                 order.order_id === paymentData.internalOrderId ||
                 order.id === paymentData.internalOrderId ||
-                String(order.order_id).includes(String(paymentData.orderId)) ||
-                String(order.id).includes(String(paymentData.orderId));
+                String(order.order_id).includes(String(updateOrderId)) ||
+                String(order.id).includes(String(updateOrderId)) ||
+                String(order.order_id).includes(String(paymentData.orderId || '')) ||
+                String(order.id).includes(String(paymentData.orderId || ''));
               
               if (matches) {
                 updated = true;
-                const oldPaymentStatus = order.payment_status;
+                const oldPaymentStatus = order.payment_status || (order as any).paymentStatus;
                 // IMPORTANT: Always use paymentData.paymentStatus if provided, otherwise keep existing
                 const newPaymentStatus = paymentData.paymentStatus !== undefined && paymentData.paymentStatus !== null 
                                        ? paymentData.paymentStatus 
-                                       : order.payment_status;
+                                       : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
                 
-                console.log('✅ Updating order payment in state (payment-updated):', {
+                console.log('✅ IMMEDIATELY updating order payment in state (payment-updated):', {
                   order_id: order.order_id,
+                  updateOrderId: updateOrderId,
+                  paymentData_orderId: paymentData.orderId,
+                  paymentData_internalOrderId: paymentData.internalOrderId,
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   paymentData_paymentStatus: paymentData.paymentStatus,
@@ -659,9 +683,11 @@ const CustomerOrders: React.FC = () => {
                 
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
-                  console.log('💳 CRITICAL: Payment verified via payment-updated event - order will show 40% progress');
+                  console.log('💳 CRITICAL: Payment verified via payment-updated - IMMEDIATELY updating to 40% progress');
                   // Force component re-render to update progress bar
-                  setForceUpdate(prev => prev + 1);
+                  setTimeout(() => {
+                    setForceUpdate(prev => prev + 1);
+                  }, 50);
                 }
                 
                 return {
@@ -677,17 +703,21 @@ const CustomerOrders: React.FC = () => {
             });
             
             if (updated) {
-              console.log('✅ Order payment state updated optimistically - component should re-render');
+              console.log('✅ Order payment state updated optimistically - UI should update IMMEDIATELY');
               // If payment was verified, log it
-              const paymentChanged = updatedOrders.find(o => 
-                (o.order_id === paymentData.orderId || o.id === paymentData.orderId) &&
-                o.payment_status === 'paid'
-              );
+              const paymentChanged = updatedOrders.find(o => {
+                const updateOrderId = paymentData.orderId || paymentData.internalOrderId;
+                return (o.order_id === updateOrderId || o.id === updateOrderId) && o.payment_status === 'paid';
+              });
               if (paymentChanged) {
-                console.log('💳 CRITICAL: Payment verified - progress should update to 40%');
+                console.log('💳 CRITICAL: Payment verified - progress should update to 40% IMMEDIATELY');
               }
             } else {
-              console.warn('⚠️ No matching order found for payment update:', paymentData.orderId);
+              console.warn('⚠️ No matching order found for payment update:', {
+                paymentData_orderId: paymentData.orderId,
+                paymentData_internalOrderId: paymentData.internalOrderId,
+                availableOrderIds: prevOrders.map(o => ({ order_id: o.order_id, id: o.id }))
+              });
             }
             
             return updatedOrders;
@@ -695,11 +725,11 @@ const CustomerOrders: React.FC = () => {
         }
         
         // IMPORTANT: Don't immediately fetch - let the optimistic update take effect first
-        // Then fetch after a delay to ensure backend has updated and we get the latest state
-        // This matches the guest tracking behavior which directly updates state
+        // Only refetch after a delay to sync with backend, but the UI should already be updated
         setTimeout(() => {
+          console.log('🔄 Refetching orders to sync with backend (UI already updated)');
           fetchOrders();
-        }, 500);
+        }, 1000);
       });
 
       // Listen for new order events
