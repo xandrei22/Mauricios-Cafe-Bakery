@@ -1037,12 +1037,19 @@ router.post('/:orderId/verify-payment', async(req, res) => {
 
         // Note: Ingredient deduction now happens when order is marked as 'ready', not during payment verification
 
-        // Insert payment transaction to trigger status change
-        await db.query(`
-            INSERT INTO payment_transactions 
-            (order_id, payment_method, amount, status, verified_by, created_at) 
-            VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
-        `, [internalId, paymentMethod || 'cash', internalId, verifiedBy || 'admin']);
+        // Insert payment transaction to trigger status change.
+        // This is useful for reporting but should NOT cause verification to fail
+        // if the table or columns are missing in some environments.
+        try {
+            await db.query(`
+                INSERT INTO payment_transactions 
+                (order_id, payment_method, amount, status, verified_by, created_at) 
+                VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
+            `, [internalId, paymentMethod || 'cash', internalId, verifiedBy || 'admin']);
+        } catch (txError) {
+            console.error('⚠️ Non‑critical error inserting into payment_transactions:', txError);
+            // Do not throw – payment has already been marked as paid above.
+        }
 
         // Get order details for notification
         const [orderDetails] = await db.query(`
@@ -1407,33 +1414,42 @@ router.post('/:orderId/cancel', async(req, res) => {
                 WHERE order_id = ?
             `, updateValues);
 
-            // Restore inventory
-            const [orders] = await connection.query(`
-                SELECT items FROM orders WHERE order_id = ?
-            `, [internalId]);
+            // Restore inventory – this is helpful but should not cause the
+            // whole cancellation to fail if inventory tables are missing.
+            try {
+                const [orders] = await connection.query(`
+                    SELECT items FROM orders WHERE order_id = ?
+                `, [internalId]);
 
-            if (orders.length > 0) {
-                const items = JSON.parse(orders[0].items);
+                if (orders.length > 0) {
+                    const items = JSON.parse(orders[0].items);
 
-                for (const item of items) {
-                    if (item.ingredients) {
-                        for (const ingredient of item.ingredients) {
-                            await connection.query(`
-                                UPDATE ingredients 
-                                SET stock_quantity = stock_quantity + ? 
-                                WHERE id = ?
-                            `, [ingredient.quantity || 1, ingredient.id]);
+                    for (const item of items) {
+                        if (item.ingredients) {
+                            for (const ingredient of item.ingredients) {
+                                try {
+                                    await connection.query(`
+                                        UPDATE ingredients 
+                                        SET stock_quantity = stock_quantity + ? 
+                                        WHERE id = ?
+                                    `, [ingredient.quantity || 1, ingredient.id]);
 
-                            // Log inventory restoration
-                            await connection.query(`
-                                INSERT INTO inventory_logs 
-                                (ingredient_id, action, quantity_change, previous_quantity, new_quantity, reason, order_id) 
-                                SELECT id, 'add', ?, stock_quantity - ?, stock_quantity, 'Order cancellation', ? 
-                                FROM ingredients WHERE id = ?
-                            `, [ingredient.quantity || 1, ingredient.quantity || 1, internalId, ingredient.id]);
+                                    // Log inventory restoration (best‑effort only)
+                                    await connection.query(`
+                                        INSERT INTO inventory_logs 
+                                        (ingredient_id, action, quantity_change, previous_quantity, new_quantity, reason, order_id) 
+                                        SELECT id, 'add', ?, stock_quantity - ?, stock_quantity, 'Order cancellation', ? 
+                                        FROM ingredients WHERE id = ?
+                                    `, [ingredient.quantity || 1, ingredient.quantity || 1, internalId, ingredient.id]);
+                                } catch (invError) {
+                                    console.error('⚠️ Non‑critical inventory restore error during cancellation:', invError);
+                                }
+                            }
                         }
                     }
                 }
+            } catch (restoreError) {
+                console.error('⚠️ Non‑critical error loading items for inventory restore:', restoreError);
             }
 
             await connection.commit();
