@@ -741,7 +741,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 											</div>
 											
 											{/* Items Grid */}
-											<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-2 sm:gap-3">
+											{/* Fewer items per row so cards are wider and wrap to new rows sooner */}
+											<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-3">
 												{groupedItems[category].map((item) => (
 													<Card
 														key={item.id}
@@ -917,8 +918,9 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					<div className="w-full lg:w-[30rem] xl:w-[32rem] 2xl:w-[36rem] min-w-0 p-2 sm:p-3 lg:p-4 flex-shrink-0 lg:sticky lg:top-0 lg:overflow-hidden">
 				{/* Customer Information */}
 				<Card className="mb-2 bg-white border shadow-lg">
-					<CardHeader className="pt-0 pb-0 px-3 -mt-3 overflow-visible">
-						<CardTitle className="text-sm text-[#3f3532] -mb-4 overflow-visible">
+					{/* Prevent any scrollbars from appearing in the header area */}
+					<CardHeader className="pt-0 pb-0 px-3 -mt-3 overflow-hidden">
+						<CardTitle className="text-sm text-[#3f3532] -mb-4">
 							Customer Information
 						</CardTitle>
 					</CardHeader>

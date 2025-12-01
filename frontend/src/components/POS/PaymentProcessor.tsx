@@ -1,10 +1,11 @@
 
 import React, { useState, useRef } from 'react';
-import { CheckCircle, CreditCard, FileImage, X, Download, Printer } from 'lucide-react';
+import { CheckCircle, CreditCard, FileImage, X, Download, Printer, Search } from 'lucide-react';
 import CashPaymentModal from './CashPaymentModal';
 import { encodeId } from '../../utils/idObfuscation';
 import axiosInstance from '../../utils/axiosInstance';
 import { getApiUrl } from '../../utils/apiConfig';
+import { Input } from '../ui/input';
 
 interface Order {
   orderId: string;
@@ -44,7 +45,19 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
   const [referenceNumber, setReferenceNumber] = useState('');
   const [transactionId, setTransactionId] = useState('');
   const [activeTab, setActiveTab] = useState<'pending' | 'cancelled'>('pending');
+  const [searchTerm, setSearchTerm] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Helper: match search text against order fields
+  const matchesSearch = (order: Order) => {
+    if (!searchTerm.trim()) return true;
+    const q = searchTerm.toLowerCase().trim();
+    return (
+      (order.orderId || '').toLowerCase().includes(q) ||
+      (order.customerName || '').toLowerCase().includes(q) ||
+      String(order.tableNumber ?? '').toLowerCase().includes(q)
+    );
+  };
 
   const pendingOrders = orders
     .filter(order => {
@@ -102,6 +115,8 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
       
       return 0;
     });
+
+  const filteredPendingOrders = pendingOrders.filter(matchesSearch);
   
   // Debug logging
   React.useEffect(() => {
@@ -173,6 +188,8 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
       
       return 0;
     });
+
+  const filteredCancelledOrders = cancelledOrders.filter(matchesSearch);
 
   const toShortId = (rawOrderId: string) => {
     try {
@@ -332,24 +349,39 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
 
   const content = (
     <>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Payment Processing</h2>
-        <div className="flex items-center gap-4">
-          {lastUpdate && (
-            <div className="flex items-center text-sm text-gray-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-              Updated {lastUpdate.toLocaleTimeString()}
-            </div>
-          )}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              title="Close"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
-          )}
+      <div className="flex flex-col gap-3 mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-gray-800">Payment Processing</h2>
+          <div className="flex items-center gap-4">
+            {lastUpdate && (
+              <div className="flex items-center text-sm text-gray-500">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
+                Updated {lastUpdate.toLocaleTimeString()}
+              </div>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                title="Close"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Search bar for orders */}
+        <div className="flex items-center gap-2 max-w-md">
+          <div className="relative w-full">
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search orders by ID, customer name, or table number"
+              className="pr-9 h-9 text-sm"
+            />
+            <Search className="w-4 h-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2" />
+          </div>
         </div>
       </div>
 
@@ -372,7 +404,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                   : 'border-transparent text-[#6B5B5B] hover:text-[#3f3532] hover:border-[#a87437]/30'
               }`}
             >
-              Pending Payments ({pendingOrders.length})
+              Pending Payments ({filteredPendingOrders.length})
             </button>
             <button
               onClick={() => setActiveTab('cancelled')}
@@ -382,7 +414,7 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
                   : 'border-transparent text-[#6B5B5B] hover:text-[#3f3532] hover:border-red-300'
               }`}
             >
-              Cancelled Orders ({cancelledOrders.length})
+              Cancelled Orders ({filteredCancelledOrders.length})
             </button>
           </div>
           <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto ${onClose ? 'max-h-[500px]' : 'max-h-[400px]'} relative scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 pr-2 px-3`}>
@@ -390,14 +422,14 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
           {/* Pending Orders Tab */}
           {activeTab === 'pending' && (
             <>
-              {pendingOrders.length === 0 ? (
+              {filteredPendingOrders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
                   <p>No pending payments</p>
                 </div>
               ) : (
                 <div className="space-y-3 pb-6 pt-4">
-                  {pendingOrders.map((order) => (
+                  {filteredPendingOrders.map((order) => (
                     <div
                       key={order.orderId}
                       className={`p-4 pb-4 border rounded-lg cursor-pointer transition-colors mb-2 ${
@@ -445,14 +477,14 @@ const PaymentProcessor: React.FC<PaymentProcessorProps> = ({ orders, onPaymentPr
           {activeTab === 'cancelled' && (
             <>
               <h3 className="text-sm font-semibold text-gray-700 mb-3">Cancelled Orders</h3>
-              {cancelledOrders.length === 0 ? (
+              {filteredCancelledOrders.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
                   <p>No cancelled orders</p>
                 </div>
               ) : (
                 <div className="space-y-3 pb-6 pt-4">
-                  {cancelledOrders.map((order) => (
+                  {filteredCancelledOrders.map((order) => (
                     <div
                       key={order.orderId}
                       className="p-4 pb-4 border border-red-200 rounded-lg bg-red-50 cursor-pointer hover:bg-red-100 transition-colors mb-2"
