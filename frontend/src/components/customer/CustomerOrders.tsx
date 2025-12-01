@@ -323,28 +323,63 @@ const CustomerOrders: React.FC = () => {
       const previousPaymentStatus = paymentStatusHistoryRef.current[order.order_id];
       const currentPaymentStatus = order.payment_status || (order as any).payment_status;
       
-      // Calculate current progress using the same logic as getRealtimeProgress
+      // Calculate current progress using the EXACT same logic as getRealtimeProgress
+      // This ensures consistency between progress tracking and display
       const status = String(order.status || 'pending');
       const paymentStatus = String(currentPaymentStatus || 'pending');
       const normalizedStatus = status.toLowerCase().trim();
       const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
       
       let currentProgress = 0;
+      
+      // Handle cancelled orders first
       if (normalizedStatus === 'cancelled') {
         currentProgress = 0;
-      } else if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
-        currentProgress = normalizedPaymentStatus === 'paid' ? 40 : 20;
-      } else if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+      }
+      // Step 1: Order Received (20%) or Payment Confirmed (40%)
+      else if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
+        // If payment is already paid, we're at payment confirmed stage (40%)
+        if (normalizedPaymentStatus === 'paid') {
+          currentProgress = 40;
+        } else {
+          // Otherwise, order is just received (20%)
+          currentProgress = 20;
+        }
+      }
+      // Step 2: Payment Confirmed (40%)
+      else if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
         currentProgress = 40;
-      } else if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+      }
+      // IMPORTANT: If payment is paid but status hasn't updated yet, we're at 40%
+      else if (normalizedPaymentStatus === 'paid' && (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification')) {
+        currentProgress = 40;
+      }
+      // Step 3: Preparing (60%)
+      else if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
         currentProgress = 60;
-      } else if (normalizedStatus === 'ready') {
-        currentProgress = 80;
-      } else if (normalizedStatus === 'completed') {
+      }
+      // Step 4: Ready (80%)
+      // BUT: Only show 80% if payment has been verified (we've passed 40%)
+      else if (normalizedStatus === 'ready') {
+        // If payment is not verified yet, we shouldn't be at ready stage
+        // But if we are, check if we've passed payment confirmation
+        if (normalizedPaymentStatus === 'paid' || normalizedStatus === 'payment_confirmed') {
+          currentProgress = 80;
+        } else {
+          // Payment not verified but status is ready - show 40% to indicate payment needed
+          currentProgress = 40;
+        }
+      }
+      // Step 5: Completed (100%)
+      else if (normalizedStatus === 'completed') {
         currentProgress = 100;
-      } else if (normalizedPaymentStatus === 'paid') {
+      }
+      // Default: if payment is paid, assume we're at payment confirmed (40%)
+      else if (normalizedPaymentStatus === 'paid') {
         currentProgress = 40;
-      } else {
+      }
+      // Otherwise, assume order is just received (20%)
+      else {
         currentProgress = 20;
       }
       
@@ -926,10 +961,26 @@ const CustomerOrders: React.FC = () => {
   const getRealtimeProgress = (order: Order | null | undefined) => {
     if (!order) return 0;
     const status = String(order.status || 'pending');
-    const paymentStatus = String((order as any).payment_status || (order as any).paymentStatus || 'pending');
+    // Try multiple ways to access payment_status to ensure we get it
+    const paymentStatus = String(
+      order.payment_status || 
+      (order as any).payment_status || 
+      (order as any).paymentStatus || 
+      'pending'
+    );
 
     const normalizedStatus = status.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
+
+    console.log('🔍 getRealtimeProgress called:', {
+      orderId: order.order_id,
+      status,
+      payment_status: paymentStatus,
+      normalizedStatus,
+      normalizedPaymentStatus,
+      order_payment_status: order.payment_status,
+      order_paymentStatus: (order as any).paymentStatus
+    });
 
     // Handle cancelled orders first
     if (normalizedStatus === 'cancelled') {
@@ -938,48 +989,73 @@ const CustomerOrders: React.FC = () => {
 
     // Progress calculation based on order status and payment status
     // The flow should be: Order Received (20%) → Payment Confirmed (40%) → Preparing (60%) → Ready (80%) → Completed (100%)
+    // IMPORTANT: Check payment status FIRST before checking order status to ensure proper progression
 
     // Step 1: Order Received (20%)
     // Order is placed but payment not yet verified
     if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
       // If payment is already paid, we're at payment confirmed stage (40%)
       if (normalizedPaymentStatus === 'paid') {
+        console.log('✅ Progress: 40% (Payment verified, status still pending)');
         return 40;
       }
       // Otherwise, order is just received (20%)
+      console.log('✅ Progress: 20% (Order received, payment not verified)');
       return 20;
     }
 
     // Step 2: Payment Confirmed (40%)
-    // Payment has been verified
+    // Payment has been verified OR status is payment_confirmed
     if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+      console.log('✅ Progress: 40% (Payment confirmed status)');
+      return 40;
+    }
+
+    // IMPORTANT: If payment is paid but status hasn't updated yet, we're at 40%
+    // This handles the case where payment is verified but order status is still pending
+    if (normalizedPaymentStatus === 'paid' && (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification')) {
+      console.log('✅ Progress: 40% (Payment paid, status pending)');
       return 40;
     }
 
     // Step 3: Preparing (60%)
     // Order is being prepared
     if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+      console.log('✅ Progress: 60% (Preparing)');
       return 60;
     }
 
     // Step 4: Ready (80%)
     // Order is ready for pickup
+    // BUT: Only show 80% if payment has been verified (we've passed 40%)
     if (normalizedStatus === 'ready') {
-      return 80;
+      // If payment is not verified yet, we shouldn't be at ready stage
+      // But if we are, check if we've passed payment confirmation
+      if (normalizedPaymentStatus === 'paid' || normalizedStatus === 'payment_confirmed') {
+        console.log('✅ Progress: 80% (Ready, payment verified)');
+        return 80;
+      } else {
+        // Payment not verified but status is ready - this shouldn't happen, but show 40% to indicate payment needed
+        console.log('⚠️ Progress: 40% (Ready but payment not verified - showing payment confirmed)');
+        return 40;
+      }
     }
 
     // Step 5: Completed (100%)
     // Order is completed
     if (normalizedStatus === 'completed') {
+      console.log('✅ Progress: 100% (Completed)');
       return 100;
     }
 
     // Default: if payment is paid, assume we're at payment confirmed (40%)
     // Otherwise, assume order is just received (20%)
     if (normalizedPaymentStatus === 'paid') {
+      console.log('✅ Progress: 40% (Default - payment paid)');
       return 40;
     }
 
+    console.log('✅ Progress: 20% (Default - order received)');
     return 20; // Default to order received
   };
 
@@ -1548,18 +1624,19 @@ const CustomerOrders: React.FC = () => {
                           // Ensure we're reading payment_status from the order object
                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus || 'pending';
                           const progress = getRealtimeProgress(currentOrder);
-                          console.log('🔍 Progress calculation:', {
+                          console.log('🔍 Progress Bar calculation:', {
                             orderId: currentOrder?.order_id,
                             status: currentOrder?.status,
                             payment_status: paymentStatus,
                             payment_status_raw: currentOrder?.payment_status,
                             paymentStatus_alt: (currentOrder as any)?.paymentStatus,
                             progress,
-                            orderObject: currentOrder
+                            timestamp: Date.now()
                           });
                           return progress;
                         })()}
                         variant="amber"
+                        key={`progress-${getCurrentOrder()?.order_id}-${getCurrentOrder()?.payment_status}-${nowTs}`}
                       />
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
