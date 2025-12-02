@@ -445,35 +445,36 @@ const GuestOrderTracking: React.FC = () => {
       
       // Order ID matching
       // Backend currently sends:
-      // - publicId (short display code) as `orderId`
-      // - internal DB/order_id (long ORD-... value) as `internalOrderId`
-      // The guest tracker uses the long ORD-... ID everywhere, so we MUST
-      // prefer `internalOrderId` when matching updates to this page.
-      const payloadOrderId =
-        payload.internalOrderId || payload.orderId || payload.order_id;
+      // - order_id (long ORD-... value) as `orderId` 
+      // - internalOrderId (same as orderId for consistency)
+      // The guest tracker uses the long ORD-... ID everywhere
+      const payloadOrderId = payload.internalOrderId || payload.orderId || payload.order_id;
+      
       // Use the long order ID from currentOrderIdRef (from API response) or decode if needed
       const currentLongOrderId = currentOrderIdRef.current || (activeOrderId.startsWith('ORD-') ? activeOrderId : (decodeId(activeOrderId) || activeOrderId));
       
       // Normalize order IDs for comparison (remove any extra characters, compare base parts)
       const normalizeOrderId = (id: string) => {
         if (!id) return '';
-        // If it's in ORD-xxx-xxx format, use the first two parts
+        // If it's in ORD-xxx-xxx format, use the full ID for exact matching
         if (id.includes('ORD-')) {
-          const parts = id.split('-');
-          return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : id;
+          return id.trim();
         }
-        return id;
+        return id.trim();
       };
       
-      // Match if order IDs match (both should be in long format)
+      const normalizedPayloadId = normalizeOrderId(payloadOrderId);
+      const normalizedCurrentId = normalizeOrderId(currentLongOrderId);
+      
+      // Match if order IDs match (exact match or normalized match)
       const orderIdMatches = payloadOrderId && (
         payloadOrderId === currentLongOrderId ||
         payloadOrderId === activeOrderId ||
         currentLongOrderId === payloadOrderId ||
-        normalizeOrderId(payloadOrderId) === normalizeOrderId(currentLongOrderId) ||
-        // Also check if they're the same after normalization
+        normalizedPayloadId === normalizedCurrentId ||
+        // Also check if they're the same after normalization (for ORD-xxx-xxx format)
         (payloadOrderId.includes('ORD-') && currentLongOrderId.includes('ORD-') && 
-         payloadOrderId.split('-').slice(0, 2).join('-') === currentLongOrderId.split('-').slice(0, 2).join('-'))
+         payloadOrderId.trim() === currentLongOrderId.trim())
       );
       
       // If we're in the order room, we should receive updates for this order
@@ -481,12 +482,22 @@ const GuestOrderTracking: React.FC = () => {
       if (payloadOrderId && !orderIdMatches) {
         console.log('🔔 GuestOrderTracking: Order ID mismatch, ignoring update:', {
           payloadOrderId,
+          normalizedPayloadId,
           currentLongOrderId,
+          normalizedCurrentId,
           activeOrderId,
           orderIdMatches
         });
         return;
       }
+      
+      console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
+        payloadOrderId,
+        currentLongOrderId,
+        status: payload.status,
+        paymentStatus: payload.paymentStatus,
+        orderIdMatches
+      });
       
       console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
         payloadOrderId,
@@ -507,8 +518,18 @@ const GuestOrderTracking: React.FC = () => {
         
         // Always update status if provided in payload, otherwise keep previous status
         // Never default to 'pending' as that would reset progress
-        const newStatus = payload.status !== undefined && payload.status !== null ? payload.status : prev.status;
-        const newPaymentStatus = payload.paymentStatus !== undefined && payload.paymentStatus !== null ? payload.paymentStatus : prev.paymentStatus;
+        let newStatus = payload.status !== undefined && payload.status !== null ? payload.status : prev.status;
+        let newPaymentStatus = payload.paymentStatus !== undefined && payload.paymentStatus !== null ? payload.paymentStatus : prev.paymentStatus;
+        
+        // CRITICAL FIX: When payment is verified, ensure status is set to 'payment_confirmed'
+        // This ensures the transition from 'pending_verification' or 'confirmed' to 'payment_confirmed' works correctly
+        if (newPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
+          // If payment just became 'paid', update status to 'payment_confirmed' if not already set
+          if (newStatus !== 'payment_confirmed' && (newStatus === 'pending_verification' || newStatus === 'confirmed' || newStatus === 'pending')) {
+            newStatus = 'payment_confirmed';
+            console.log('🔔 GuestOrderTracking: Payment verified - updating status to payment_confirmed');
+          }
+        }
         
         console.log('🔔 GuestOrderTracking: Updating order with:', {
           payloadStatus: payload.status,
@@ -553,15 +574,12 @@ const GuestOrderTracking: React.FC = () => {
         setLastUpdate(new Date());
         
         // If payment was just verified, track the confirmation time for delay logic
+        // This delay is for auto-transitioning from payment_confirmed to preparing (not for showing payment_confirmed)
         if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
-          console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for delay');
+          console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for auto-transition to preparing');
           setPaymentConfirmedTime(new Date());
-          // Refetch after a short delay to ensure backend has updated
-          setTimeout(() => {
-            if (updatedOrder.orderId) {
-              fetchOrder(updatedOrder.orderId);
-            }
-          }, 500);
+          // Don't refetch - the WebSocket update should be sufficient
+          // The status should update immediately to payment_confirmed via the WebSocket
         }
         
         // Play sound for status changes - check if status actually changed

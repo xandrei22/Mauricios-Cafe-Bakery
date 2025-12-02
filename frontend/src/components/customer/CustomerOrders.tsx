@@ -576,9 +576,11 @@ const CustomerOrders: React.FC = () => {
                               ? updateData.status 
                               : order.status;
                 
-                // If payment status changed to 'paid' and status is not already 'payment_confirmed', update it
+                // If payment status changed to 'paid', ensure status is set to 'payment_confirmed'
+                // This matches the guest tracking behavior - immediate status update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
-                  if (newStatus !== 'payment_confirmed' && (oldStatus === 'confirmed' || oldStatus === 'pending' || oldStatus === 'pending_verification')) {
+                  // Always update to payment_confirmed when payment is verified, regardless of current status
+                  if (newStatus !== 'payment_confirmed') {
                     newStatus = 'payment_confirmed';
                     console.log('💳 CRITICAL: Payment verified - updating status from', oldStatus, 'to payment_confirmed');
                   }
@@ -707,9 +709,11 @@ const CustomerOrders: React.FC = () => {
                               ? paymentData.status 
                               : order.status;
                 
-                // If payment status changed to 'paid' and status is not already 'payment_confirmed', update it
+                // If payment status changed to 'paid', ensure status is set to 'payment_confirmed'
+                // This matches the guest tracking behavior - immediate status update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
-                  if (newStatus !== 'payment_confirmed' && (oldStatus === 'confirmed' || oldStatus === 'pending' || oldStatus === 'pending_verification')) {
+                  // Always update to payment_confirmed when payment is verified, regardless of current status
+                  if (newStatus !== 'payment_confirmed') {
                     newStatus = 'payment_confirmed';
                     console.log('💳 CRITICAL: Payment verified via payment-updated - updating status from', oldStatus, 'to payment_confirmed');
                   }
@@ -1749,6 +1753,7 @@ const CustomerOrders: React.FC = () => {
                            if (status === 'preparing') return 'bg-yellow-100 text-yellow-800';
                            if (status === 'pending') return 'bg-orange-100 text-orange-800';
                            if (status === 'pending_verification') return 'bg-amber-100 text-amber-800';
+                           if (status === 'payment_confirmed') return 'bg-blue-100 text-blue-800';
                            if (status === 'confirmed') return 'bg-purple-100 text-purple-800';
                            if (status === 'cancelled') return 'bg-red-100 text-red-800';
                            if (status === 'processing') return 'bg-indigo-100 text-indigo-800';
@@ -1774,6 +1779,7 @@ const CustomerOrders: React.FC = () => {
                            if (status === 'preparing') return 'IN PROGRESS';
                            if (status === 'pending') return 'PENDING';
                            if (status === 'pending_verification') return 'VERIFYING';
+                           if (status === 'payment_confirmed') return 'PAYMENT CONFIRMED';
                            if (status === 'confirmed') return 'CONFIRMED';
                            if (status === 'cancelled') return 'CANCELLED';
                            if (status === 'processing') return 'PROCESSING';
