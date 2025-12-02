@@ -1742,7 +1742,7 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                 io.to(`order-${payload.orderId}`).emit('order-updated', payload);
                 io.to(`order-${orderId}`).emit('order-updated', payload);
                 console.log(`📤 Admin: Emitted payment_confirmed to order room: order-${payload.orderId}`);
-                
+
                 io.to('admin-room').emit('order-updated', payload);
                 io.to('staff-room').emit('order-updated', payload);
                 io.to('admin-room').emit('payment-updated', payload);
@@ -1755,8 +1755,12 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                     io.to(customerRoom).emit('order-updated', payload);
                     io.to(customerRoom).emit('payment-updated', payload);
                     console.log(`📤 Admin: Emitted order-updated to customer room: ${customerRoom}`);
+                } else {
+                    console.warn('⚠️ Admin: No customer_email found for order, cannot emit to customer room');
+                    console.warn('  - Order customer_id:', order.customer_id);
+                    console.warn('  - Order customer_name:', order.customer_name);
                 }
-                
+
                 // Also emit to customer room using customer_name as fallback
                 if (order.customer_name && !order.customer_email) {
                     const customerName = String(order.customer_name).toLowerCase().trim();
@@ -1765,7 +1769,7 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
                     io.to(customerRoom).emit('payment-updated', payload);
                     console.log(`📤 Admin: Emitted order-updated to customer room (name fallback): ${customerRoom}`);
                 }
-                
+
                 // Broadcast to all as final fallback
                 io.emit('order-updated', payload);
             }

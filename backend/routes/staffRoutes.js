@@ -1308,8 +1308,13 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
         const { orderId } = req.params;
         const { paymentMethod, verifiedBy, reference, transactionId } = req.body;
 
-        // Get order details (accept DB id or UUID)
-        const [orderResult] = await db.query('SELECT * FROM orders WHERE id = ? OR order_id = ?', [orderId, orderId]);
+        // Get order details with customer email (accept DB id or UUID)
+        const [orderResult] = await db.query(`
+            SELECT o.*, c.email as customer_email 
+            FROM orders o 
+            LEFT JOIN customers c ON o.customer_id = c.id 
+            WHERE o.id = ? OR o.order_id = ?
+        `, [orderId, orderId]);
         if (orderResult.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -1343,9 +1348,13 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
             io.to(`order-${order.order_id}`).emit('order-updated', payload);
             io.to('staff-room').emit('order-updated', payload);
             io.to('admin-room').emit('order-updated', payload);
-            // Notify customer room
+            // Notify customer room (normalized to lowercase for consistency)
             if (order.customer_email) {
-                io.to(`customer-${order.customer_email}`).emit('order-updated', payload);
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                io.to(customerRoom).emit('order-updated', payload);
+                io.to(customerRoom).emit('payment-updated', payload);
+                console.log(`📤 Staff: Emitted order-updated to customer room: ${customerRoom}`);
             }
         }
 
@@ -1392,6 +1401,12 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
 
         // Emit real-time update (explicit to rooms)
         if (io) {
+            console.log('📡 Staff: Emitting payment verification updates...');
+            console.log('  - Order ID:', orderId);
+            console.log('  - Order order_id:', order.order_id);
+            console.log('  - Customer email:', order.customer_email);
+            console.log('  - Customer ID:', order.customer_id);
+            
             const finalPayload = {
                 orderId: order.order_id || orderId,
                 internalOrderId: order.order_id || order.id,
@@ -1413,6 +1428,9 @@ router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) 
                 io.to(customerRoom).emit('order-updated', finalPayload);
                 io.to(customerRoom).emit('payment-updated', finalPayload);
                 console.log(`📤 Staff: Emitted order-updated to customer room: ${customerRoom}`);
+            } else {
+                console.warn('⚠️ Staff: No customer_email found for order, cannot emit to customer room');
+                console.warn('  - Order customer_id:', order.customer_id);
             }
             
             io.to('staff-room').emit('payment-updated', finalPayload);
