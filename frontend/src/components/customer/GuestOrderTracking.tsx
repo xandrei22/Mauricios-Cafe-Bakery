@@ -578,8 +578,17 @@ const GuestOrderTracking: React.FC = () => {
         
         // Always update status if provided in payload, otherwise keep previous status
         // Never default to 'pending' as that would reset progress
+        // CRITICAL: Always use payload status if provided, even if it's the same - this ensures UI updates
         let newStatus = payload.status !== undefined && payload.status !== null ? payload.status : prev.status;
         let newPaymentStatus = payload.paymentStatus !== undefined && payload.paymentStatus !== null ? payload.paymentStatus : prev.paymentStatus;
+        
+        // CRITICAL: Log status update to debug why icons might not be updating
+        console.log('🔔 GuestOrderTracking: Processing status update:', {
+          payloadStatus: payload.status,
+          prevStatus: prev.status,
+          newStatus,
+          willUpdate: payload.status !== undefined && payload.status !== null && payload.status !== prev.status
+        });
         
         // CRITICAL FIX: When payment is verified, ALWAYS set status to 'payment_confirmed'
         // This ensures the transition from any status (pending_verification, confirmed, pending, etc.) to 'payment_confirmed' works correctly
@@ -711,8 +720,42 @@ const GuestOrderTracking: React.FC = () => {
         
         // Always force re-render when payment status or order status changes to ensure UI updates
         if (paymentStatusChanged || statusChanged) {
+          console.log('🔔 GuestOrderTracking: Status or payment changed - forcing multiple re-renders for UI update');
           setLastUpdate(new Date());
+          // Force multiple updates to ensure all UI elements (progress bar, icons, colors) update
           setTimeout(() => setLastUpdate(new Date()), 50);
+          setTimeout(() => setLastUpdate(new Date()), 100);
+          setTimeout(() => setLastUpdate(new Date()), 200);
+          // CRITICAL: Force another update after a longer delay to ensure status icons update
+          setTimeout(() => setLastUpdate(new Date()), 500);
+        }
+        
+        // CRITICAL: If status changed to 'ready', force immediate and delayed re-renders
+        // This ensures the "Ready for Pickup" icon turns brown immediately
+        if (statusChanged && (finalUpdatedOrder.status === 'ready' || finalUpdatedOrder.status === 'completed')) {
+          console.log('🔔 GuestOrderTracking: Status changed to ready/completed - forcing immediate UI update for icons');
+          // Force immediate re-render
+          setLastUpdate(new Date());
+          // Force multiple updates at different intervals to ensure UI updates
+          setTimeout(() => {
+            console.log('🔔 GuestOrderTracking: Forcing re-render at 50ms for ready status');
+            setLastUpdate(new Date());
+          }, 50);
+          setTimeout(() => {
+            console.log('🔔 GuestOrderTracking: Forcing re-render at 100ms for ready status');
+            setLastUpdate(new Date());
+          }, 100);
+          setTimeout(() => {
+            console.log('🔔 GuestOrderTracking: Forcing re-render at 200ms for ready status');
+            setLastUpdate(new Date());
+          }, 200);
+          setTimeout(() => {
+            console.log('🔔 GuestOrderTracking: Forcing re-render at 500ms for ready status');
+            setLastUpdate(new Date());
+          }, 500);
+          // Also force a state update to ensure React detects the change
+          setStatusUpdateAnimation(true);
+          setTimeout(() => setStatusUpdateAnimation(false), 1000);
         }
         
         // Play sound for ALL status updates - not just when status changes
@@ -992,8 +1035,10 @@ const GuestOrderTracking: React.FC = () => {
                   const ariaValueMin = 0;
                   const ariaValueMax = 100;
                   
+                  // CRITICAL: Add key to force re-render when status or lastUpdate changes
+                  // This ensures progress bar updates immediately when status changes to 'ready'
                   return (
-                    <div className="mb-6">
+                    <div className="mb-6" key={`progress-bar-${order.orderId || 'unknown'}-${order.status}-${lastUpdate?.getTime()}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-700">Progress</span>
                         <div className="flex items-center gap-2">
@@ -1024,9 +1069,20 @@ const GuestOrderTracking: React.FC = () => {
 
                 {/* Progress Steps */}
                 {(() => {
+                  // CRITICAL: Recalculate displayStatus on every render to ensure it's always up-to-date
+                  // This ensures icons update immediately when status changes to 'ready'
                   const displayStatus = getDisplayStatus(order.status, order.paymentStatus);
+                  console.log('🔍 Progress Steps render:', {
+                    orderId: order.orderId,
+                    rawStatus: order.status,
+                    displayStatus,
+                    lastUpdate: lastUpdate?.getTime(),
+                    isReady: displayStatus === 'ready' || displayStatus === 'completed'
+                  });
+                  // CRITICAL: Add key to force re-render when status or lastUpdate changes
+                  // This ensures icons update immediately when status changes to 'ready'
                   return (
-                    <div className="relative">
+                    <div className="relative" key={`progress-steps-${order.orderId || 'unknown'}-${order.status}-${lastUpdate?.getTime()}`}>
                       {/* Single continuous vertical line */}
                       <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-300"></div>
                       
@@ -1107,23 +1163,39 @@ const GuestOrderTracking: React.FC = () => {
                         </div>
 
                         {/* Ready for Pickup */}
-                        <div className="flex items-center">
-                          <div className="relative z-10">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              displayStatus === 'ready' || displayStatus === 'completed'
-                                ? 'bg-[#a87437] text-white' 
-                                : 'bg-gray-300 text-gray-600'
-                            }`}>
-                              <Package className="h-4 w-4" />
+                        {(() => {
+                          // CRITICAL: Calculate display status fresh to ensure it's up-to-date
+                          const currentDisplayStatus = getDisplayStatus(order.status, order.paymentStatus);
+                          const isReady = currentDisplayStatus === 'ready' || currentDisplayStatus === 'completed';
+                          
+                          console.log('🔍 Ready for Pickup step check:', {
+                            orderId: order.orderId,
+                            rawStatus: order.status,
+                            displayStatus: currentDisplayStatus,
+                            isReady,
+                            lastUpdate: lastUpdate?.getTime()
+                          });
+                          
+                          return (
+                            <div className="flex items-center" key={`ready-step-${order.orderId}-${order.status}-${lastUpdate?.getTime()}`}>
+                              <div className="relative z-10">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                                  isReady
+                                    ? 'bg-[#a87437] text-white' 
+                                    : 'bg-gray-300 text-gray-600'
+                                }`}>
+                                  <Package className="h-4 w-4" />
+                                </div>
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <p className={`text-sm font-medium transition-colors duration-300 ${isReady ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                                  Ready for Pickup
+                                </p>
+                                <p className="text-xs text-gray-500">Your order is ready for pickup</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <p className={`text-sm font-medium ${displayStatus === 'ready' || displayStatus === 'completed' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                              Ready for Pickup
-                            </p>
-                            <p className="text-xs text-gray-500">Your order is ready for pickup</p>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {/* Completed */}
                         <div className="flex items-center">
