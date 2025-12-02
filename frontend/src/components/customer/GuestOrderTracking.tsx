@@ -88,10 +88,19 @@ const GuestOrderTracking: React.FC = () => {
 
   // Compute display status with automatic transition from payment confirmed to preparing
   const getDisplayStatus = (status: string, paymentStatus?: string): string => {
-    if (!status) return status;
+    if (!status) return status || 'pending';
     
     const normalizedStatus = status.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
+    
+    // If payment is paid but status is not payment_confirmed or beyond, show payment_confirmed
+    // This ensures the UI always shows the correct status when payment is verified
+    if (normalizedPaymentStatus === 'paid') {
+      if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification' || normalizedStatus === 'confirmed') {
+        // If payment is paid but status hasn't been updated yet, show payment_confirmed
+        return 'payment_confirmed';
+      }
+    }
     
     // Only apply automatic transition if payment was just confirmed
     if (paymentConfirmedTime && normalizedPaymentStatus === 'paid') {
@@ -105,7 +114,7 @@ const GuestOrderTracking: React.FC = () => {
           return 'preparing';
         }
         // Before 4 seconds, still show payment_confirmed
-        return status;
+        return 'payment_confirmed';
       }
       
       // If status is already preparing or ready, and we're still within the transition period
@@ -521,14 +530,18 @@ const GuestOrderTracking: React.FC = () => {
         let newStatus = payload.status !== undefined && payload.status !== null ? payload.status : prev.status;
         let newPaymentStatus = payload.paymentStatus !== undefined && payload.paymentStatus !== null ? payload.paymentStatus : prev.paymentStatus;
         
-        // CRITICAL FIX: When payment is verified, ensure status is set to 'payment_confirmed'
-        // This ensures the transition from 'pending_verification' or 'confirmed' to 'payment_confirmed' works correctly
+        // CRITICAL FIX: When payment is verified, ALWAYS set status to 'payment_confirmed'
+        // This ensures the transition from any status (pending_verification, confirmed, pending, etc.) to 'payment_confirmed' works correctly
         if (newPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
-          // If payment just became 'paid', update status to 'payment_confirmed' if not already set
-          if (newStatus !== 'payment_confirmed' && (newStatus === 'pending_verification' || newStatus === 'confirmed' || newStatus === 'pending')) {
-            newStatus = 'payment_confirmed';
-            console.log('🔔 GuestOrderTracking: Payment verified - updating status to payment_confirmed');
-          }
+          // If payment just became 'paid', ALWAYS update status to 'payment_confirmed'
+          // This ensures immediate visual feedback when payment is verified
+          newStatus = 'payment_confirmed';
+          console.log('🔔 GuestOrderTracking: Payment verified - updating status to payment_confirmed (from', prev.status, ')');
+        } else if (newPaymentStatus === 'paid' && newStatus !== 'payment_confirmed' && newStatus !== 'preparing' && newStatus !== 'ready' && newStatus !== 'completed') {
+          // If payment is already paid but status is not yet payment_confirmed or beyond, update it
+          // This handles cases where the status might not have been set correctly
+          newStatus = 'payment_confirmed';
+          console.log('🔔 GuestOrderTracking: Payment is paid but status incorrect - updating to payment_confirmed');
         }
         
         console.log('🔔 GuestOrderTracking: Updating order with:', {
@@ -561,7 +574,7 @@ const GuestOrderTracking: React.FC = () => {
         
         // Check if payment status and order status changed (calculate BEFORE using)
         const paymentStatusChanged = previousPaymentStatus !== updatedOrder.paymentStatus;
-        const statusChanged = previousStatus && previousStatus !== updatedOrder.status;
+        const statusChanged = previousStatus !== updatedOrder.status;
         
         console.log('🔔 GuestOrderTracking: Order updated:', {
           previousStatus,
@@ -569,8 +582,11 @@ const GuestOrderTracking: React.FC = () => {
           previousPaymentStatus,
           newPaymentStatus: updatedOrder.paymentStatus,
           statusChanged,
-          paymentStatusChanged
+          paymentStatusChanged,
+          paymentConfirmedTime: paymentConfirmedTime ? 'set' : 'not set'
         });
+        
+        // Force update to ensure UI re-renders
         setLastUpdate(new Date());
         
         // If payment was just verified, track the confirmation time for delay logic
@@ -578,8 +594,14 @@ const GuestOrderTracking: React.FC = () => {
         if (paymentStatusChanged && updatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
           console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for auto-transition to preparing');
           setPaymentConfirmedTime(new Date());
-          // Don't refetch - the WebSocket update should be sufficient
-          // The status should update immediately to payment_confirmed via the WebSocket
+          // Force immediate re-render to show payment_confirmed status
+          setLastUpdate(new Date());
+        }
+        
+        // If status changed to payment_confirmed, ensure UI updates immediately
+        if (statusChanged && updatedOrder.status === 'payment_confirmed') {
+          console.log('🔔 GuestOrderTracking: Status changed to payment_confirmed - forcing UI update');
+          setLastUpdate(new Date());
         }
         
         // Play sound for status changes - check if status actually changed

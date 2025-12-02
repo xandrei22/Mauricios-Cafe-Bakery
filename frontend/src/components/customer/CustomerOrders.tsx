@@ -570,20 +570,23 @@ const CustomerOrders: React.FC = () => {
                                        : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
                 
-                // CRITICAL FIX: When payment is verified, always update status to 'payment_confirmed'
-                // This ensures the transition from 'confirmed' to 'payment_confirmed' works correctly
+                // CRITICAL FIX: When payment is verified, ALWAYS update status to 'payment_confirmed'
+                // This ensures the transition from any status (pending_verification, confirmed, pending, etc.) to 'payment_confirmed' works correctly
                 let newStatus = updateData.status !== undefined && updateData.status !== null 
                               ? updateData.status 
                               : order.status;
                 
-                // If payment status changed to 'paid', ensure status is set to 'payment_confirmed'
+                // If payment status changed to 'paid', ALWAYS set status to 'payment_confirmed'
                 // This matches the guest tracking behavior - immediate status update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   // Always update to payment_confirmed when payment is verified, regardless of current status
-                  if (newStatus !== 'payment_confirmed') {
-                    newStatus = 'payment_confirmed';
-                    console.log('💳 CRITICAL: Payment verified - updating status from', oldStatus, 'to payment_confirmed');
-                  }
+                  newStatus = 'payment_confirmed';
+                  console.log('💳 CRITICAL: Payment verified - updating status from', oldStatus, 'to payment_confirmed');
+                } else if (newPaymentStatus === 'paid' && newStatus !== 'payment_confirmed' && newStatus !== 'preparing' && newStatus !== 'ready' && newStatus !== 'completed') {
+                  // If payment is already paid but status is not yet payment_confirmed or beyond, update it
+                  // This handles cases where the status might not have been set correctly
+                  newStatus = 'payment_confirmed';
+                  console.log('💳 CRITICAL: Payment is paid but status incorrect - updating to payment_confirmed');
                 }
                 
                 const statusChanged = oldStatus !== newStatus;
@@ -616,11 +619,21 @@ const CustomerOrders: React.FC = () => {
                   }
                   // Force component re-render to update progress bar immediately
                   setForceUpdate(prev => prev + 1);
+                  // Force another update to ensure UI reflects the change
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 50);
                 }
                 
                 // Also force re-render if status changed
                 if (statusChanged) {
                   console.log('🔄 Status changed from', oldStatus, 'to', newStatus, '- forcing re-render');
+                  setForceUpdate(prev => prev + 1);
+                  // Force another update to ensure UI reflects the change
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 50);
+                }
+                
+                // If status changed to payment_confirmed, force immediate re-render
+                if (statusChanged && newStatus === 'payment_confirmed') {
+                  console.log('💳 CRITICAL: Status changed to payment_confirmed - forcing immediate UI update');
                   setForceUpdate(prev => prev + 1);
                 }
                 
@@ -703,20 +716,23 @@ const CustomerOrders: React.FC = () => {
                                        : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
                 
-                // CRITICAL FIX: When payment is verified, always update status to 'payment_confirmed'
-                // This ensures the transition from 'confirmed' to 'payment_confirmed' works correctly
+                // CRITICAL FIX: When payment is verified, ALWAYS update status to 'payment_confirmed'
+                // This ensures the transition from any status (pending_verification, confirmed, pending, etc.) to 'payment_confirmed' works correctly
                 let newStatus = paymentData.status !== undefined && paymentData.status !== null 
                               ? paymentData.status 
                               : order.status;
                 
-                // If payment status changed to 'paid', ensure status is set to 'payment_confirmed'
+                // If payment status changed to 'paid', ALWAYS set status to 'payment_confirmed'
                 // This matches the guest tracking behavior - immediate status update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   // Always update to payment_confirmed when payment is verified, regardless of current status
-                  if (newStatus !== 'payment_confirmed') {
-                    newStatus = 'payment_confirmed';
-                    console.log('💳 CRITICAL: Payment verified via payment-updated - updating status from', oldStatus, 'to payment_confirmed');
-                  }
+                  newStatus = 'payment_confirmed';
+                  console.log('💳 CRITICAL: Payment verified via payment-updated - updating status from', oldStatus, 'to payment_confirmed');
+                } else if (newPaymentStatus === 'paid' && newStatus !== 'payment_confirmed' && newStatus !== 'preparing' && newStatus !== 'ready' && newStatus !== 'completed') {
+                  // If payment is already paid but status is not yet payment_confirmed or beyond, update it
+                  // This handles cases where the status might not have been set correctly
+                  newStatus = 'payment_confirmed';
+                  console.log('💳 CRITICAL: Payment is paid but status incorrect - updating to payment_confirmed');
                 }
                 
                 const statusChanged = oldStatus !== newStatus;
@@ -749,11 +765,21 @@ const CustomerOrders: React.FC = () => {
                   }
                   // Force component re-render to update progress bar immediately
                   setForceUpdate(prev => prev + 1);
+                  // Force another update to ensure UI reflects the change
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 50);
                 }
                 
                 // Also force re-render if status changed
                 if (statusChanged) {
                   console.log('🔄 Status changed from', oldStatus, 'to', newStatus, '- forcing re-render');
+                  setForceUpdate(prev => prev + 1);
+                  // Force another update to ensure UI reflects the change
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 50);
+                }
+                
+                // If status changed to payment_confirmed, force immediate re-render
+                if (statusChanged && newStatus === 'payment_confirmed') {
+                  console.log('💳 CRITICAL: Status changed to payment_confirmed - forcing immediate UI update');
                   setForceUpdate(prev => prev + 1);
                 }
                 
@@ -1741,12 +1767,18 @@ const CustomerOrders: React.FC = () => {
                          (() => {
                            const currentOrder = getCurrentOrder();
                            const status = currentOrder?.status?.toString().toLowerCase();
-                           console.log('CustomerOrders status badge - raw status:', currentOrder?.status, 'normalized:', status);
+                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
+                           console.log('CustomerOrders status badge - raw status:', currentOrder?.status, 'payment_status:', paymentStatus, 'normalized:', status);
                            
                           // Handle null/undefined status - default to VERIFYING color
                           if (!currentOrder?.status) {
                              return 'bg-amber-100 text-amber-800';
                            }
+                           
+                          // If payment is paid but status is not payment_confirmed or beyond, show payment_confirmed color
+                          if (paymentStatus === 'paid' && status !== 'payment_confirmed' && status !== 'preparing' && status !== 'ready' && status !== 'completed') {
+                            return 'bg-blue-100 text-blue-800';
+                          }
                            
                            if (status === 'completed') return 'bg-green-100 text-green-800';
                            if (status === 'ready') return 'bg-blue-100 text-blue-800';
@@ -1764,14 +1796,20 @@ const CustomerOrders: React.FC = () => {
                          {(() => {
                            const currentOrder = getCurrentOrder();
                            const rawStatus = currentOrder?.status;
+                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
                            const status = rawStatus?.toString().toLowerCase();
-                           console.log('🔍 CustomerOrders status badge - raw status:', rawStatus, 'type:', typeof rawStatus, 'normalized:', status);
+                           console.log('🔍 CustomerOrders status badge - raw status:', rawStatus, 'payment_status:', paymentStatus, 'normalized:', status);
                            
                            // Handle null/undefined status - default to VERIFYING
                            if (!rawStatus) {
                              console.error('❌ CustomerOrders - Invalid status detected:', rawStatus);
                              console.error('❌ CustomerOrders - Full currentOrder:', currentOrder);
                              return 'VERIFYING'; // Default to VERIFYING instead of ERROR
+                           }
+                           
+                           // If payment is paid but status is not payment_confirmed or beyond, show PAYMENT CONFIRMED
+                           if (paymentStatus === 'paid' && status !== 'payment_confirmed' && status !== 'preparing' && status !== 'ready' && status !== 'completed') {
+                             return 'PAYMENT CONFIRMED';
                            }
                            
                            if (status === 'completed') return 'COMPLETED';
