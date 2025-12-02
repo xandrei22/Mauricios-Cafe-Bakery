@@ -339,6 +339,15 @@ const GuestOrderTracking: React.FC = () => {
           paymentMethod: fetchedOrder.paymentMethod
         });
         
+        // CRITICAL: If status is preparing/ready/completed, payment MUST be paid
+        // Ensure paymentStatus is set correctly even if backend doesn't send it
+        const normalizedStatus = fetchedOrder.status?.toLowerCase();
+        if ((normalizedStatus === 'preparing' || normalizedStatus === 'ready' || normalizedStatus === 'completed') && 
+            fetchedOrder.paymentStatus?.toLowerCase() !== 'paid') {
+          console.log('🔔 GuestOrderTracking: Status is', normalizedStatus, 'but paymentStatus not paid - forcing to paid');
+          fetchedOrder.paymentStatus = 'paid';
+        }
+        
         // Check if this is a new order (order wasn't previously set) or if it's the first time loading
         const isNewOrder = !order;
         const previousOrderId = order?.orderId;
@@ -647,6 +656,7 @@ const GuestOrderTracking: React.FC = () => {
         });
         
         // Ensure we never lose the order data - always preserve existing values
+        // CRITICAL: If status is preparing/ready/completed, payment MUST be paid - preserve it
         const updatedOrder = {
           ...prev,
           // Only update fields that are explicitly provided in payload
@@ -667,7 +677,19 @@ const GuestOrderTracking: React.FC = () => {
             }
             return prev.status;
           })(),
-          paymentStatus: newPaymentStatus !== undefined && newPaymentStatus !== null ? newPaymentStatus : prev.paymentStatus,
+          // CRITICAL: If status is preparing/ready/completed, payment MUST be paid - ensure it's preserved
+          paymentStatus: (() => {
+            // If status is preparing/ready/completed, payment must be paid
+            const finalStatus = newStatus !== undefined && newStatus !== null ? newStatus : prev.status;
+            if (finalStatus === 'preparing' || finalStatus === 'ready' || finalStatus === 'completed') {
+              // If payment status is not explicitly set but status is preparing+, assume payment is paid
+              if (newPaymentStatus === undefined || newPaymentStatus === null) {
+                console.log('🔔 GuestOrderTracking: Status is', finalStatus, 'but paymentStatus not set - assuming paid');
+                return 'paid';
+              }
+            }
+            return newPaymentStatus !== undefined && newPaymentStatus !== null ? newPaymentStatus : prev.paymentStatus;
+          })(),
           paymentMethod: payload.paymentMethod !== undefined ? payload.paymentMethod : prev.paymentMethod,
           // Only update these if provided, otherwise keep existing
           items: (payload as any).items || prev.items,
@@ -682,16 +704,29 @@ const GuestOrderTracking: React.FC = () => {
         };
         
         // CRITICAL: Ensure status is payment_confirmed if payment is paid (before calculating changes)
+        // Also ensure paymentStatus is 'paid' if status is preparing/ready/completed
         let finalStatus = updatedOrder.status;
-        if (updatedOrder.paymentStatus === 'paid' && (finalStatus === 'pending' || finalStatus === 'pending_verification' || finalStatus === 'confirmed')) {
+        let finalPaymentStatus = updatedOrder.paymentStatus;
+        
+        // If status is preparing/ready/completed, payment MUST be paid
+        if (finalStatus === 'preparing' || finalStatus === 'ready' || finalStatus === 'completed') {
+          if (finalPaymentStatus !== 'paid') {
+            console.log('🔔 GuestOrderTracking: Status is', finalStatus, 'but paymentStatus is', finalPaymentStatus, '- forcing to paid');
+            finalPaymentStatus = 'paid';
+          }
+        }
+        
+        // If payment is paid but status is still pending/pending_verification/confirmed, force payment_confirmed
+        if (finalPaymentStatus === 'paid' && (finalStatus === 'pending' || finalStatus === 'pending_verification' || finalStatus === 'confirmed')) {
           finalStatus = 'payment_confirmed';
           console.log('🔔 GuestOrderTracking: Forcing status to payment_confirmed because payment is paid');
         }
         
-        // Update the order with the final status
+        // Update the order with the final status and payment status
         const finalUpdatedOrder = {
           ...updatedOrder,
-          status: finalStatus
+          status: finalStatus,
+          paymentStatus: finalPaymentStatus
         };
         
         // Check if payment status and order status changed (calculate AFTER final status is set)
