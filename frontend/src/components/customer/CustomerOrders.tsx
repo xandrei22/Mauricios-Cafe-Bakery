@@ -36,7 +36,7 @@ interface Order {
     customizations?: any;
   }>;
   total_price: string | number;
-  status: 'pending' | 'pending_verification' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  status: 'pending' | 'pending_verification' | 'confirmed' | 'payment_confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   payment_status: 'pending' | 'paid' | 'failed' | 'pending_verification';
   payment_method?: 'cash' | 'gcash' | 'paymaya';
   order_type: 'dine_in' | 'takeout';
@@ -46,6 +46,7 @@ interface Order {
   order_time: string;
   completed_time?: string;
   notes?: string;
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'pending_verification'; // Alias for compatibility
 }
 
 interface StatusNotification {
@@ -370,7 +371,7 @@ const CustomerOrders: React.FC = () => {
       else if (normalizedStatus === 'ready') {
         // If payment is not verified yet, we shouldn't be at ready stage
         // But if we are, check if we've passed payment confirmation
-        if (normalizedPaymentStatus === 'paid' || normalizedStatus === 'payment_confirmed') {
+        if (normalizedPaymentStatus === 'paid') {
           currentProgress = 80;
         } else {
           // Payment not verified but status is ready - show 40% to indicate payment needed
@@ -443,7 +444,7 @@ const CustomerOrders: React.FC = () => {
           }
           // IMPORTANT: Also trigger progress update sound for payment verification
           // When payment changes to 'paid', progress should go from 20% to 40%
-          const progressBeforePayment = previousPaymentStatus === 'paid' ? 40 : 20;
+          const progressBeforePayment = String(previousPaymentStatus).toLowerCase() === 'paid' ? 40 : 20;
           const progressAfterPayment = 40;
           if (progressAfterPayment > progressBeforePayment) {
             progressUpdates.push({
@@ -532,6 +533,7 @@ const CustomerOrders: React.FC = () => {
           const normalizedEmail = String(user.email).toLowerCase().trim();
           newSocket.emit('join-customer-room', { customerEmail: normalizedEmail });
           console.log('🔌 Emitted join-customer-room with normalized email:', normalizedEmail);
+          // Note: Individual order rooms are joined in a separate useEffect when orders are loaded
         } else {
           console.warn('🔌 Cannot join room - socket not connected or no email');
         }
@@ -1027,6 +1029,19 @@ const CustomerOrders: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Join individual order rooms when orders are loaded or updated
+  useEffect(() => {
+    if (socket && socket.connected && orders.length > 0) {
+      orders.forEach(order => {
+        const orderId = order.order_id || order.id;
+        if (orderId) {
+          console.log('🔌 CustomerOrders: Joining order room for:', orderId);
+          socket.emit('join-order-room', orderId);
+        }
+      });
+    }
+  }, [socket, orders]);
+
   // Watch for order changes and update selected order automatically
   useEffect(() => {
     if (orders.length > 0) {
@@ -1499,7 +1514,7 @@ const CustomerOrders: React.FC = () => {
     if (normalizedStatus === 'ready') {
       // If payment is not verified yet, we shouldn't be at ready stage
       // But if we are, check if we've passed payment confirmation
-      if (normalizedPaymentStatus === 'paid' || normalizedStatus === 'payment_confirmed') {
+      if (normalizedPaymentStatus === 'paid') {
         console.log('✅ Progress: 80% (Ready, payment verified)');
         return 80;
       } else {

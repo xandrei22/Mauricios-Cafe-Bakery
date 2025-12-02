@@ -344,7 +344,39 @@ const GuestOrderTracking: React.FC = () => {
         const previousOrderId = order?.orderId;
         const isFirstLoad = !previousOrderId || previousOrderId !== fetchedOrder.orderId;
         
-        setOrder(fetchedOrder);
+        // CRITICAL: Preserve optimistic updates when refetching
+        // If we already have an order with payment_confirmed or preparing status, don't downgrade it
+        setOrder(prev => {
+          if (!prev || isNewOrder || isFirstLoad) {
+            return fetchedOrder;
+          }
+          
+          // If previous order has payment_confirmed or beyond, and fetched order has lower status, preserve the higher status
+          const prevStatus = prev.status?.toLowerCase();
+          const fetchedStatus = fetchedOrder.status?.toLowerCase();
+          const prevPaymentStatus = prev.paymentStatus?.toLowerCase();
+          const fetchedPaymentStatus = fetchedOrder.paymentStatus?.toLowerCase();
+          
+          // If payment is paid in both, preserve the higher status
+          if (prevPaymentStatus === 'paid' && fetchedPaymentStatus === 'paid') {
+            const statusOrder = ['pending', 'pending_verification', 'confirmed', 'payment_confirmed', 'preparing', 'ready', 'completed'];
+            const prevStatusIndex = statusOrder.indexOf(prevStatus || 'pending');
+            const fetchedStatusIndex = statusOrder.indexOf(fetchedStatus || 'pending');
+            
+            // If previous status is higher (more advanced), preserve it
+            if (prevStatusIndex > fetchedStatusIndex) {
+              console.log('🔔 GuestOrderTracking: Preserving optimistic status', prevStatus, 'over fetched status', fetchedStatus);
+              return {
+                ...fetchedOrder,
+                status: prev.status,
+                paymentStatus: prev.paymentStatus
+              };
+            }
+          }
+          
+          // Otherwise, use the fetched order
+          return fetchedOrder;
+        });
         // Use the orderId directly from the API response (long format like ORD-1764039875901-qb6xvn1fj)
         // This is the format the backend uses for socket rooms
         const longOrderId = fetchedOrder.orderId || decoded;
@@ -701,13 +733,15 @@ const GuestOrderTracking: React.FC = () => {
           setTimeout(() => setLastUpdate(new Date()), 50);
           setTimeout(() => setLastUpdate(new Date()), 100);
           setTimeout(() => setLastUpdate(new Date()), 200);
-          // Also trigger a refetch after a short delay to ensure backend state is synced
-          setTimeout(() => {
-            if (finalUpdatedOrder.orderId) {
-              console.log('🔔 GuestOrderTracking: Refetching order to ensure state is synced');
-              fetchOrder(finalUpdatedOrder.orderId);
-            }
-          }, 1000);
+          // CRITICAL: Don't refetch immediately after payment verification
+          // The socket update already has the correct status, and refetching might overwrite it with stale data
+          // Only refetch if we don't have the order data yet
+          // setTimeout(() => {
+          //   if (finalUpdatedOrder.orderId) {
+          //     console.log('🔔 GuestOrderTracking: Refetching order to ensure state is synced');
+          //     fetchOrder(finalUpdatedOrder.orderId);
+          //   }
+          // }, 1000);
         }
         
         // If status changed to payment_confirmed, ensure UI updates immediately
@@ -1088,79 +1122,100 @@ const GuestOrderTracking: React.FC = () => {
                       
                       <div className="space-y-4 relative">
                         {/* Order Received */}
-                        <div className="flex items-center">
-                          <div className="relative z-10">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'payment_confirmed' || displayStatus === 'preparing' || displayStatus === 'ready' || displayStatus === 'completed' || order.paymentStatus === 'paid'
-                                ? 'bg-[#a87437] text-white' 
-                                : 'bg-gray-300 text-gray-600'
-                            }`}>
-                              <CheckCircle className="h-4 w-4" />
+                        {(() => {
+                          // CRITICAL: Always show Order Received as completed if order exists
+                          const isOrderReceived = order && order.orderId;
+                          return (
+                            <div className="flex items-center" key={`order-received-${order.orderId}-${lastUpdate?.getTime()}`}>
+                              <div className="relative z-10">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                                  isOrderReceived
+                                    ? 'bg-[#a87437] text-white' 
+                                    : 'bg-gray-300 text-gray-600'
+                                }`}>
+                                  <CheckCircle className="h-4 w-4" />
+                                </div>
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <p className={`text-sm font-medium transition-colors duration-300 ${isOrderReceived ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                                  Order Received
+                                </p>
+                                <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <p className={`text-sm font-medium ${displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'payment_confirmed' || displayStatus === 'preparing' || displayStatus === 'ready' || displayStatus === 'completed' || order.paymentStatus === 'paid' ? 'text-[#a87437]' : 'text-gray-600'}`}>
-                              Order Received
-                            </p>
-                            <p className="text-xs text-gray-500">Your order has been received and is being processed</p>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {/* Payment Confirmed */}
-                        <div className="flex items-center">
-                          <div className="relative z-10">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              displayStatus === 'payment_confirmed' || 
-                              displayStatus === 'preparing' || 
-                              displayStatus === 'ready' || 
-                              displayStatus === 'completed' || 
-                              (order.paymentStatus === 'paid' && (displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'confirmed'))
-                                ? 'bg-[#a87437] text-white' 
-                                : 'bg-gray-300 text-gray-600'
-                            }`}>
-                              <CheckCircle className="h-4 w-4" />
+                        {(() => {
+                          // CRITICAL: Check payment status directly and display status
+                          const paymentStatus = order.paymentStatus?.toLowerCase();
+                          const isPaymentConfirmed = paymentStatus === 'paid' || 
+                            displayStatus === 'payment_confirmed' || 
+                            displayStatus === 'preparing' || 
+                            displayStatus === 'ready' || 
+                            displayStatus === 'completed';
+                          
+                          console.log('🔍 Payment Confirmed step check:', {
+                            orderId: order.orderId,
+                            paymentStatus,
+                            displayStatus,
+                            isPaymentConfirmed
+                          });
+                          
+                          return (
+                            <div className="flex items-center" key={`payment-confirmed-${order.orderId}-${order.paymentStatus}-${lastUpdate?.getTime()}`}>
+                              <div className="relative z-10">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                                  isPaymentConfirmed
+                                    ? 'bg-[#a87437] text-white' 
+                                    : 'bg-gray-300 text-gray-600'
+                                }`}>
+                                  <CheckCircle className="h-4 w-4" />
+                                </div>
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <p className={`text-sm font-medium transition-colors duration-300 ${isPaymentConfirmed ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                                  Payment Confirmed
+                                </p>
+                                <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <p className={`text-sm font-medium ${
-                              displayStatus === 'payment_confirmed' || 
-                              displayStatus === 'preparing' || 
-                              displayStatus === 'ready' || 
-                              displayStatus === 'completed' || 
-                              (order.paymentStatus === 'paid' && (displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'confirmed'))
-                                ? 'text-[#a87437]' : 'text-gray-600'
-                            }`}>
-                              Payment Confirmed
-                            </p>
-                            <p className="text-xs text-gray-500">Your payment has been verified and confirmed</p>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {/* Preparing */}
-                        <div className="flex items-center">
-                          <div className="relative z-10">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              displayStatus === 'preparing' || 
-                              displayStatus === 'ready' || 
-                              displayStatus === 'completed'
-                                ? 'bg-[#a87437] text-white' 
-                                : 'bg-gray-300 text-gray-600'
-                            }`}>
-                              <Loader2 className={`h-4 w-4 ${displayStatus === 'preparing' ? 'animate-spin' : ''}`} />
+                        {(() => {
+                          const isPreparing = displayStatus === 'preparing' || 
+                            displayStatus === 'ready' || 
+                            displayStatus === 'completed';
+                          
+                          console.log('🔍 Preparing step check:', {
+                            orderId: order.orderId,
+                            displayStatus,
+                            isPreparing
+                          });
+                          
+                          return (
+                            <div className="flex items-center" key={`preparing-${order.orderId}-${displayStatus}-${lastUpdate?.getTime()}`}>
+                              <div className="relative z-10">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                                  isPreparing
+                                    ? 'bg-[#a87437] text-white' 
+                                    : 'bg-gray-300 text-gray-600'
+                                }`}>
+                                  <Loader2 className={`h-4 w-4 ${displayStatus === 'preparing' ? 'animate-spin' : ''}`} />
+                                </div>
+                              </div>
+                              <div className="ml-4 flex-1">
+                                <p className={`text-sm font-medium transition-colors duration-300 ${isPreparing ? 'text-[#a87437]' : 'text-gray-600'}`}>
+                                  Preparing
+                                </p>
+                                <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="ml-4 flex-1">
-                            <p className={`text-sm font-medium ${
-                              displayStatus === 'preparing' || 
-                              displayStatus === 'ready' || 
-                              displayStatus === 'completed'
-                                ? 'text-[#a87437]' : 'text-gray-600'
-                            }`}>
-                              Preparing
-                            </p>
-                            <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
-                          </div>
-                        </div>
+                          );
+                        })()}
 
                         {/* Ready for Pickup */}
                         {(() => {
