@@ -418,6 +418,16 @@ const CustomerOrders: React.FC = () => {
         // If payment just changed to 'paid', trigger notification even if status hasn't changed
         if (currentPaymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
           console.log('💳 Payment verified for order:', order.order_id, 'Previous:', previousPaymentStatus, 'Current:', currentPaymentStatus);
+          // CRITICAL: Set paymentConfirmedTime when payment is verified (for auto-transition to preparing)
+          const orderId = order.order_id || (order as any).orderId || '';
+          if (orderId) {
+            const confirmationTime = new Date();
+            setPaymentConfirmedTimes(prev => ({
+              ...prev,
+              [String(orderId)]: confirmationTime
+            }));
+            console.log('💳 CRITICAL: Set paymentConfirmedTime for order', orderId, 'at', confirmationTime);
+          }
           // Always add payment verification notification, even if status update exists
           // This ensures users are notified when payment is verified
           const hasStatusUpdate = updates.some(u => u.order.order_id === order.order_id);
@@ -629,18 +639,23 @@ const CustomerOrders: React.FC = () => {
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   console.log('💳 CRITICAL: Payment verified - IMMEDIATELY updating to 40% progress');
-                  // Track payment confirmation time for delay logic
+                  // Track payment confirmation time for delay logic (CRITICAL for auto-transition to preparing)
                   const orderIdKey = updateOrderId || order.order_id || order.id;
                   if (orderIdKey) {
+                    const confirmationTime = new Date();
                     setPaymentConfirmedTimes(prev => ({
                       ...prev,
-                      [String(orderIdKey)]: new Date()
+                      [String(orderIdKey)]: confirmationTime
                     }));
+                    console.log('💳 CRITICAL: Set paymentConfirmedTime for order', orderIdKey, 'at', confirmationTime);
                   }
                   // Force component re-render to update progress bar immediately
                   setForceUpdate(prev => prev + 1);
                   // Force another update to ensure UI reflects the change
                   setTimeout(() => setForceUpdate(prev => prev + 1), 50);
+                  // Force periodic updates to check for auto-transition
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 100);
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 200);
                 }
                 
                 // Also force re-render if status changed
@@ -657,7 +672,8 @@ const CustomerOrders: React.FC = () => {
                   setForceUpdate(prev => prev + 1);
                 }
                 
-                // Play sound for status changes
+                // Play sound for status changes AND payment confirmations
+                // CRITICAL: Play sound for both status changes and payment confirmations
                 if (statusChanged) {
                   console.log('🔔 CustomerOrders: Status changed from', oldStatus, 'to', newStatus, '- playing sound');
                   // Trigger visual animation (if you have one)
@@ -666,13 +682,15 @@ const CustomerOrders: React.FC = () => {
                     console.log('🔔 Attempting to play notification sound for status change');
                     playNotificationSound();
                   }, 200); // Delay to ensure state is updated and audio context is ready
-                } else if (paymentStatusChanged && newPaymentStatus === 'paid') {
+                }
+                // IMPORTANT: Also play sound when payment is confirmed, even if status hasn't changed yet
+                if (paymentStatusChanged && newPaymentStatus === 'paid') {
                   console.log('🔔 CustomerOrders: Payment confirmed, playing sound');
                   // Play sound when payment is confirmed
                   setTimeout(() => {
                     console.log('🔔 Attempting to play notification sound for payment confirmation');
                     playNotificationSound();
-                  }, 200);
+                  }, 300); // Slightly longer delay to avoid overlap with status change sound
                 }
                 
                 return {
@@ -807,18 +825,23 @@ const CustomerOrders: React.FC = () => {
                 // If payment status changed to 'paid', this is a critical update
                 if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
                   console.log('💳 CRITICAL: Payment verified via payment-updated - IMMEDIATELY updating to 40% progress');
-                  // Track payment confirmation time for delay logic
+                  // Track payment confirmation time for delay logic (CRITICAL for auto-transition to preparing)
                   const orderIdKey = updateOrderId || order.order_id || order.id;
                   if (orderIdKey) {
+                    const confirmationTime = new Date();
                     setPaymentConfirmedTimes(prev => ({
                       ...prev,
-                      [String(orderIdKey)]: new Date()
+                      [String(orderIdKey)]: confirmationTime
                     }));
+                    console.log('💳 CRITICAL: Set paymentConfirmedTime for order', orderIdKey, 'at', confirmationTime);
                   }
                   // Force component re-render to update progress bar immediately
                   setForceUpdate(prev => prev + 1);
                   // Force another update to ensure UI reflects the change
                   setTimeout(() => setForceUpdate(prev => prev + 1), 50);
+                  // Force periodic updates to check for auto-transition
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 100);
+                  setTimeout(() => setForceUpdate(prev => prev + 1), 200);
                 }
                 
                 // Also force re-render if status changed
@@ -835,7 +858,8 @@ const CustomerOrders: React.FC = () => {
                   setForceUpdate(prev => prev + 1);
                 }
                 
-                // Play sound for status changes
+                // Play sound for status changes AND payment confirmations
+                // CRITICAL: Play sound for both status changes and payment confirmations
                 if (statusChanged) {
                   console.log('🔔 CustomerOrders: Status changed from', oldStatus, 'to', newStatus, '- playing sound (payment-updated)');
                   // Play notification sound when status changes
@@ -843,13 +867,15 @@ const CustomerOrders: React.FC = () => {
                     console.log('🔔 Attempting to play notification sound for status change (payment-updated)');
                     playNotificationSound();
                   }, 200); // Delay to ensure state is updated and audio context is ready
-                } else if (paymentStatusChanged && newPaymentStatus === 'paid') {
+                }
+                // IMPORTANT: Also play sound when payment is confirmed, even if status hasn't changed yet
+                if (paymentStatusChanged && newPaymentStatus === 'paid') {
                   console.log('🔔 CustomerOrders: Payment confirmed, playing sound (payment-updated)');
                   // Play sound when payment is confirmed
                   setTimeout(() => {
                     console.log('🔔 Attempting to play notification sound for payment confirmation (payment-updated)');
                     playNotificationSound();
-                  }, 200);
+                  }, 300); // Slightly longer delay to avoid overlap with status change sound
                 }
                 
                 return {
@@ -967,29 +993,36 @@ const CustomerOrders: React.FC = () => {
   }, [loading, authenticated, user?.email]); // Changed from 'user' to 'user?.email'
 
   // Clear payment confirmed times after delay period and force re-renders
+  // This interval ensures the component re-renders frequently to check auto-transition
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
+      let hasChanges = false;
+      
       setPaymentConfirmedTimes(prev => {
         const updated: Record<string, Date> = {};
-        let hasChanges = false;
         
         Object.entries(prev).forEach(([orderId, confirmedTime]) => {
           const timeSincePaymentConfirmed = now - confirmedTime.getTime();
-          if (timeSincePaymentConfirmed < 4000) {
+          // Keep the time for 5 seconds (transition delay + buffer) to allow auto-transition
+          if (timeSincePaymentConfirmed < 5000) {
             updated[orderId] = confirmedTime;
+            // Force re-render every 100ms to check for auto-transition
+            hasChanges = true;
           } else {
+            // Clear after transition period
             hasChanges = true;
           }
         });
         
-        if (hasChanges) {
-          setForceUpdate(prev => prev + 1);
-        }
-        
         return Object.keys(updated).length > 0 ? updated : {};
       });
-    }, 100); // Update every 100ms for smooth transition
+      
+      // Force re-render to check for auto-transition from payment_confirmed to preparing
+      if (hasChanges) {
+        setForceUpdate(prev => prev + 1);
+      }
+    }, 100); // Update every 100ms for smooth transition and auto-transition check
     
     return () => clearInterval(interval);
   }, []);
@@ -1148,6 +1181,35 @@ const CustomerOrders: React.FC = () => {
           
           setOrders(ordersWithPaymentStatus);
           
+          // CRITICAL: Set paymentConfirmedTime for orders that are already paid
+          // This ensures auto-transition from payment_confirmed to preparing works even if page was refreshed
+          setPaymentConfirmedTimes(prev => {
+            const updated = { ...prev };
+            let hasChanges = false;
+            
+            ordersWithPaymentStatus.forEach((order: Order) => {
+              const paymentStatus = String(order.payment_status || (order as any).paymentStatus || 'pending').toLowerCase().trim();
+              const status = String(order.status || 'pending').toLowerCase().trim();
+              const orderId = order.order_id || (order as any).orderId || '';
+              
+              // If payment is paid and status is payment_confirmed or confirmed, set paymentConfirmedTime
+              // Use a time in the past (5 seconds ago) so auto-transition can happen immediately if needed
+              if (paymentStatus === 'paid' && (status === 'payment_confirmed' || status === 'confirmed') && orderId) {
+                // Check if we already have a paymentConfirmedTime for this order
+                if (!updated[orderId]) {
+                  // Set to 5 seconds ago so if it's been more than 4 seconds, it will auto-transition
+                  // Otherwise, it will transition after the remaining time
+                  const pastTime = new Date(Date.now() - 5000);
+                  updated[String(orderId)] = pastTime;
+                  hasChanges = true;
+                  console.log('💳 CRITICAL: Set paymentConfirmedTime for existing paid order', orderId, 'at', pastTime);
+                }
+              }
+            });
+            
+            return hasChanges ? updated : prev;
+          });
+          
           // Only update selectedOrder when it actually changes
           const currentOrders = sortedOrders.filter((order: Order) => {
             // Never treat cancelled orders as active/current
@@ -1209,10 +1271,11 @@ const CustomerOrders: React.FC = () => {
   };
 
   // Real-time progress that animates between phases based on elapsed time since order_time
+  // Update more frequently (every 100ms) to ensure smooth auto-transition from payment_confirmed to preparing
   const [nowTs, setNowTs] = useState<number>(Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    const timer = setInterval(() => setNowTs(Date.now()), 100);
     return () => clearInterval(timer);
   }, []);
 
@@ -1231,27 +1294,53 @@ const CustomerOrders: React.FC = () => {
     const normalizedStatus = status.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus.toLowerCase().trim();
     
-    // Only apply automatic transition if payment was just confirmed
-    if (paymentConfirmedTimes[orderId] && normalizedPaymentStatus === 'paid') {
-      // Use nowTs to ensure re-renders happen when time updates
-      const timeSincePaymentConfirmed = nowTs - paymentConfirmedTimes[orderId].getTime();
-      const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before transitioning to preparing
-      
-      // If status is payment_confirmed or confirmed, check if we should transition to preparing
-      if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
-        // After 4 seconds, automatically transition to preparing
-        if (timeSincePaymentConfirmed >= transitionDelay) {
-          return 'preparing';
+    // CRITICAL: If payment is paid, always show payment_confirmed or beyond (never show pending/pending_verification)
+    // This ensures the UI always shows the correct status when payment is verified
+    if (normalizedPaymentStatus === 'paid') {
+      // If status is still pending/pending_verification/confirmed, show payment_confirmed
+      if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification' || normalizedStatus === 'confirmed') {
+        // Check if we should auto-transition to preparing
+        if (paymentConfirmedTimes[orderId]) {
+          const timeSincePaymentConfirmed = nowTs - paymentConfirmedTimes[orderId].getTime();
+          const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before transitioning to preparing
+          
+          // After 4 seconds, automatically transition to preparing
+          if (timeSincePaymentConfirmed >= transitionDelay) {
+            console.log('🔔 CustomerOrders: Auto-transitioning from payment_confirmed to preparing after', timeSincePaymentConfirmed, 'ms');
+            return 'preparing';
+          }
         }
-        // Before 4 seconds, still show payment_confirmed
-        return status;
+        // Before transition delay or if paymentConfirmedTime not set, show payment_confirmed
+        return 'payment_confirmed';
       }
       
-      // REMOVED: No longer force showing "preparing" if status is already "ready"
-      // The status should reflect what the backend says - if it's "ready", show "ready"
-      // Admin/barista will update it manually and it will update dynamically via WebSocket
+      // Only apply automatic transition if payment was just confirmed and status is payment_confirmed/confirmed
+      if (paymentConfirmedTimes[orderId]) {
+        const timeSincePaymentConfirmed = nowTs - paymentConfirmedTimes[orderId].getTime();
+        const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before transitioning to preparing
+        
+        // If status is payment_confirmed or confirmed, check if we should transition to preparing
+        if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
+          // After 4 seconds, automatically transition to preparing
+          if (timeSincePaymentConfirmed >= transitionDelay) {
+            console.log('🔔 CustomerOrders: Auto-transitioning from payment_confirmed to preparing after', timeSincePaymentConfirmed, 'ms');
+            return 'preparing';
+          }
+          // Before 4 seconds, still show payment_confirmed
+          return 'payment_confirmed';
+        }
+      }
+      
+      // If payment is paid and status is already payment_confirmed or beyond, return the status
+      // But ensure we never return pending/pending_verification when payment is paid
+      if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
+        return 'payment_confirmed';
+      }
+      
+      return status;
     }
     
+    // If payment is not paid, return the original status
     return status;
   };
 

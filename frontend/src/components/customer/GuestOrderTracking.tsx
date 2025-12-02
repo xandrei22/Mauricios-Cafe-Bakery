@@ -87,6 +87,7 @@ const GuestOrderTracking: React.FC = () => {
   };
 
   // Compute display status with automatic transition from payment confirmed to preparing
+  // This function is called on every render, so it will check paymentConfirmedTime and auto-transition
   const getDisplayStatus = (status: string, paymentStatus?: string): string => {
     if (!status) return 'pending';
     
@@ -108,10 +109,18 @@ const GuestOrderTracking: React.FC = () => {
         const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
         const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before automatically transitioning to preparing
         
+        console.log('🔔 GuestOrderTracking: Checking auto-transition:', {
+          timeSincePaymentConfirmed,
+          transitionDelay,
+          normalizedStatus,
+          shouldTransition: timeSincePaymentConfirmed >= transitionDelay && (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed')
+        });
+        
         // If status is payment_confirmed or confirmed, check if we should transition to preparing
         if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
           // After 4 seconds, automatically transition to preparing
           if (timeSincePaymentConfirmed >= transitionDelay) {
+            console.log('🔔 GuestOrderTracking: Auto-transitioning from payment_confirmed to preparing');
             return 'preparing';
           }
           // Before 4 seconds, still show payment_confirmed
@@ -628,7 +637,7 @@ const GuestOrderTracking: React.FC = () => {
           displayStatus: getDisplayStatus(finalUpdatedOrder.status, finalUpdatedOrder.paymentStatus)
         });
         
-        // Force update to ensure UI re-renders
+        // Force update to ensure UI re-renders - this is critical for progress bar and status display
         setLastUpdate(new Date());
         
         // If payment was just verified, track the confirmation time for delay logic
@@ -636,8 +645,10 @@ const GuestOrderTracking: React.FC = () => {
         if (paymentStatusChanged && finalUpdatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
           console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for auto-transition to preparing');
           setPaymentConfirmedTime(new Date());
-          // Force immediate re-render to show payment_confirmed status
+          // Force immediate re-render to show payment_confirmed status and update progress bar
           setLastUpdate(new Date());
+          // Force another update to ensure UI reflects the change
+          setTimeout(() => setLastUpdate(new Date()), 50);
           // Also trigger a refetch after a short delay to ensure backend state is synced
           setTimeout(() => {
             if (finalUpdatedOrder.orderId) {
@@ -651,37 +662,33 @@ const GuestOrderTracking: React.FC = () => {
         if (statusChanged && finalUpdatedOrder.status === 'payment_confirmed') {
           console.log('🔔 GuestOrderTracking: Status changed to payment_confirmed - forcing UI update');
           setLastUpdate(new Date());
+          // Force another update to ensure progress bar updates
+          setTimeout(() => setLastUpdate(new Date()), 50);
         }
         
-        // Play sound for status changes - check if status actually changed
-        if (statusChanged) {
-          console.log('🔔 GuestOrderTracking: Status changed from', previousStatus, 'to', finalUpdatedOrder.status, '- playing sound');
+        // Always force re-render when payment status or order status changes to ensure UI updates
+        if (paymentStatusChanged || statusChanged) {
+          setLastUpdate(new Date());
+          setTimeout(() => setLastUpdate(new Date()), 50);
+        }
+        
+        // Play sound for ALL status updates - not just when status changes
+        // This ensures sounds play when payment is confirmed, when status changes, and when order is first loaded
+        const shouldPlaySound = statusChanged || 
+                                (paymentStatusChanged && finalUpdatedOrder.paymentStatus === 'paid') ||
+                                (!previousStatus && finalUpdatedOrder.status && finalUpdatedOrder.status !== 'pending');
+        
+        if (shouldPlaySound) {
+          const reason = statusChanged ? 'status changed' : 
+                        (paymentStatusChanged && finalUpdatedOrder.paymentStatus === 'paid') ? 'payment confirmed' : 
+                        'first status update';
+          console.log(`🔔 GuestOrderTracking: ${reason} - playing sound (from ${previousStatus || 'none'} to ${finalUpdatedOrder.status})`);
           // Trigger visual animation
           setStatusUpdateAnimation(true);
           setTimeout(() => setStatusUpdateAnimation(false), 2000);
-          // Play notification sound when status changes - use longer delay to ensure audio context is ready
+          // Play notification sound - use longer delay to ensure audio context is ready
           setTimeout(() => {
-            console.log('🔔 Attempting to play notification sound for status change');
-            playNotificationSound();
-          }, 200); // Increased delay to ensure state is updated and audio context is ready
-        } else if (paymentStatusChanged && finalUpdatedOrder.paymentStatus === 'paid') {
-          console.log('🔔 GuestOrderTracking: Payment confirmed, playing sound');
-          // Trigger visual animation
-          setStatusUpdateAnimation(true);
-          setTimeout(() => setStatusUpdateAnimation(false), 2000);
-          // Play sound when payment is confirmed
-          setTimeout(() => {
-            console.log('🔔 Attempting to play notification sound for payment confirmation');
-            playNotificationSound();
-          }, 200); // Increased delay to ensure state is updated and audio context is ready
-        } else if (!previousStatus && finalUpdatedOrder.status && finalUpdatedOrder.status !== 'pending') {
-          console.log('🔔 GuestOrderTracking: First status update, playing sound');
-          // Trigger visual animation
-          setStatusUpdateAnimation(true);
-          setTimeout(() => setStatusUpdateAnimation(false), 2000);
-          // First time seeing this order with a non-pending status - play sound
-          setTimeout(() => {
-            console.log('🔔 Attempting to play notification sound for first status update');
+            console.log('🔔 Attempting to play notification sound');
             playNotificationSound();
           }, 200); // Increased delay to ensure state is updated and audio context is ready
         }
@@ -717,17 +724,21 @@ const GuestOrderTracking: React.FC = () => {
   }, [decodedParamId, searchOrderId, playNotificationSound]);
 
   // Clear payment confirmed time after delay period and force re-renders
+  // This interval ensures the component re-renders frequently to check auto-transition
   useEffect(() => {
     if (paymentConfirmedTime) {
       const interval = setInterval(() => {
         const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
-        if (timeSincePaymentConfirmed >= 4000) {
+        // Force re-render by updating lastUpdate - this triggers getDisplayStatus to check auto-transition
+        setLastUpdate(new Date());
+        
+        // Clear paymentConfirmedTime after transition delay + buffer to prevent memory leaks
+        if (timeSincePaymentConfirmed >= 5000) {
+          console.log('🔔 GuestOrderTracking: Clearing paymentConfirmedTime after transition period');
           setPaymentConfirmedTime(null);
           clearInterval(interval);
         }
-        // Force re-render by updating a dummy state
-        setLastUpdate(new Date());
-      }, 100); // Update every 100ms for smooth transition
+      }, 100); // Update every 100ms for smooth transition and auto-transition check
       return () => clearInterval(interval);
     }
   }, [paymentConfirmedTime]);
