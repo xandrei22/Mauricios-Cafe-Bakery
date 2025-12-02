@@ -101,7 +101,7 @@ const CustomerOrders: React.FC = () => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }, []);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback(async () => {
     try {
       if (typeof window === 'undefined') return;
       const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
@@ -117,11 +117,16 @@ const CustomerOrders: React.FC = () => {
       const ctx = audioContextRef.current;
       if (!ctx) return;
 
-      // Resume audio context if suspended (required by browser autoplay policies)
+      // CRITICAL: Resume audio context if suspended (required by browser autoplay policies)
+      // Must await resume to ensure audio context is ready before playing
       if (ctx.state === 'suspended') {
-        ctx.resume().catch((err) => {
+        try {
+          await ctx.resume();
+          console.log('🔔 Audio context resumed');
+        } catch (err) {
           console.warn('Failed to resume audio context:', err);
-        });
+          return; // Don't play if we can't resume
+        }
       }
 
       // Create a pleasant notification sound (two-tone chime) - matching guest tracking
@@ -155,9 +160,9 @@ const CustomerOrders: React.FC = () => {
       osc2.start(now + 0.2);
       osc2.stop(now + 0.5);
       
-      console.log('🔔 Notification sound played');
+      console.log('🔔 Notification sound played successfully');
     } catch (error) {
-      console.warn('Failed to play notification sound:', error);
+      console.error('🔔 Failed to play notification sound:', error);
     }
   }, []);
 
@@ -652,6 +657,24 @@ const CustomerOrders: React.FC = () => {
                   setForceUpdate(prev => prev + 1);
                 }
                 
+                // Play sound for status changes
+                if (statusChanged) {
+                  console.log('🔔 CustomerOrders: Status changed from', oldStatus, 'to', newStatus, '- playing sound');
+                  // Trigger visual animation (if you have one)
+                  // Play notification sound when status changes
+                  setTimeout(() => {
+                    console.log('🔔 Attempting to play notification sound for status change');
+                    playNotificationSound();
+                  }, 200); // Delay to ensure state is updated and audio context is ready
+                } else if (paymentStatusChanged && newPaymentStatus === 'paid') {
+                  console.log('🔔 CustomerOrders: Payment confirmed, playing sound');
+                  // Play sound when payment is confirmed
+                  setTimeout(() => {
+                    console.log('🔔 Attempting to play notification sound for payment confirmation');
+                    playNotificationSound();
+                  }, 200);
+                }
+                
                 return {
                   ...order,
                   status: newStatus,
@@ -810,6 +833,23 @@ const CustomerOrders: React.FC = () => {
                 if (statusChanged && newStatus === 'payment_confirmed') {
                   console.log('💳 CRITICAL: Status changed to payment_confirmed - forcing immediate UI update');
                   setForceUpdate(prev => prev + 1);
+                }
+                
+                // Play sound for status changes
+                if (statusChanged) {
+                  console.log('🔔 CustomerOrders: Status changed from', oldStatus, 'to', newStatus, '- playing sound (payment-updated)');
+                  // Play notification sound when status changes
+                  setTimeout(() => {
+                    console.log('🔔 Attempting to play notification sound for status change (payment-updated)');
+                    playNotificationSound();
+                  }, 200); // Delay to ensure state is updated and audio context is ready
+                } else if (paymentStatusChanged && newPaymentStatus === 'paid') {
+                  console.log('🔔 CustomerOrders: Payment confirmed, playing sound (payment-updated)');
+                  // Play sound when payment is confirmed
+                  setTimeout(() => {
+                    console.log('🔔 Attempting to play notification sound for payment confirmation (payment-updated)');
+                    playNotificationSound();
+                  }, 200);
                 }
                 
                 return {
@@ -1207,14 +1247,9 @@ const CustomerOrders: React.FC = () => {
         return status;
       }
       
-      // If status is already preparing or ready, and we're still within the transition period
-      // Keep showing preparing until the transition period is over
-      if ((normalizedStatus === 'preparing' || normalizedStatus === 'ready' || normalizedStatus === 'processing')) {
-        // If less than 4 seconds have passed, force show preparing
-        if (timeSincePaymentConfirmed < transitionDelay) {
-          return 'preparing';
-        }
-      }
+      // REMOVED: No longer force showing "preparing" if status is already "ready"
+      // The status should reflect what the backend says - if it's "ready", show "ready"
+      // Admin/barista will update it manually and it will update dynamically via WebSocket
     }
     
     return status;
