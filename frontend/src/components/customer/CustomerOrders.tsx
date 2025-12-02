@@ -527,6 +527,7 @@ const CustomerOrders: React.FC = () => {
       newSocket.on('order-updated', (updateData) => {
         console.log('📡 Order updated received:', updateData);
         console.log('🔄 Processing order-updated event - updating state immediately');
+        console.log('📡 Current orders in state:', orders.map(o => ({ order_id: o.order_id, id: o.id, status: o.status, payment_status: o.payment_status })));
         
         // Update status history for tracking changes
         if (updateData.orderId || updateData.internalOrderId) {
@@ -542,8 +543,16 @@ const CustomerOrders: React.FC = () => {
         
         // CRITICAL: Optimistically update the order in state IMMEDIATELY
         // This matches guest tracking behavior - update state first, then optionally refetch
-        if ((updateData.orderId || updateData.internalOrderId) && (updateData.status || updateData.paymentStatus)) {
+        // IMPORTANT: Process update even if only paymentStatus is provided (payment verification)
+        if (updateData.orderId || updateData.internalOrderId) {
           setOrders(prevOrders => {
+            console.log('🔍 Checking', prevOrders.length, 'orders for match with update:', {
+              updateOrderId: updateData.orderId,
+              updateInternalOrderId: updateData.internalOrderId,
+              updateStatus: updateData.status,
+              updatePaymentStatus: updateData.paymentStatus
+            });
+            
             let updated = false;
             const updatedOrders = prevOrders.map(order => {
               // Enhanced matching: try multiple ID formats
@@ -561,6 +570,12 @@ const CustomerOrders: React.FC = () => {
                 String(order.id).includes(String(updateData.orderId || ''));
               
               if (matches) {
+                console.log('✅ Found matching order:', {
+                  order_id: order.order_id,
+                  id: order.id,
+                  current_status: order.status,
+                  current_payment_status: order.payment_status
+                });
                 updated = true;
                 const oldPaymentStatus = order.payment_status || (order as any).paymentStatus;
                 const oldStatus = order.status;
@@ -651,12 +666,26 @@ const CustomerOrders: React.FC = () => {
             
             if (updated) {
               console.log('✅ Order state updated optimistically - UI should update IMMEDIATELY');
+              console.log('✅ Updated orders:', updatedOrders.map(o => ({ 
+                order_id: o.order_id, 
+                status: o.status, 
+                payment_status: o.payment_status 
+              })));
             } else {
               console.warn('⚠️ No matching order found for update:', {
                 updateData_orderId: updateData.orderId,
                 updateData_internalOrderId: updateData.internalOrderId,
-                availableOrderIds: prevOrders.map(o => ({ order_id: o.order_id, id: o.id }))
+                updateData_status: updateData.status,
+                updateData_paymentStatus: updateData.paymentStatus,
+                availableOrderIds: prevOrders.map(o => ({ order_id: o.order_id, id: o.id, status: o.status }))
               });
+              // If no match found but we have an orderId, try to refetch orders
+              if (updateData.orderId || updateData.internalOrderId) {
+                console.log('🔄 No match found, will refetch orders to sync');
+                setTimeout(() => {
+                  fetchOrders();
+                }, 500);
+              }
             }
             
             return updatedOrders;
@@ -1164,8 +1193,9 @@ const CustomerOrders: React.FC = () => {
     
     // Only apply automatic transition if payment was just confirmed
     if (paymentConfirmedTimes[orderId] && normalizedPaymentStatus === 'paid') {
-      const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTimes[orderId].getTime();
-      const transitionDelay = 4000; // 4 seconds before transitioning to preparing
+      // Use nowTs to ensure re-renders happen when time updates
+      const timeSincePaymentConfirmed = nowTs - paymentConfirmedTimes[orderId].getTime();
+      const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before transitioning to preparing
       
       // If status is payment_confirmed or confirmed, check if we should transition to preparing
       if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
@@ -1748,37 +1778,40 @@ const CustomerOrders: React.FC = () => {
                          </div>
                          <div className="ml-4">
                            <h3 className="text-xl font-bold text-gray-900">
-                             {getCurrentOrder()?.status === 'completed' ? 'Order Completed' :
-                              getCurrentOrder()?.status === 'ready' ? 'Ready for Pickup' :
-                              getCurrentOrder()?.status === 'preparing' ? 'Preparing Your Order' :
-                              getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.payment_status === 'paid' ? 'Payment Confirmed' :
-                              'Order Received'}
+                             {(() => {
+                               const currentOrder = getCurrentOrder();
+                               const displayStatus = getDisplayStatus(currentOrder);
+                               if (displayStatus === 'completed') return 'Order Completed';
+                               if (displayStatus === 'ready') return 'Ready for Pickup';
+                               if (displayStatus === 'preparing') return 'Preparing Your Order';
+                               if (displayStatus === 'payment_confirmed') return 'Payment Confirmed';
+                               return 'Order Received';
+                             })()}
                            </h3>
                            <p className="text-sm text-gray-600">
-                             {getCurrentOrder()?.status === 'completed' ? 'Your delicious order is ready!' :
-                              getCurrentOrder()?.status === 'ready' ? 'Your order is ready for pickup!' :
-                              getCurrentOrder()?.status === 'preparing' ? 'Your delicious order is being carefully prepared.' :
-                              getCurrentOrder()?.status === 'payment_confirmed' || getCurrentOrder()?.payment_status === 'paid' ? 'Your payment has been verified and confirmed.' :
-                              'Your order has been received and is being processed.'}
+                             {(() => {
+                               const currentOrder = getCurrentOrder();
+                               const displayStatus = getDisplayStatus(currentOrder);
+                               if (displayStatus === 'completed') return 'Your delicious order is ready!';
+                               if (displayStatus === 'ready') return 'Your order is ready for pickup!';
+                               if (displayStatus === 'preparing') return 'Your delicious order is being carefully prepared.';
+                               if (displayStatus === 'payment_confirmed') return 'Your payment has been verified and confirmed.';
+                               return 'Your order has been received and is being processed.';
+                             })()}
                            </p>
                          </div>
                        </div>
                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                          (() => {
                            const currentOrder = getCurrentOrder();
-                           const status = currentOrder?.status?.toString().toLowerCase();
-                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
-                           console.log('CustomerOrders status badge - raw status:', currentOrder?.status, 'payment_status:', paymentStatus, 'normalized:', status);
+                           const displayStatus = getDisplayStatus(currentOrder);
+                           const status = displayStatus?.toString().toLowerCase();
+                           console.log('CustomerOrders status badge - display status:', displayStatus, 'raw status:', currentOrder?.status);
                            
                           // Handle null/undefined status - default to VERIFYING color
-                          if (!currentOrder?.status) {
+                          if (!displayStatus) {
                              return 'bg-amber-100 text-amber-800';
                            }
-                           
-                          // If payment is paid but status is not payment_confirmed or beyond, show payment_confirmed color
-                          if (paymentStatus === 'paid' && status !== 'payment_confirmed' && status !== 'preparing' && status !== 'ready' && status !== 'completed') {
-                            return 'bg-blue-100 text-blue-800';
-                          }
                            
                            if (status === 'completed') return 'bg-green-100 text-green-800';
                            if (status === 'ready') return 'bg-blue-100 text-blue-800';

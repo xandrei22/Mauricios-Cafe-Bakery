@@ -105,7 +105,7 @@ const GuestOrderTracking: React.FC = () => {
     // Only apply automatic transition if payment was just confirmed
     if (paymentConfirmedTime && normalizedPaymentStatus === 'paid') {
       const timeSincePaymentConfirmed = Date.now() - paymentConfirmedTime.getTime();
-      const transitionDelay = 4000; // 4 seconds before automatically transitioning to preparing
+      const transitionDelay = 4000; // 4 seconds (within 3-5 second range) before automatically transitioning to preparing
       
       // If status is payment_confirmed or confirmed, check if we should transition to preparing
       if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
@@ -495,9 +495,15 @@ const GuestOrderTracking: React.FC = () => {
           currentLongOrderId,
           normalizedCurrentId,
           activeOrderId,
-          orderIdMatches
+          orderIdMatches,
+          currentOrderIdRef: currentOrderIdRef.current
         });
-        return;
+        // If we're in the order room and have an order, still try to process if it's a payment update
+        // This handles cases where order ID format might be slightly different
+        if (!order || !payload.paymentStatus) {
+          return;
+        }
+        console.log('🔔 GuestOrderTracking: Order ID mismatch but processing payment update anyway');
       }
       
       console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
@@ -505,14 +511,8 @@ const GuestOrderTracking: React.FC = () => {
         currentLongOrderId,
         status: payload.status,
         paymentStatus: payload.paymentStatus,
-        orderIdMatches
-      });
-      
-      console.log('🔔 GuestOrderTracking: Order ID matches, processing update:', {
-        payloadOrderId,
-        currentLongOrderId,
-        status: payload.status,
-        paymentStatus: payload.paymentStatus
+        orderIdMatches,
+        hasOrder: !!order
       });
       
       setOrder(prev => {
@@ -557,8 +557,10 @@ const GuestOrderTracking: React.FC = () => {
         const updatedOrder = {
           ...prev,
           // Only update fields that are explicitly provided in payload
-          status: newStatus || prev.status,
-          paymentStatus: newPaymentStatus || prev.paymentStatus,
+          // CRITICAL: Use newStatus if it was set, otherwise keep prev.status
+          // Don't use || operator as it will fallback to prev.status if newStatus is falsy
+          status: newStatus !== undefined && newStatus !== null ? newStatus : prev.status,
+          paymentStatus: newPaymentStatus !== undefined && newPaymentStatus !== null ? newPaymentStatus : prev.paymentStatus,
           paymentMethod: payload.paymentMethod !== undefined ? payload.paymentMethod : prev.paymentMethod,
           // Only update these if provided, otherwise keep existing
           items: (payload as any).items || prev.items,
@@ -596,6 +598,13 @@ const GuestOrderTracking: React.FC = () => {
           setPaymentConfirmedTime(new Date());
           // Force immediate re-render to show payment_confirmed status
           setLastUpdate(new Date());
+          // Also trigger a refetch after a short delay to ensure backend state is synced
+          setTimeout(() => {
+            if (updatedOrder.orderId) {
+              console.log('🔔 GuestOrderTracking: Refetching order to ensure state is synced');
+              fetchOrder(updatedOrder.orderId);
+            }
+          }, 1000);
         }
         
         // If status changed to payment_confirmed, ensure UI updates immediately
