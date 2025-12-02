@@ -158,6 +158,14 @@ const GuestOrderTracking: React.FC = () => {
     const normalizedStatus = displayStatus.toLowerCase().trim();
     const normalizedPaymentStatus = paymentStatus?.toLowerCase().trim();
     
+    console.log('🔍 getProgressPercentage called:', {
+      status,
+      paymentStatus,
+      displayStatus,
+      normalizedStatus,
+      normalizedPaymentStatus
+    });
+    
     // Handle cancelled orders first
     if (normalizedStatus === 'cancelled') {
       return 0;
@@ -166,48 +174,55 @@ const GuestOrderTracking: React.FC = () => {
     // Progress calculation based on order status and payment status
     // The flow should be: Order Received (20%) → Payment Confirmed (40%) → Preparing (60%) → Ready (80%) → Completed (100%)
     
+    // CRITICAL: Check payment status FIRST - if payment is paid, we're at least at 40%
+    // This ensures progress bar updates immediately when payment is verified
+    if (normalizedPaymentStatus === 'paid') {
+      // Step 2: Payment Confirmed (40%)
+      if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification' || 
+          normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+        console.log('✅ Progress: 40% (Payment confirmed)');
+        return 40;
+      }
+      
+      // Step 3: Preparing (60%)
+      if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+        console.log('✅ Progress: 60% (Preparing)');
+        return 60;
+      }
+      
+      // Step 4: Ready (80%)
+      if (normalizedStatus === 'ready') {
+        console.log('✅ Progress: 80% (Ready)');
+        return 80;
+      }
+      
+      // Step 5: Completed (100%)
+      if (normalizedStatus === 'completed') {
+        console.log('✅ Progress: 100% (Completed)');
+        return 100;
+      }
+      
+      // Default: if payment is paid but status unknown, assume payment confirmed (40%)
+      console.log('✅ Progress: 40% (Default - payment paid)');
+      return 40;
+    }
+    
     // Step 1: Order Received (20%)
     // Order is placed but payment not yet verified
     if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
-      // If payment is already paid, we're at payment confirmed stage (40%)
-      if (normalizedPaymentStatus === 'paid') {
-        return 40;
-      }
-      // Otherwise, order is just received (20%)
+      console.log('✅ Progress: 20% (Order received, payment not verified)');
       return 20;
     }
     
-    // Step 2: Payment Confirmed (40%)
-    // Payment has been verified
+    // If status is confirmed/payment_confirmed but payment not paid, still show 20%
     if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
-      return 40;
+      console.log('✅ Progress: 20% (Status confirmed but payment not verified)');
+      return 20;
     }
     
-    // Step 3: Preparing (60%)
-    // Order is being prepared
-    if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
-      return 60;
-    }
-    
-    // Step 4: Ready (80%)
-    // Order is ready for pickup
-    if (normalizedStatus === 'ready') {
-      return 80;
-    }
-    
-    // Step 5: Completed (100%)
-    // Order is completed
-    if (normalizedStatus === 'completed') {
-      return 100;
-    }
-    
-    // Default: if payment is paid, assume we're at payment confirmed (40%)
-    // Otherwise, assume order is just received (20%)
-    if (normalizedPaymentStatus === 'paid') {
-      return 40;
-    }
-    
-    return 20; // Default to order received
+    // Default to order received (20%)
+    console.log('✅ Progress: 20% (Default - order received)');
+    return 20;
   };
 
   const playNotificationSound = useCallback(async () => {
@@ -762,12 +777,17 @@ const GuestOrderTracking: React.FC = () => {
             console.log('🔔 GuestOrderTracking: Forcing status to payment_confirmed for immediate display');
             finalUpdatedOrder.status = 'payment_confirmed';
           }
-          // Force immediate re-render to show payment_confirmed status and update progress bar
+          // CRITICAL: Force immediate re-render to show payment_confirmed status and update progress bar
+          // Use requestAnimationFrame for smoother updates
+          console.log('🔔 GuestOrderTracking: Payment verified - forcing progress bar update to 40%');
           setLastUpdate(new Date());
-          // Force multiple updates to ensure UI reflects the change (progress bar, status icons, colors)
-          setTimeout(() => setLastUpdate(new Date()), 50);
-          setTimeout(() => setLastUpdate(new Date()), 100);
-          setTimeout(() => setLastUpdate(new Date()), 200);
+          requestAnimationFrame(() => {
+            setLastUpdate(new Date());
+            setTimeout(() => setLastUpdate(new Date()), 50);
+            setTimeout(() => setLastUpdate(new Date()), 100);
+            setTimeout(() => setLastUpdate(new Date()), 200);
+            setTimeout(() => setLastUpdate(new Date()), 500);
+          });
           // CRITICAL: Don't refetch immediately after payment verification
           // The socket update already has the correct status, and refetching might overwrite it with stale data
           // Only refetch if we don't have the order data yet
@@ -1096,6 +1116,8 @@ const GuestOrderTracking: React.FC = () => {
               <CardContent>
                 {/* Progress Bar */}
                 {(() => {
+                  // CRITICAL: Recalculate displayStatus and progressPercentage on every render
+                  // This ensures progress bar updates immediately when payment is verified
                   const displayStatus = getDisplayStatus(order.status, order.paymentStatus);
                   const progressPercentage = getProgressPercentage(displayStatus, order.paymentStatus);
                   const progressWidth = `${progressPercentage}%`;
@@ -1104,10 +1126,19 @@ const GuestOrderTracking: React.FC = () => {
                   const ariaValueMin = 0;
                   const ariaValueMax = 100;
                   
-                  // CRITICAL: Add key to force re-render when status or lastUpdate changes
-                  // This ensures progress bar updates immediately when status changes to 'ready'
+                  console.log('🔍 Progress Bar calculation:', {
+                    orderId: order.orderId,
+                    rawStatus: order.status,
+                    paymentStatus: order.paymentStatus,
+                    displayStatus,
+                    progressPercentage,
+                    lastUpdate: lastUpdate?.getTime()
+                  });
+                  
+                  // CRITICAL: Add key to force re-render when status, paymentStatus, or lastUpdate changes
+                  // This ensures progress bar updates immediately when payment is verified or status changes
                   return (
-                    <div className="mb-6" key={`progress-bar-${order.orderId || 'unknown'}-${order.status}-${lastUpdate?.getTime()}`}>
+                    <div className="mb-6" key={`progress-bar-${order.orderId || 'unknown'}-${order.status}-${order.paymentStatus}-${lastUpdate?.getTime()}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-700">Progress</span>
                         <div className="flex items-center gap-2">

@@ -1472,33 +1472,51 @@ const CustomerOrders: React.FC = () => {
 
     // Progress calculation based on order status and payment status
     // The flow should be: Order Received (20%) → Payment Confirmed (40%) → Preparing (60%) → Ready (80%) → Completed (100%)
-    // IMPORTANT: Check payment status FIRST before checking order status to ensure proper progression
-
+    // CRITICAL: Check payment status FIRST - if payment is paid, we're at least at 40%
+    // This ensures progress bar updates immediately when payment is verified
+    
+    if (normalizedPaymentStatus === 'paid') {
+      // Step 2: Payment Confirmed (40%)
+      if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification' || 
+          normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
+        console.log('✅ Progress: 40% (Payment confirmed)');
+        return 40;
+      }
+      
+      // Step 3: Preparing (60%)
+      if (normalizedStatus === 'processing' || normalizedStatus === 'preparing') {
+        console.log('✅ Progress: 60% (Preparing)');
+        return 60;
+      }
+      
+      // Step 4: Ready (80%)
+      if (normalizedStatus === 'ready') {
+        console.log('✅ Progress: 80% (Ready)');
+        return 80;
+      }
+      
+      // Step 5: Completed (100%)
+      if (normalizedStatus === 'completed') {
+        console.log('✅ Progress: 100% (Completed)');
+        return 100;
+      }
+      
+      // Default: if payment is paid but status unknown, assume payment confirmed (40%)
+      console.log('✅ Progress: 40% (Default - payment paid)');
+      return 40;
+    }
+    
     // Step 1: Order Received (20%)
     // Order is placed but payment not yet verified
     if (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification') {
-      // If payment is already paid, we're at payment confirmed stage (40%)
-      if (normalizedPaymentStatus === 'paid') {
-        console.log('✅ Progress: 40% (Payment verified, status still pending)');
-        return 40;
-      }
-      // Otherwise, order is just received (20%)
       console.log('✅ Progress: 20% (Order received, payment not verified)');
       return 20;
     }
-
-    // Step 2: Payment Confirmed (40%)
-    // Payment has been verified OR status is payment_confirmed
+    
+    // If status is confirmed/payment_confirmed but payment not paid, still show 20%
     if (normalizedStatus === 'confirmed' || normalizedStatus === 'payment_confirmed') {
-      console.log('✅ Progress: 40% (Payment confirmed status)');
-      return 40;
-    }
-
-    // IMPORTANT: If payment is paid but status hasn't updated yet, we're at 40%
-    // This handles the case where payment is verified but order status is still pending
-    if (normalizedPaymentStatus === 'paid' && (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification')) {
-      console.log('✅ Progress: 40% (Payment paid, status pending)');
-      return 40;
+      console.log('✅ Progress: 20% (Status confirmed but payment not verified)');
+      return 20;
     }
 
     // Step 3: Preparing (60%)
@@ -2125,12 +2143,14 @@ const CustomerOrders: React.FC = () => {
                             payment_status_raw: currentOrder?.payment_status,
                             paymentStatus_alt: (currentOrder as any)?.paymentStatus,
                             progress,
-                            timestamp: Date.now()
+                            timestamp: Date.now(),
+                            forceUpdate,
+                            nowTs
                           });
                           return progress;
                         })()}
                         variant="amber"
-                        key={`progress-${getCurrentOrder()?.order_id}-${getCurrentOrder()?.payment_status}-${nowTs}-${forceUpdate}`}
+                        key={`progress-${getCurrentOrder()?.order_id}-${getCurrentOrder()?.status}-${getCurrentOrder()?.payment_status || (getCurrentOrder() as any)?.paymentStatus || 'pending'}-${nowTs}-${forceUpdate}`}
                       />
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
