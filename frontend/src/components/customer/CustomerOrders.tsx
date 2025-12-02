@@ -563,23 +563,42 @@ const CustomerOrders: React.FC = () => {
               if (matches) {
                 updated = true;
                 const oldPaymentStatus = order.payment_status || (order as any).paymentStatus;
+                const oldStatus = order.status;
                 // IMPORTANT: Always use updateData.paymentStatus if provided, otherwise keep existing
                 const newPaymentStatus = updateData.paymentStatus !== undefined && updateData.paymentStatus !== null 
                                        ? updateData.paymentStatus 
                                        : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
                 
+                // CRITICAL FIX: When payment is verified, always update status to 'payment_confirmed'
+                // This ensures the transition from 'confirmed' to 'payment_confirmed' works correctly
+                let newStatus = updateData.status !== undefined && updateData.status !== null 
+                              ? updateData.status 
+                              : order.status;
+                
+                // If payment status changed to 'paid' and status is not already 'payment_confirmed', update it
+                if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
+                  if (newStatus !== 'payment_confirmed' && (oldStatus === 'confirmed' || oldStatus === 'pending' || oldStatus === 'pending_verification')) {
+                    newStatus = 'payment_confirmed';
+                    console.log('💳 CRITICAL: Payment verified - updating status from', oldStatus, 'to payment_confirmed');
+                  }
+                }
+                
+                const statusChanged = oldStatus !== newStatus;
+                
                 console.log('✅ IMMEDIATELY updating order in state (order-updated):', {
                   order_id: order.order_id,
                   updateOrderId: updateOrderId,
                   updateData_orderId: updateData.orderId,
                   updateData_internalOrderId: updateData.internalOrderId,
-                  old_status: order.status,
-                  new_status: updateData.status,
+                  old_status: oldStatus,
+                  new_status: newStatus,
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   updateData_paymentStatus: updateData.paymentStatus,
-                  paymentStatusChanged
+                  updateData_status: updateData.status,
+                  paymentStatusChanged,
+                  statusChanged
                 });
                 
                 // If payment status changed to 'paid', this is a critical update
@@ -593,15 +612,19 @@ const CustomerOrders: React.FC = () => {
                       [String(orderIdKey)]: new Date()
                     }));
                   }
-                  // Force component re-render to update progress bar
-                  setTimeout(() => {
-                    setForceUpdate(prev => prev + 1);
-                  }, 50);
+                  // Force component re-render to update progress bar immediately
+                  setForceUpdate(prev => prev + 1);
+                }
+                
+                // Also force re-render if status changed
+                if (statusChanged) {
+                  console.log('🔄 Status changed from', oldStatus, 'to', newStatus, '- forcing re-render');
+                  setForceUpdate(prev => prev + 1);
                 }
                 
                 return {
                   ...order,
-                  status: updateData.status !== undefined ? updateData.status : order.status,
+                  status: newStatus,
                   payment_status: newPaymentStatus,
                   // Also set paymentStatus alias for compatibility
                   paymentStatus: newPaymentStatus,
@@ -671,11 +694,28 @@ const CustomerOrders: React.FC = () => {
               if (matches) {
                 updated = true;
                 const oldPaymentStatus = order.payment_status || (order as any).paymentStatus;
+                const oldStatus = order.status;
                 // IMPORTANT: Always use paymentData.paymentStatus if provided, otherwise keep existing
                 const newPaymentStatus = paymentData.paymentStatus !== undefined && paymentData.paymentStatus !== null 
                                        ? paymentData.paymentStatus 
                                        : oldPaymentStatus;
                 const paymentStatusChanged = oldPaymentStatus !== newPaymentStatus;
+                
+                // CRITICAL FIX: When payment is verified, always update status to 'payment_confirmed'
+                // This ensures the transition from 'confirmed' to 'payment_confirmed' works correctly
+                let newStatus = paymentData.status !== undefined && paymentData.status !== null 
+                              ? paymentData.status 
+                              : order.status;
+                
+                // If payment status changed to 'paid' and status is not already 'payment_confirmed', update it
+                if (paymentStatusChanged && newPaymentStatus === 'paid' && oldPaymentStatus !== 'paid') {
+                  if (newStatus !== 'payment_confirmed' && (oldStatus === 'confirmed' || oldStatus === 'pending' || oldStatus === 'pending_verification')) {
+                    newStatus = 'payment_confirmed';
+                    console.log('💳 CRITICAL: Payment verified via payment-updated - updating status from', oldStatus, 'to payment_confirmed');
+                  }
+                }
+                
+                const statusChanged = oldStatus !== newStatus;
                 
                 console.log('✅ IMMEDIATELY updating order payment in state (payment-updated):', {
                   order_id: order.order_id,
@@ -685,9 +725,11 @@ const CustomerOrders: React.FC = () => {
                   old_payment_status: oldPaymentStatus,
                   new_payment_status: newPaymentStatus,
                   paymentData_paymentStatus: paymentData.paymentStatus,
-                  old_status: order.status,
-                  new_status: paymentData.status,
-                  paymentStatusChanged
+                  old_status: oldStatus,
+                  new_status: newStatus,
+                  paymentData_status: paymentData.status,
+                  paymentStatusChanged,
+                  statusChanged
                 });
                 
                 // If payment status changed to 'paid', this is a critical update
@@ -701,15 +743,19 @@ const CustomerOrders: React.FC = () => {
                       [String(orderIdKey)]: new Date()
                     }));
                   }
-                  // Force component re-render to update progress bar
-                  setTimeout(() => {
-                    setForceUpdate(prev => prev + 1);
-                  }, 50);
+                  // Force component re-render to update progress bar immediately
+                  setForceUpdate(prev => prev + 1);
+                }
+                
+                // Also force re-render if status changed
+                if (statusChanged) {
+                  console.log('🔄 Status changed from', oldStatus, 'to', newStatus, '- forcing re-render');
+                  setForceUpdate(prev => prev + 1);
                 }
                 
                 return {
                   ...order,
-                  status: paymentData.status !== undefined ? paymentData.status : order.status,
+                  status: newStatus,
                   payment_status: newPaymentStatus,
                   // Also set paymentStatus alias for compatibility
                   paymentStatus: newPaymentStatus,
