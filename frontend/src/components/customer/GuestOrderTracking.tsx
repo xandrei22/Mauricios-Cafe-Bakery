@@ -43,6 +43,7 @@ const GuestOrderTracking: React.FC = () => {
   const previousStatusRef = useRef<string | null>(null);
   const previousPaymentStatusRef = useRef<string | null>(null);
   const currentOrderIdRef = useRef<string | null>(null);
+  const orderSoundPlayedRef = useRef<Set<string>>(new Set()); // Track which orders have played sound
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -113,17 +114,21 @@ const GuestOrderTracking: React.FC = () => {
           timeSincePaymentConfirmed,
           transitionDelay,
           normalizedStatus,
-          shouldTransition: timeSincePaymentConfirmed >= transitionDelay && (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed')
+          paymentConfirmedTime: paymentConfirmedTime.getTime(),
+          shouldTransition: timeSincePaymentConfirmed >= transitionDelay && (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed' || normalizedStatus === 'pending' || normalizedStatus === 'pending_verification')
         });
         
-        // If status is payment_confirmed or confirmed, check if we should transition to preparing
-        if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed') {
+        // If status is payment_confirmed, confirmed, pending, or pending_verification (and payment is paid),
+        // check if we should transition to preparing after the delay
+        if (normalizedStatus === 'payment_confirmed' || normalizedStatus === 'confirmed' || 
+            (normalizedStatus === 'pending' || normalizedStatus === 'pending_verification')) {
           // After 4 seconds, automatically transition to preparing
           if (timeSincePaymentConfirmed >= transitionDelay) {
-            console.log('🔔 GuestOrderTracking: Auto-transitioning from payment_confirmed to preparing');
+            console.log('🔔 GuestOrderTracking: Auto-transitioning from payment_confirmed to preparing (after', timeSincePaymentConfirmed, 'ms)');
             return 'preparing';
           }
           // Before 4 seconds, still show payment_confirmed
+          console.log('🔔 GuestOrderTracking: Still showing payment_confirmed (', timeSincePaymentConfirmed, 'ms <', transitionDelay, 'ms)');
           return 'payment_confirmed';
         }
         
@@ -333,6 +338,12 @@ const GuestOrderTracking: React.FC = () => {
           paymentStatus: fetchedOrder.paymentStatus,
           paymentMethod: fetchedOrder.paymentMethod
         });
+        
+        // Check if this is a new order (order wasn't previously set) or if it's the first time loading
+        const isNewOrder = !order;
+        const previousOrderId = order?.orderId;
+        const isFirstLoad = !previousOrderId || previousOrderId !== fetchedOrder.orderId;
+        
         setOrder(fetchedOrder);
         // Use the orderId directly from the API response (long format like ORD-1764039875901-qb6xvn1fj)
         // This is the format the backend uses for socket rooms
@@ -347,6 +358,26 @@ const GuestOrderTracking: React.FC = () => {
         if (socket && socket.connected) {
           console.log('🔌 GuestOrderTracking: Joining socket room with long order ID:', longOrderId);
           socket.emit('join-order-room', longOrderId);
+        }
+        
+        // Play notification sound when order is first loaded/placed
+        // This happens when customer places order and navigates to tracking page
+        // Use orderId to track if we've already played sound for this order
+        const orderIdKey = longOrderId || fetchedOrder.orderId;
+        const hasPlayedSound = orderSoundPlayedRef.current.has(orderIdKey);
+        
+        if ((isNewOrder || isFirstLoad) && !hasPlayedSound) {
+          console.log('🔔 GuestOrderTracking: Order first loaded - playing notification sound');
+          // Mark that we've played sound for this order
+          orderSoundPlayedRef.current.add(orderIdKey);
+          // Trigger visual animation
+          setStatusUpdateAnimation(true);
+          setTimeout(() => setStatusUpdateAnimation(false), 2000);
+          // Play notification sound after a short delay to ensure audio context is ready
+          setTimeout(() => {
+            console.log('🔔 Attempting to play notification sound for order placement');
+            playNotificationSound();
+          }, 500); // Increased delay to ensure audio context is ready
         }
       } else {
         setError(data.message || 'Order not found');
@@ -644,11 +675,23 @@ const GuestOrderTracking: React.FC = () => {
         // This delay is for auto-transitioning from payment_confirmed to preparing (not for showing payment_confirmed)
         if (paymentStatusChanged && finalUpdatedOrder.paymentStatus === 'paid' && previousPaymentStatus !== 'paid') {
           console.log('🔔 GuestOrderTracking: Payment verified, setting confirmation time for auto-transition to preparing');
-          setPaymentConfirmedTime(new Date());
+          const confirmationTime = new Date();
+          setPaymentConfirmedTime(confirmationTime);
+          // CRITICAL: Ensure status is set to payment_confirmed immediately for display
+          // This ensures the UI shows payment_confirmed with brown color and 40% progress immediately
+          if (finalUpdatedOrder.status !== 'payment_confirmed' && 
+              finalUpdatedOrder.status !== 'preparing' && 
+              finalUpdatedOrder.status !== 'ready' && 
+              finalUpdatedOrder.status !== 'completed') {
+            console.log('🔔 GuestOrderTracking: Forcing status to payment_confirmed for immediate display');
+            finalUpdatedOrder.status = 'payment_confirmed';
+          }
           // Force immediate re-render to show payment_confirmed status and update progress bar
           setLastUpdate(new Date());
-          // Force another update to ensure UI reflects the change
+          // Force multiple updates to ensure UI reflects the change (progress bar, status icons, colors)
           setTimeout(() => setLastUpdate(new Date()), 50);
+          setTimeout(() => setLastUpdate(new Date()), 100);
+          setTimeout(() => setLastUpdate(new Date()), 200);
           // Also trigger a refetch after a short delay to ensure backend state is synced
           setTimeout(() => {
             if (finalUpdatedOrder.orderId) {
@@ -1015,7 +1058,7 @@ const GuestOrderTracking: React.FC = () => {
                               displayStatus === 'preparing' || 
                               displayStatus === 'ready' || 
                               displayStatus === 'completed' || 
-                              order.paymentStatus === 'paid'
+                              (order.paymentStatus === 'paid' && (displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'confirmed'))
                                 ? 'bg-[#a87437] text-white' 
                                 : 'bg-gray-300 text-gray-600'
                             }`}>
@@ -1028,7 +1071,7 @@ const GuestOrderTracking: React.FC = () => {
                               displayStatus === 'preparing' || 
                               displayStatus === 'ready' || 
                               displayStatus === 'completed' || 
-                              order.paymentStatus === 'paid'
+                              (order.paymentStatus === 'paid' && (displayStatus === 'pending' || displayStatus === 'pending_verification' || displayStatus === 'confirmed'))
                                 ? 'text-[#a87437]' : 'text-gray-600'
                             }`}>
                               Payment Confirmed

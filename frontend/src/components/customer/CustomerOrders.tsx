@@ -1108,7 +1108,17 @@ const CustomerOrders: React.FC = () => {
                     ...order,
                     payment_status: order.payment_status || order.paymentStatus || 'pending'
                   }));
+                  // Check if this is the first time loading orders
+                  const isFirstLoad = orders.length === 0 && ordersWithPaymentStatus.length > 0;
                   setOrders(ordersWithPaymentStatus);
+                  // Play notification sound when orders are first loaded
+                  if (isFirstLoad) {
+                    console.log('🔔 CustomerOrders: Orders first loaded (test endpoint) - playing notification sound');
+                    setTimeout(() => {
+                      console.log('🔔 Attempting to play notification sound for order placement');
+                      playNotificationSound();
+                    }, 300);
+                  }
                   return;
                 }
               }
@@ -1133,7 +1143,17 @@ const CustomerOrders: React.FC = () => {
                       ...order,
                       payment_status: order.payment_status || order.paymentStatus || 'pending'
                     }));
+                    // Check if this is the first time loading orders
+                    const isFirstLoad = orders.length === 0 && ordersWithPaymentStatus.length > 0;
                     setOrders(ordersWithPaymentStatus);
+                    // Play notification sound when orders are first loaded
+                    if (isFirstLoad) {
+                      console.log('🔔 CustomerOrders: Orders first loaded (alternative endpoint) - playing notification sound');
+                      setTimeout(() => {
+                        console.log('🔔 Attempting to play notification sound for order placement');
+                        playNotificationSound();
+                      }, 300);
+                    }
                     return;
                   }
                 }
@@ -1179,7 +1199,66 @@ const CustomerOrders: React.FC = () => {
             payment_status: o.payment_status
           })));
           
-          setOrders(ordersWithPaymentStatus);
+          // Check if this is the first time loading orders (no previous orders)
+          const isFirstLoad = orders.length === 0 && ordersWithPaymentStatus.length > 0;
+          const hasNewOrders = ordersWithPaymentStatus.length > orders.length;
+          
+          // CRITICAL: Before setting orders, preserve optimistic updates (especially payment_confirmed status)
+          // This prevents refetch from overwriting the optimistic status update
+          setOrders(prevOrders => {
+            const updatedOrders = ordersWithPaymentStatus.map((newOrder: Order) => {
+              // Find matching order in previous state
+              const prevOrder = prevOrders.find(o => 
+                o.order_id === newOrder.order_id || o.id === newOrder.order_id || o.id === newOrder.id
+              );
+              
+              // If we have a previous order with optimistic payment_confirmed status, preserve it
+              if (prevOrder) {
+                const prevPaymentStatus = prevOrder.payment_status || (prevOrder as any).paymentStatus;
+                const newPaymentStatus = newOrder.payment_status || (newOrder as any).paymentStatus;
+                const prevStatus = prevOrder.status;
+                const newStatus = newOrder.status;
+                
+                // If previous order had payment_confirmed status and new order doesn't, preserve the optimistic update
+                if (prevStatus === 'payment_confirmed' && newStatus !== 'payment_confirmed' && 
+                    prevPaymentStatus === 'paid' && newPaymentStatus === 'paid') {
+                  console.log('💳 CRITICAL: Preserving optimistic payment_confirmed status for order', newOrder.order_id);
+                  return {
+                    ...newOrder,
+                    status: 'payment_confirmed' as Order['status'],
+                    payment_status: 'paid' as Order['payment_status']
+                  };
+                }
+                
+                // If previous order had payment_confirmed or preparing status and new order has a lower status, preserve the higher status
+                if ((prevStatus === 'payment_confirmed' || prevStatus === 'preparing') && 
+                    (newStatus === 'pending' || newStatus === 'pending_verification' || newStatus === 'confirmed') &&
+                    prevPaymentStatus === 'paid' && newPaymentStatus === 'paid') {
+                  console.log('💳 CRITICAL: Preserving optimistic status', prevStatus, 'for order', newOrder.order_id);
+                  return {
+                    ...newOrder,
+                    status: prevStatus,
+                    payment_status: 'paid' as Order['payment_status']
+                  };
+                }
+              }
+              
+              return newOrder;
+            });
+            
+            return updatedOrders;
+          });
+          
+          // Play notification sound when orders are first loaded (when customer places order)
+          // This happens when customer places order and navigates to orders page
+          if (isFirstLoad || hasNewOrders) {
+            console.log('🔔 CustomerOrders: Orders first loaded or new orders detected - playing notification sound');
+            // Play notification sound after a short delay to ensure audio context is ready
+            setTimeout(() => {
+              console.log('🔔 Attempting to play notification sound for order placement');
+              playNotificationSound();
+            }, 300);
+          }
           
           // CRITICAL: Set paymentConfirmedTime for orders that are already paid
           // This ensures auto-transition from payment_confirmed to preparing works even if page was refreshed
@@ -1952,21 +2031,15 @@ const CustomerOrders: React.FC = () => {
                        }`}>
                          {(() => {
                            const currentOrder = getCurrentOrder();
-                           const rawStatus = currentOrder?.status;
-                           const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
-                           const status = rawStatus?.toString().toLowerCase();
-                           console.log('🔍 CustomerOrders status badge - raw status:', rawStatus, 'payment_status:', paymentStatus, 'normalized:', status);
+                           const displayStatus = getDisplayStatus(currentOrder);
+                           const status = displayStatus?.toString().toLowerCase();
+                           console.log('🔍 CustomerOrders status badge - display status:', displayStatus, 'raw status:', currentOrder?.status);
                            
                            // Handle null/undefined status - default to VERIFYING
-                           if (!rawStatus) {
-                             console.error('❌ CustomerOrders - Invalid status detected:', rawStatus);
+                           if (!displayStatus) {
+                             console.error('❌ CustomerOrders - Invalid display status detected:', displayStatus);
                              console.error('❌ CustomerOrders - Full currentOrder:', currentOrder);
                              return 'VERIFYING'; // Default to VERIFYING instead of ERROR
-                           }
-                           
-                           // If payment is paid but status is not payment_confirmed or beyond, show PAYMENT CONFIRMED
-                           if (paymentStatus === 'paid' && status !== 'payment_confirmed' && status !== 'preparing' && status !== 'ready' && status !== 'completed') {
-                             return 'PAYMENT CONFIRMED';
                            }
                            
                            if (status === 'completed') return 'COMPLETED';
@@ -1979,7 +2052,7 @@ const CustomerOrders: React.FC = () => {
                            if (status === 'cancelled') return 'CANCELLED';
                            if (status === 'processing') return 'PROCESSING';
                            
-                           console.warn('❌ CustomerOrders - Unknown status for badge text:', { rawStatus, status, type: typeof rawStatus });
+                           console.warn('❌ CustomerOrders - Unknown status for badge text:', { displayStatus, status, type: typeof displayStatus });
                            return 'UNKNOWN';
                          })()}
                        </div>
@@ -2055,7 +2128,7 @@ const CustomerOrders: React.FC = () => {
                    </div>
 
                    {/* Order Progress Steps */}
-                   <div className="p-6 border-t border-gray-100">
+                   <div className="p-6 border-t border-gray-100" key={`progress-steps-${getCurrentOrder()?.order_id}-${nowTs}-${forceUpdate}`}>
                      <h4 className="text-lg font-bold text-gray-900 mb-4">Order Progress</h4>
                      <div className="relative">
                        {/* Single continuous vertical line */}
@@ -2101,17 +2174,20 @@ const CustomerOrders: React.FC = () => {
                          {/* Payment Confirmed */}
                          {(() => {
                            const currentOrder = getCurrentOrder();
+                           const displayStatus = getDisplayStatus(currentOrder);
                            const paymentStatus = currentOrder?.payment_status || (currentOrder as any)?.paymentStatus;
+                           // Payment is confirmed if display status is payment_confirmed or beyond, OR if payment is paid
                            const isPaymentConfirmed = 
-                             currentOrder?.status === 'payment_confirmed' || 
-                             currentOrder?.status === 'preparing' || 
-                             currentOrder?.status === 'ready' || 
-                             currentOrder?.status === 'completed' || 
+                             displayStatus === 'payment_confirmed' || 
+                             displayStatus === 'preparing' || 
+                             displayStatus === 'ready' || 
+                             displayStatus === 'completed' || 
                              paymentStatus === 'paid';
                            
                            console.log('🔍 Payment Confirmed step check:', {
                              orderId: currentOrder?.order_id,
-                             status: currentOrder?.status,
+                             rawStatus: currentOrder?.status,
+                             displayStatus,
                              payment_status: paymentStatus,
                              isPaymentConfirmed
                            });
@@ -2141,70 +2217,98 @@ const CustomerOrders: React.FC = () => {
                          })()}
 
                          {/* Preparing */}
-                         <div className="flex items-center">
-                           <div className="relative z-10">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                               getCurrentOrder()?.status === 'preparing' || getCurrentOrder()?.status === 'ready' || 
-                               getCurrentOrder()?.status === 'completed'
-                                 ? 'bg-[#a87437] text-white' 
-                                 : 'bg-gray-300 text-gray-600'
-                             }`}>
-                               <Loader2 className={`h-4 w-4 ${getCurrentOrder()?.status === 'preparing' ? 'animate-spin' : ''}`} />
+                         {(() => {
+                           const currentOrder = getCurrentOrder();
+                           const displayStatus = getDisplayStatus(currentOrder);
+                           const isPreparing = displayStatus === 'preparing' || displayStatus === 'ready' || displayStatus === 'completed';
+                           
+                           console.log('🔍 Preparing step check:', {
+                             orderId: currentOrder?.order_id,
+                             rawStatus: currentOrder?.status,
+                             displayStatus,
+                             isPreparing
+                           });
+                           
+                           return (
+                             <div className="flex items-center">
+                               <div className="relative z-10">
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                   isPreparing
+                                     ? 'bg-[#a87437] text-white' 
+                                     : 'bg-gray-300 text-gray-600'
+                                 }`}>
+                                   <Loader2 className={`h-4 w-4 ${displayStatus === 'preparing' ? 'animate-spin' : ''}`} />
+                                 </div>
+                               </div>
+                               <div className="ml-4 flex-1">
+                                 <p className={`text-sm font-medium ${
+                                   isPreparing ? 'text-[#a87437]' : 'text-gray-600'
+                                 }`}>
+                                   Preparing
+                                 </p>
+                                 <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="ml-4 flex-1">
-                             <p className={`text-sm font-medium ${
-                               getCurrentOrder()?.status === 'preparing' || getCurrentOrder()?.status === 'ready' || 
-                               getCurrentOrder()?.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'
-                             }`}>
-                               Preparing
-                             </p>
-                             <p className="text-xs text-gray-500">Your order is being prepared by our kitchen staff</p>
-                           </div>
-                         </div>
+                           );
+                         })()}
 
                          {/* Ready for Pickup */}
-                         <div className="flex items-center">
-                           <div className="relative z-10">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                               getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed'
-                                 ? 'bg-[#a87437] text-white' 
-                                 : 'bg-gray-300 text-gray-600'
-                             }`}>
-                               <Package className="h-4 w-4" />
+                         {(() => {
+                           const currentOrder = getCurrentOrder();
+                           const displayStatus = getDisplayStatus(currentOrder);
+                           const isReady = displayStatus === 'ready' || displayStatus === 'completed';
+                           
+                           return (
+                             <div className="flex items-center">
+                               <div className="relative z-10">
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                   isReady
+                                     ? 'bg-[#a87437] text-white' 
+                                     : 'bg-gray-300 text-gray-600'
+                                 }`}>
+                                   <Package className="h-4 w-4" />
+                                 </div>
+                               </div>
+                               <div className="ml-4 flex-1">
+                                 <p className={`text-sm font-medium ${
+                                   isReady ? 'text-[#a87437]' : 'text-gray-600'
+                                 }`}>
+                                   Ready for Pickup
+                                 </p>
+                                 <p className="text-xs text-gray-500">Your order is ready for pickup</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="ml-4 flex-1">
-                             <p className={`text-sm font-medium ${
-                               getCurrentOrder()?.status === 'ready' || getCurrentOrder()?.status === 'completed' 
-                                 ? 'text-[#a87437]' : 'text-gray-600'
-                             }`}>
-                               Ready for Pickup
-                             </p>
-                             <p className="text-xs text-gray-500">Your order is ready for pickup</p>
-                           </div>
-                         </div>
+                           );
+                         })()}
 
                          {/* Completed */}
-                         <div className="flex items-center">
-                           <div className="relative z-10">
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                               getCurrentOrder()?.status === 'completed'
-                                 ? 'bg-[#a87437] text-white' 
-                                 : 'bg-gray-300 text-gray-600'
-                             }`}>
-                               <CheckCircle className="h-4 w-4" />
+                         {(() => {
+                           const currentOrder = getCurrentOrder();
+                           const displayStatus = getDisplayStatus(currentOrder);
+                           const isCompleted = displayStatus === 'completed';
+                           
+                           return (
+                             <div className="flex items-center">
+                               <div className="relative z-10">
+                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                   isCompleted
+                                     ? 'bg-[#a87437] text-white' 
+                                     : 'bg-gray-300 text-gray-600'
+                                 }`}>
+                                   <CheckCircle className="h-4 w-4" />
+                                 </div>
+                               </div>
+                               <div className="ml-4 flex-1">
+                                 <p className={`text-sm font-medium ${
+                                   isCompleted ? 'text-[#a87437]' : 'text-gray-600'
+                                 }`}>
+                                   Completed
+                                 </p>
+                                 <p className="text-xs text-gray-500">Order has been completed successfully</p>
+                               </div>
                              </div>
-                           </div>
-                           <div className="ml-4 flex-1">
-                             <p className={`text-sm font-medium ${
-                               getCurrentOrder()?.status === 'completed' ? 'text-[#a87437]' : 'text-gray-600'
-                             }`}>
-                               Completed
-                             </p>
-                             <p className="text-xs text-gray-500">Order has been completed successfully</p>
-                           </div>
-                         </div>
+                           );
+                         })()}
                        </div>
                      </div>
                    </div>
