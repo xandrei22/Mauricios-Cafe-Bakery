@@ -62,3 +62,5 @@ The Google OAuth `invalid_client` error is caused by:
 **Summary:** `CORS_ALLOWED_ORIGINS` is optional and not used. Your CORS is already configured correctly. Focus on fixing the Client ID/Secret mismatch for Google OAuth.
 
 
+
+

@@ -2957,6 +2957,13 @@ router.post('/reward-redemptions/:redemptionId/:action', optionalJWT, async(req,
         const { redemptionId, action } = req.params;
         // Get staff/admin ID from JWT user or session
         const staffId = req.user?.id || (req.session && req.session.staffUser && req.session.staffUser.id) || (req.session && req.session.adminUser && req.session.adminUser.id) || null;
+        
+        // Validate staffId is present
+        if (!staffId) {
+            console.error('Staff process redemption: No staff ID found. User:', req.user, 'Session:', req.session);
+            return res.status(401).json({ success: false, error: 'Staff ID not found. Please ensure you are properly authenticated.' });
+        }
+        
         if (!['complete', 'cancel'].includes(action)) {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
@@ -2971,12 +2978,24 @@ router.post('/reward-redemptions/:redemptionId/:action', optionalJWT, async(req,
         try {
             await db.query(`
                 UPDATE loyalty_reward_redemptions 
-                SET status = ?, staff_id = ? 
+                SET status = ?, staff_id = ?, processed_at = NOW() 
                 WHERE id = ?
             `, [action === 'complete' ? 'completed' : 'cancelled', staffId, redemptionId]);
         } catch (err) {
-            console.error('Update redemption status failed:', err && err.message ? err.message : err);
-            return res.status(500).json({ success: false, error: 'Failed to update redemption status' });
+            console.error('Update redemption status failed:', {
+                error: err && err.message ? err.message : err,
+                code: err?.code,
+                sqlState: err?.sqlState,
+                sqlMessage: err?.sqlMessage,
+                redemptionId,
+                staffId,
+                action
+            });
+            const errorMessage = err?.sqlMessage || err?.message || 'Database error occurred';
+            return res.status(500).json({ 
+                success: false, 
+                error: `Failed to update redemption status: ${errorMessage}` 
+            });
         }
         if (action === 'cancel') {
             try {

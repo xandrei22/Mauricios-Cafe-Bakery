@@ -162,3 +162,5 @@ If `hasClientId: true` and `hasClientSecret: true`, the variables are set, but t
 **Most Common Fix:** Copy-paste the Client ID and Client Secret directly from Google Cloud Console into Render, ensuring no extra spaces or characters.
 
 
+
+
