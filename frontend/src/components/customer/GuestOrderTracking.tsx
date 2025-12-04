@@ -659,6 +659,20 @@ const GuestOrderTracking: React.FC = () => {
           newStatus = 'payment_confirmed';
           console.log('🔔 GuestOrderTracking: Payment is paid but status incorrect - updating to payment_confirmed');
         }
+
+        // CRITICAL: Some socket payloads might set status to preparing/ready/completed without explicitly setting paymentStatus
+        // When that happens, assume payment is already paid so that progress bar and icons update correctly
+        const normalizedIncomingStatus = (newStatus || prev.status || '').toString().toLowerCase();
+        const paymentIsUnset = !newPaymentStatus || newPaymentStatus === 'pending' || newPaymentStatus === 'pending_verification';
+        const statusRequiresPaid = normalizedIncomingStatus === 'payment_confirmed' ||
+          normalizedIncomingStatus === 'preparing' ||
+          normalizedIncomingStatus === 'ready' ||
+          normalizedIncomingStatus === 'completed';
+
+        if (paymentIsUnset && statusRequiresPaid) {
+          newPaymentStatus = 'paid';
+          console.log('🔔 GuestOrderTracking: Status', normalizedIncomingStatus, 'requires paid paymentStatus - forcing paymentStatus to paid');
+        }
         
         console.log('🔔 GuestOrderTracking: Updating order with:', {
           payloadStatus: payload.status,

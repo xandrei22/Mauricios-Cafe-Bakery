@@ -621,6 +621,19 @@ const CustomerOrders: React.FC = () => {
                   console.log('💳 CRITICAL: Payment is paid but status incorrect - updating to payment_confirmed');
                 }
                 
+                // If status indicates payment_confirmed/preparing/ready/completed but paymentStatus isn't paid, force it
+                const normalizedIncomingStatus = (newStatus || order.status || '').toString().toLowerCase();
+                const paymentIsUnset = !newPaymentStatus || newPaymentStatus === 'pending' || newPaymentStatus === 'pending_verification';
+                const statusRequiresPaid = normalizedIncomingStatus === 'payment_confirmed' ||
+                  normalizedIncomingStatus === 'preparing' ||
+                  normalizedIncomingStatus === 'ready' ||
+                  normalizedIncomingStatus === 'completed';
+
+                if (paymentIsUnset && statusRequiresPaid) {
+                  newPaymentStatus = 'paid';
+                  console.log('💳 CRITICAL: Status', normalizedIncomingStatus, 'requires paid payment_status - forcing payment_status to paid');
+                }
+                
                 const statusChanged = oldStatus !== newStatus;
                 
                 console.log('✅ IMMEDIATELY updating order in state (order-updated):', {
@@ -805,6 +818,19 @@ const CustomerOrders: React.FC = () => {
                   // This handles cases where the status might not have been set correctly
                   newStatus = 'payment_confirmed';
                   console.log('💳 CRITICAL: Payment is paid but status incorrect - updating to payment_confirmed');
+                }
+                
+                // If status indicates payment_confirmed/preparing/ready/completed but paymentStatus isn't paid, force it
+                const normalizedIncomingStatus = (newStatus || order.status || '').toString().toLowerCase();
+                const paymentIsUnset = !newPaymentStatus || newPaymentStatus === 'pending' || newPaymentStatus === 'pending_verification';
+                const statusRequiresPaid = normalizedIncomingStatus === 'payment_confirmed' ||
+                  normalizedIncomingStatus === 'preparing' ||
+                  normalizedIncomingStatus === 'ready' ||
+                  normalizedIncomingStatus === 'completed';
+
+                if (paymentIsUnset && statusRequiresPaid) {
+                  newPaymentStatus = 'paid';
+                  console.log('💳 CRITICAL: Status', normalizedIncomingStatus, 'requires paid payment_status - forcing payment_status to paid (payment-updated)');
                 }
                 
                 const statusChanged = oldStatus !== newStatus;

@@ -917,27 +917,26 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 				{!hideSidebar && (
 					<div className="w-full lg:w-[30rem] xl:w-[32rem] 2xl:w-[36rem] min-w-0 p-2 sm:p-3 lg:p-4 flex-shrink-0 lg:sticky lg:top-0 lg:overflow-hidden">
 				{/* Customer Information */}
-				<Card className="mb-2 bg-white border shadow-lg">
-					{/* Prevent any scrollbars from appearing in the header area */}
-					<CardHeader className="pt-0 pb-0 px-3 -mt-3 overflow-hidden">
-						<CardTitle className="text-sm text-[#3f3532] -mb-4">
+				<Card className="mb-2 bg-white border shadow-lg min-h-[180px]">
+					<CardHeader className="pt-4 pb-3 px-4">
+						<CardTitle className="text-base font-semibold text-[#3f3532]">
 							Customer Information
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="px-3 pb-0 pt-0 -mb-2">
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+					<CardContent className="px-4 pb-4 pt-6">
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							{/* Left: Name + Order Type */}
-							<div className="space-y-0">
+							<div className="space-y-3">
 								<div>
-									<label className="text-xs font-medium text-[#6B5B5B] mb-0 block">Customer Name *</label>
+									<label className="text-xs font-medium text-[#6B5B5B] mb-1 block">Customer Name *</label>
 									<Input
 										placeholder="Enter customer name"
 										value={customerInfo.name}
 										onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-										className="h-6 text-xs bg-white border focus:border-[#a87437]"
+										className="h-8 text-xs bg-white border focus:border-[#a87437]"
 									/>
 								</div>
-								<div className="mt-2">
+								<div>
 									<label className="text-xs font-medium text-gray-700 mb-0 block">Order Type *</label>
 									<div className="flex gap-3 ml-0">
 									<label className="flex items-center space-x-1">
@@ -964,10 +963,10 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 							</div>
 						</div>
 						{/* Right: Table Number */}
-							<div className="space-y-0">
+							<div className="space-y-3">
 								{customerInfo.orderType === 'dine_in' && (
 									<div>
-										<label className="text-xs font-medium text-gray-700 mb-0 block">Table Number *</label>
+										<label className="text-xs font-medium text-gray-700 mb-1 block">Table Number *</label>
 										<div className="grid grid-cols-3 gap-2">
 											{[1,2,3,4,5,6].map((num) => (
 												<Button
