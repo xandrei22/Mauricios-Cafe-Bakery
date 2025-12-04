@@ -918,12 +918,12 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					<div className="w-full lg:w-[30rem] xl:w-[32rem] 2xl:w-[36rem] min-w-0 p-2 sm:p-3 lg:p-4 flex-shrink-0 lg:sticky lg:top-0 lg:overflow-hidden">
 				{/* Customer Information */}
 				<Card className="mb-2 bg-white border shadow-lg">
-					<CardHeader className="pt-4 pb-1 px-4">
+					<CardHeader className="pt-3 pb-1 px-4">
 						<CardTitle className="text-base font-semibold text-[#3f3532]">
 							Customer Information
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="px-4 pb-3 pt-1">
+					<CardContent className="px-4 pb-2 pt-1">
 						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							{/* Left: Name + Order Type */}
 							<div className="space-y-3">
