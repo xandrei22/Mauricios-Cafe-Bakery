@@ -301,35 +301,37 @@ export default function CustomerDasboard() {
       return;
     }
 
+    if (!authenticated || !user) {
+      alert('Please log in to claim rewards');
+      return;
+    }
+
     setRedeeming(item.id);
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'omit',
-        body: JSON.stringify({
-          customerId: user.id,
-          rewardId: item.id,
-          orderId: null,
-          redemptionProof: 'Claimed through customer dashboard',
-          staffId: null
-        })
+      const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
+        customerId: user.id,
+        rewardId: item.id,
+        orderId: null,
+        redemptionProof: 'Claimed through customer dashboard',
+        staffId: null
       });
 
-      const data = await response.json();
-      if (data.success) {
+      if (res.status === 200) {
+        const data = res.data;
         alert(`Successfully claimed "${item.name}"! Your claim code is ${data.claimCode}. Show this code to staff to redeem.`);
         // Refresh dashboard data to update points
         fetchDashboardData();
+        // Refresh redeemable items to update the list
+        fetchRedeemableItems();
       } else {
-        alert(`Failed to claim reward: ${data.error || 'Unknown error'}`);
+        const errorData = res.data as any;
+        alert(`Failed to claim reward: ${(errorData && (errorData.error || errorData.message)) || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error claiming reward:', error);
-      alert('Failed to claim reward. Please try again.');
+      const errorMessage = error?.response?.data?.error || error?.response?.data?.message || 'Failed to claim reward. Please try again.';
+      alert(`Failed to claim reward: ${errorMessage}`);
     } finally {
       setRedeeming(null);
     }
