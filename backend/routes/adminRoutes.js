@@ -2470,6 +2470,7 @@ router.get('/loyalty/redemptions', optionalJWT, async(req, res) => {
                 lrr.expires_at,
                 lrr.order_id,
                 lrr.staff_id,
+                lrr.redemption_proof,
                 lrr.created_at,
                 lrr.updated_at,
                 c.full_name as customer_name,

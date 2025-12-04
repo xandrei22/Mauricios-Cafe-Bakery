@@ -2978,7 +2978,7 @@ router.post('/reward-redemptions/:redemptionId/:action', optionalJWT, async(req,
         try {
             await db.query(`
                 UPDATE loyalty_reward_redemptions 
-                SET status = ?, staff_id = ?, processed_at = NOW() 
+                SET status = ?, staff_id = ? 
                 WHERE id = ?
             `, [action === 'complete' ? 'completed' : 'cancelled', staffId, redemptionId]);
         } catch (err) {
