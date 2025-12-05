@@ -1,10 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '../ui/tabs';
+// Tabs removed - no longer using tab navigation
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -121,7 +116,7 @@ const AdminRewardProcessing: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [processingRewardId, setProcessingRewardId] = useState<number | null>(null);
   const [redemptionProof, setRedemptionProof] = useState<string>('');
-  const [activeTab, setActiveTab] = useState('pending');
+  // Removed activeTab - always showing pending redemptions
   const [stats, setStats] = useState<LoyaltyStats | null>(null);
   const [claimCode, setClaimCode] = useState('');
   const [searchResult, setSearchResult] = useState<ClaimedReward | null>(null);
@@ -132,20 +127,8 @@ const AdminRewardProcessing: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Use staff endpoints which support both staff and admin authentication
-      // For pending tab, use the pending endpoint; for others, fetch all and filter client-side
-      let url = '';
-      if (activeTab === 'pending') {
-        url = '/api/staff/reward-redemptions/pending';
-      } else {
-        // For other tabs, we'll fetch all and filter client-side
-        // Since staff endpoint doesn't support status filtering, we'll use admin endpoint as fallback
-        const params = new URLSearchParams();
-        if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
-        if (activeTab === 'cancelled') params.set('status', 'cancelled');
-        if (activeTab === 'expired') params.set('status', 'expired');
-        url = `/api/admin/loyalty/redemptions?${params.toString()}`;
-      }
+      // Always fetch pending redemptions
+      const url = '/api/staff/reward-redemptions/pending';
       console.log('📋 Admin: Fetching redemptions from:', url);
       console.log('📋 Admin: axiosInstance baseURL:', axiosInstance.defaults.baseURL);
       console.log('📋 Admin: Full URL will be:', `${axiosInstance.defaults.baseURL}${url}`);
@@ -178,7 +161,7 @@ const AdminRewardProcessing: React.FC = () => {
           order_id: r.order_id ?? null,
           claim_code: r.claim_code ?? null,
         }));
-        console.log(`✅ Admin: Found ${normalized.length} redemptions for tab: ${activeTab}`);
+        console.log(`✅ Admin: Found ${normalized.length} pending redemptions`);
         setClaimedRewards(normalized);
         setError(null); // Clear any previous errors
       } else {
@@ -228,7 +211,7 @@ const AdminRewardProcessing: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, []);
 
   const fetchLoyaltyStats = useCallback(async () => {
     try {
@@ -585,45 +568,38 @@ const AdminRewardProcessing: React.FC = () => {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="processed">Processed</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-          <TabsTrigger value="expired">Expired</TabsTrigger>
-        </TabsList>
-        <TabsContent value="pending" className="mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-semibold text-gray-700">Pending Rewards</h2>
-            <Button 
-              onClick={() => fetchClaimedRewards()} 
-              variant="outline" 
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
-            </Button>
-          </div>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No pending rewards to process.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claim Code</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Expires In</TableHead>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead className="w-[200px]">Proof / Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold text-gray-700">Pending Rewards</h2>
+          <Button 
+            onClick={() => fetchClaimedRewards()} 
+            variant="outline" 
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
+        {claimedRewards.length === 0 ? (
+          <p className="text-gray-500">No pending rewards to process.</p>
+        ) : (
+          <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Reward</TableHead>
+                  <TableHead>Points Cost</TableHead>
+                  <TableHead>Claim Code</TableHead>
+                  <TableHead>Claimed At</TableHead>
+                  <TableHead>Expires In</TableHead>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead className="w-[200px]">Proof / Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {claimedRewards.map((reward) => (
                     <TableRow key={reward.id}>
                       <TableCell>
                         <div className="font-medium">{reward.customer_name}</div>
@@ -699,172 +675,7 @@ const AdminRewardProcessing: React.FC = () => {
               </Table>
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="processed" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Processed Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have been processed yet.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Processed At</TableHead>
-                    <TableHead>Processed By</TableHead>
-                    <TableHead>Proof</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {reward.redemption_date ? (
-                          <div className="flex items-center space-x-1 text-sm">
-                            <Calendar className="w-4 h-4 text-gray-500" />
-                            <span>{new Date(reward.redemption_date).toLocaleDateString()}</span>
-                          </div>
-                        ) : 'N/A'}
-                        {reward.redemption_date ? (
-                          <div className="flex items-center space-x-1 text-sm text-gray-500">
-                            <Clock className="w-4 h-4" />
-                            <span>{new Date(reward.redemption_date).toLocaleTimeString()}</span>
-                          </div>
-                        ) : ''}
-                      </TableCell>
-                      <TableCell>{reward.staff_id || 'N/A'}</TableCell>
-                      <TableCell>{reward.redemption_proof || 'N/A'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="cancelled" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Cancelled Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have been cancelled.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-red-600">{reward.status.toUpperCase()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="expired" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Expired Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have expired.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Expired At</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-red-600">
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{new Date(reward.expires_at).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{new Date(reward.expires_at).toLocaleTimeString()}</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 };

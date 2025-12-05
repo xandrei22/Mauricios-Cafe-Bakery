@@ -2479,15 +2479,10 @@ router.get('/loyalty/redemptions', optionalJWT, async(req, res) => {
                 lr.name as reward_name,
                 lr.reward_type,
                 lr.description as reward_description,
-                lr.points_required,
-                u.full_name as staff_name,
-                o.total_amount as order_amount,
-                o.status as order_status
+                lr.points_required
             FROM loyalty_reward_redemptions lrr
             INNER JOIN customers c ON lrr.customer_id = c.id
             INNER JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
-            LEFT JOIN users u ON lrr.staff_id = u.id
-            LEFT JOIN orders o ON lrr.order_id = o.order_id AND lrr.order_id IS NOT NULL
             ${whereClause}
             ORDER BY COALESCE(lrr.redemption_date, lrr.created_at, lrr.updated_at) DESC
             LIMIT ? OFFSET ?
@@ -2516,10 +2511,19 @@ router.get('/loyalty/redemptions', optionalJWT, async(req, res) => {
     } catch (error) {
         console.error('Error fetching loyalty redemptions:', error);
         console.error('Error stack:', error.stack);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            sqlState: error.sqlState,
+            sqlMessage: error.sqlMessage,
+            status: status || 'all',
+            query: whereClause,
+            params: params
+        });
         res.status(500).json({ 
             success: false, 
             error: 'Failed to fetch redemptions',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            details: process.env.NODE_ENV === 'development' ? (error.sqlMessage || error.message) : undefined
         });
     }
 });

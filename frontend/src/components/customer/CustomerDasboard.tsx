@@ -310,11 +310,11 @@ export default function CustomerDasboard() {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
-        customerId: user.id,
-        rewardId: item.id,
-        orderId: null,
-        redemptionProof: 'Claimed through customer dashboard',
-        staffId: null
+          customerId: user.id,
+          rewardId: item.id,
+          orderId: null,
+          redemptionProof: 'Claimed through customer dashboard',
+          staffId: null
       });
 
       if (res.status === 200) {
