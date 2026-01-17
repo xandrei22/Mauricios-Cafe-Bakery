@@ -229,12 +229,12 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="email" className="text-gray-700">
-                      Username or Email
+                      Username
                     </Label>
                     <Input
                       id="email"
                       type="text"
-                      placeholder="Enter username or admin@email.com"
+                      placeholder="Enter username"
                       className="w-full px-4 py-3 bg-gray-100 border-0 rounded-none focus:bg-white focus:ring-1 focus:ring-[#a87437] mt-1"
                       required
                       value={usernameOrEmail}

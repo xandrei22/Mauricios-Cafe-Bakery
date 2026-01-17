@@ -53,11 +53,6 @@ const AdminSidebar: React.FC = () => {
           ? storedAdmin.email.split('@')[0]
           : 'Admin');
 
-  const displayEmail =
-    (typeof storedAdmin?.email === 'string' && storedAdmin.email.length > 0)
-      ? storedAdmin.email
-      : 'admin@example.com';
-
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await mobileFriendlySwal.confirm(
@@ -164,7 +159,6 @@ const AdminSidebar: React.FC = () => {
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
               <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
-              <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
             </div>
           </div>
         </div>
