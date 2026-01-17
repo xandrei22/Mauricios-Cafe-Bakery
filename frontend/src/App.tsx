@@ -1,8 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { CartProvider } from "./contexts/CartContext";
+import "./utils/cartClearDebug"; // Import debug utility
 import { AuthProvider } from "./components/customer/AuthContext";
 import { AlertProvider } from "./contexts/AlertContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PositionProtectedRoute from "./components/auth/PositionProtectedRoute";
 import Unauthorized from "./components/auth/Unauthorized";
 import AdminLanding from "./components/admin/AdminLanding";
 import CustomerLanding from "./components/customer/CustomerLanding";
@@ -48,7 +50,6 @@ import StaffDashboard from "./components/staff/StaffDashboard";
 import StaffInventory from "./components/staff/StaffInventory";
 import StaffOrders from "./components/staff/StaffOrders";
 import StaffLoyalty from "./components/staff/StaffLoyalty";
-import StaffRewardProcessing from "./components/staff/StaffRewardProcessing";
 import StaffSales from "./components/staff/StaffSales";
 import StaffActivityLogs from "./components/staff/StaffActivityLogs";
 import StaffSettings from "./components/staff/StaffSettings";
@@ -116,6 +117,7 @@ function App() {
         <Route path="/customer-login" element={<CustomerLogin />} />
         <Route path="/customer/forgot-password" element={<CustomerForgotPassword />} />
         <Route path="/customer/reset-password/:token" element={<CustomerResetPassword />} />
+        <Route path="/customer/reset-password" element={<CustomerResetPassword />} />
         <Route path="/customer/payment" element={<CustomerPayment />} />
         <Route
           path="/customer/payment-qr/:orderId"
@@ -153,11 +155,22 @@ function App() {
           <Route index element={<StaffLanding />} />
           <Route path="dashboard" element={<StaffDashboard />} />
           <Route path="inventory" element={<StaffInventory />} />
-          <Route path="orders" element={<StaffOrders />} />
-          <Route path="pos" element={<POSPage />} />
+          <Route path="orders" element={
+            <PositionProtectedRoute allowedPositions={['Barista', 'Manager', 'Admin']}>
+              <StaffOrders />
+            </PositionProtectedRoute>
+          } />
+          <Route path="pos" element={
+            <PositionProtectedRoute allowedPositions={['Cashier', 'Manager', 'Admin']}>
+              <POSPage />
+            </PositionProtectedRoute>
+          } />
           <Route path="loyalty" element={<StaffLoyalty />} />
-          <Route path="reward-processing" element={<StaffRewardProcessing />} />
-          <Route path="sales" element={<StaffSales />} />
+          <Route path="sales" element={
+            <PositionProtectedRoute allowedPositions={['Cashier', 'Manager', 'Admin']}>
+              <StaffSales />
+            </PositionProtectedRoute>
+          } />
           <Route path="activity-logs" element={<StaffActivityLogs />} />
           <Route path="settings" element={<StaffSettings />} />
         </Route>

@@ -20,48 +20,125 @@ const LayeredCupVisualization: React.FC<LayeredCupVisualizationProps> = ({ custo
 
   const borderWidth = 8; // Thicker walls to match reference
 
-  // Colors
-  const milkColorMap: Record<string, string> = {
-    'no milk': 'transparent',
-    'whole milk': '#F5F5DC',
-    'fresh milk': '#F5F5DC',
-    'oat milk': '#F2E7C9',
-    'almond milk': '#EFE6D6',
-    'soy milk': '#F3EED9',
-    'cream': '#FFF3D6'
-  };
-  const milkKey = (customizations.milk || 'no milk').toLowerCase();
-  const milkColor = milkColorMap[milkKey] || (milkKey.includes('milk') ? '#F5F5DC' : 'transparent');
-  const hasMilk = milkKey !== 'no milk' && milkColor !== 'transparent';
-  const hasSyrup = customizations.syrup && customizations.syrup.toLowerCase() !== 'no sweetener';
+  // Generate a unique color for any ingredient name
+  const getIngredientColor = (ingredientName: string): string => {
+    if (!ingredientName || ingredientName.toLowerCase() === 'no milk' || ingredientName.toLowerCase() === 'no sweetener') {
+      return 'transparent';
+    }
 
-  // Categorize toppings by type for proper layering
-  const categorizeToppings = (toppings: string[]) => {
-    const milkToppings: string[] = [];
-    const syrupToppings: string[] = [];
-    const powderToppings: string[] = [];
-    const otherToppings: string[] = [];
+    const name = ingredientName.toLowerCase().trim();
+    
+    // Comprehensive color map for common ingredients
+    const colorMap: Record<string, string> = {
+      // Milks
+      'whole milk': '#F5F5DC',
+      'fresh milk': '#F5F5DC',
+      'full cream milk': '#F8F8E8',
+      'oat milk': '#F2E7C9',
+      'almond milk': '#EFE6D6',
+      'soy milk': '#F3EED9',
+      'coconut milk': '#FFF8E1',
+      'coconut cream': '#FFE5B4',
+      'cream': '#FFF3D6',
+      'heavy cream': '#FFF8DC',
+      'whipped cream': '#FFFEF0',
+      
+      // Sweeteners/Syrups
+      'sugar': '#FFE4B5',
+      'brown sugar': '#D2B48C',
+      'coconut sugar': '#D4A574',
+      'honey': '#FFD700',
+      'maple syrup': '#D2691E',
+      'agave': '#F0E68C',
+      'stevia': '#E6E6FA',
+      'monk fruit': '#F5DEB3',
+      'erythritol': '#FFFACD',
+      'xylitol': '#F0F8FF',
+      'vanilla syrup': '#FFE4E1',
+      'caramel syrup': '#DEB887',
+      'chocolate syrup': '#8B4513',
+      'hazelnut syrup': '#CD853F',
+      'toffee syrup': '#D2B48C',
+      
+      // Powders/Spices
+      'cinnamon': '#CD853F',
+      'cinnamon powder': '#CD853F',
+      'cocoa powder': '#6B4423',
+      'chocolate powder': '#654321',
+      'matcha powder': '#90EE90',
+      'vanilla powder': '#F5DEB3',
+      'nutmeg': '#D2691E',
+      'cardamom': '#DAA520',
+      'ginger powder': '#FF8C00',
+      'turmeric': '#FFD700',
+      
+      // Other toppings
+      'chocolate chips': '#654321',
+      'caramel drizzle': '#DEB887',
+      'whipped topping': '#FFFEF0',
+      'sprinkles': '#FF69B4',
+      'nuts': '#8B4513',
+      'almonds': '#D2B48C',
+      'hazelnuts': '#CD853F',
+      'walnuts': '#8B6F47',
+    };
 
-    toppings.forEach(topping => {
-      const lower = topping.toLowerCase();
-      if (lower.includes('milk') || lower.includes('cream')) {
-        milkToppings.push(topping);
-      } else if (lower.includes('syrup') || lower.includes('sweetener') || lower.includes('sugar')) {
-        syrupToppings.push(topping);
-      } else if (lower.includes('powder') || lower.includes('cinnamon') || lower.includes('cocoa') || lower.includes('spice')) {
-        powderToppings.push(topping);
-      } else {
-        otherToppings.push(topping);
+    // Check exact match first
+    if (colorMap[name]) {
+      return colorMap[name];
+    }
+
+    // Check partial matches for variations
+    for (const [key, color] of Object.entries(colorMap)) {
+      if (name.includes(key) || key.includes(name)) {
+        return color;
       }
-    });
+    }
 
-    return { milkToppings, syrupToppings, powderToppings, otherToppings };
+    // Generate a consistent color based on ingredient name hash
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Generate colors in warm, drink-appropriate palette
+    const hue = Math.abs(hash) % 60; // 0-60 (warm colors: yellows, oranges, browns)
+    const saturation = 40 + (Math.abs(hash >> 8) % 30); // 40-70%
+    const lightness = 60 + (Math.abs(hash >> 16) % 25); // 60-85% (light colors for visibility)
+    
+    return `hsl(${hue + 20}, ${saturation}%, ${lightness}%)`;
   };
 
-  const { milkToppings, syrupToppings, powderToppings, otherToppings } = categorizeToppings(customizations.toppings || []);
+  const milkKey = (customizations.milk || 'no milk').toLowerCase();
+  const milkColor = getIngredientColor(customizations.milk || '');
+  const hasMilk = milkKey !== 'no milk' && milkColor !== 'transparent';
+  
+  const syrupKey = (customizations.syrup || '').toLowerCase();
+  const syrupColor = getIngredientColor(customizations.syrup || '');
+  const hasSyrup = syrupKey !== 'no sweetener' && syrupColor !== 'transparent';
+
+  // Process all toppings individually with their own colors
+  const processedToppings = (customizations.toppings || []).map(topping => ({
+    name: topping,
+    color: getIngredientColor(topping),
+    category: (() => {
+      const lower = topping.toLowerCase();
+      if (lower.includes('milk') || lower.includes('cream')) return 'milk';
+      if (lower.includes('syrup') || lower.includes('sweetener') || lower.includes('sugar') || lower.includes('honey') || lower.includes('agave')) return 'syrup';
+      if (lower.includes('powder') || lower.includes('cinnamon') || lower.includes('cocoa') || lower.includes('spice') || lower.includes('matcha')) return 'powder';
+      return 'other';
+    })()
+  })).filter(t => t.color !== 'transparent');
+
+  const milkToppings = processedToppings.filter(t => t.category === 'milk');
+  const syrupToppings = processedToppings.filter(t => t.category === 'syrup');
+  const powderToppings = processedToppings.filter(t => t.category === 'powder');
+  const otherToppings = processedToppings.filter(t => t.category === 'other');
+  
   const hasAdditionalMilk = milkToppings.length > 0;
   const hasAdditionalSyrup = syrupToppings.length > 0;
   const hasPowder = powderToppings.length > 0;
+  const hasOther = otherToppings.length > 0;
 
   // Layout geometry
   const outerTopLeft = { x: baseWidth * 0.15, y: baseHeight * 0.15 };
@@ -93,27 +170,80 @@ const LayeredCupVisualization: React.FC<LayeredCupVisualizationProps> = ({ custo
   const syrupIntensity = Math.max(0, Math.min(1, sugarLevel / 100));
   const totalCupHeight = innerBottomLeft.y - innerTopLeft.y;
   const maxSyrupHeight = totalCupHeight * 0.4; // Maximum 40% of cup height
-  const actualSyrupHeight = hasManualSugar ? maxSyrupHeight * syrupIntensity : 0;
+  
+  // Determine if we have any syrup (from sweetener dropdown or toppings)
+  const hasAnySyrup = hasSyrup || hasAdditionalSyrup;
+  
+  // If manual sugar level is set, use it; otherwise use fixed height for syrups
+  const actualSyrupHeight = hasManualSugar 
+    ? maxSyrupHeight * syrupIntensity 
+    : (hasAnySyrup ? maxSyrupHeight * 0.3 : 0); // Default 30% height for syrups
   
   // Calculate remaining space for other layers
   const remainingHeight = totalCupHeight - actualSyrupHeight;
-  const otherLayers = (hasMilk ? 1 : 0) + (hasAdditionalMilk ? 1 : 0) + (hasPowder ? 1 : 0);
-  const otherLayerHeight = otherLayers > 0 ? remainingHeight / (otherLayers + 1) : remainingHeight;
   
-  // Layer positions from top to bottom
+  // Count all individual layers
+  const totalLayers = 
+    (hasMilk ? 1 : 0) + 
+    milkToppings.length + 
+    powderToppings.length + 
+    otherToppings.length;
+  
+  const individualLayerHeight = totalLayers > 0 ? remainingHeight / (totalLayers + 1) : remainingHeight;
+  
+  // Layer positions from top to bottom - each ingredient gets its own layer
   let currentY = innerTopLeft.y;
   
-  // Syrup layer at the top (height controlled by sugar level)
-  const syrupLayerY = (hasSyrup || hasAdditionalSyrup || hasManualSugar) ? currentY : null;
-  const syrupLayerBottom = syrupLayerY !== null ? syrupLayerY + actualSyrupHeight : currentY;
-  if (syrupLayerY !== null) currentY = syrupLayerBottom;
+  // Syrup layers at the top (height controlled by sugar level)
+  const syrupLayers: Array<{y: number, height: number, color: string, name: string}> = [];
+  if (hasSyrup || hasAdditionalSyrup || hasManualSugar) {
+    const syrupLayerCount = (hasSyrup ? 1 : 0) + syrupToppings.length;
+    const syrupLayerHeight = syrupLayerCount > 0 ? actualSyrupHeight / syrupLayerCount : actualSyrupHeight;
+    
+    // Add main sweetener layer if selected
+    if (hasSyrup) {
+      syrupLayers.push({ y: currentY, height: syrupLayerHeight, color: syrupColor, name: customizations.syrup || 'Sweetener' });
+      currentY += syrupLayerHeight;
+    }
+    
+    // Add syrup topping layers
+    syrupToppings.forEach(topping => {
+      syrupLayers.push({ y: currentY, height: syrupLayerHeight, color: topping.color, name: topping.name });
+      currentY += syrupLayerHeight;
+    });
+    
+    // If manual sugar level is set but no syrups, show a generic sugar layer
+    if (hasManualSugar && !hasSyrup && syrupToppings.length === 0) {
+      syrupLayers.push({ y: currentY, height: actualSyrupHeight, color: getIngredientColor('sugar'), name: 'Sugar' });
+      currentY += actualSyrupHeight;
+    }
+  }
   
-  // Other layers below syrup
-  const milkLayerY = hasMilk || hasAdditionalMilk ? currentY : null;
-  if (milkLayerY !== null) currentY += otherLayerHeight;
+  // Milk layers
+  const milkLayers: Array<{y: number, height: number, color: string, name: string}> = [];
+  if (hasMilk) {
+    milkLayers.push({ y: currentY, height: individualLayerHeight, color: milkColor, name: customizations.milk || 'Milk' });
+    currentY += individualLayerHeight;
+  }
   
-  const powderLayerY = hasPowder ? currentY : null;
-  if (powderLayerY !== null) currentY += otherLayerHeight;
+  milkToppings.forEach(topping => {
+    milkLayers.push({ y: currentY, height: individualLayerHeight, color: topping.color, name: topping.name });
+    currentY += individualLayerHeight;
+  });
+  
+  // Powder layers
+  const powderLayers: Array<{y: number, height: number, color: string, name: string}> = [];
+  powderToppings.forEach(topping => {
+    powderLayers.push({ y: currentY, height: individualLayerHeight, color: topping.color, name: topping.name });
+    currentY += individualLayerHeight;
+  });
+  
+  // Other topping layers
+  const otherLayers: Array<{y: number, height: number, color: string, name: string}> = [];
+  otherToppings.forEach(topping => {
+    otherLayers.push({ y: currentY, height: individualLayerHeight, color: topping.color, name: topping.name });
+    currentY += individualLayerHeight;
+  });
   
   const coffeeTopY = currentY;
 
@@ -182,7 +312,7 @@ const LayeredCupVisualization: React.FC<LayeredCupVisualizationProps> = ({ custo
   return (
     <div className={`flex flex-col items-center ${className}`}>
       <div className="text-sm font-medium text-gray-600 mb-2">
-        {customizations.size.charAt(0).toUpperCase() + customizations.size.slice(1)} Size
+        {customizations.size === 'large' ? 'Large' : 'Regular'} Size
       </div>
       <svg viewBox={`0 0 ${baseWidth} ${baseHeight + 20}`} className="w-full h-full drop-shadow-lg" preserveAspectRatio="xMidYMid meet">
         {/* Main cup outline with thick walls - transparent fill */}
@@ -200,31 +330,45 @@ const LayeredCupVisualization: React.FC<LayeredCupVisualizationProps> = ({ custo
           fill="#4A2C2A"
         />
 
-        {/* Powder layer (cinnamon, cocoa, etc.) */}
-        {hasPowder && powderLayerY !== null && (
+        {/* Individual powder layers - each with unique color */}
+        {powderLayers.map((layer, idx) => (
           <path
-            d={trapezoidPath(powderLayerY, powderLayerY + otherLayerHeight)}
-            fill="#8B4513"
-            opacity={0.8}
+            key={`powder-${idx}-${layer.name}`}
+            d={trapezoidPath(layer.y, layer.y + layer.height)}
+            fill={layer.color}
+            opacity={0.85}
           />
-        )}
+        ))}
 
-        {/* Milk layer - can be from main milk selection or additional milk toppings */}
-        {(hasMilk || hasAdditionalMilk) && milkLayerY !== null && (
+        {/* Individual milk layers - each with unique color */}
+        {milkLayers.map((layer, idx) => (
           <path
-            d={trapezoidPath(milkLayerY, milkLayerY + otherLayerHeight)}
-            fill={hasAdditionalMilk ? '#F0E68C' : milkColor}
-          />
-        )}
-
-        {/* Syrup layer - can be from main sweetener, additional syrup toppings, or manual sugar level */}
-        {(hasSyrup || hasAdditionalSyrup || hasManualSugar) && syrupLayerY !== null && (
-          <path
-            d={trapezoidPath(syrupLayerY, syrupLayerBottom)}
-            fill="#C07A3A"
+            key={`milk-${idx}-${layer.name}`}
+            d={trapezoidPath(layer.y, layer.y + layer.height)}
+            fill={layer.color}
             opacity={0.9}
           />
-        )}
+        ))}
+
+        {/* Individual syrup layers - each with unique color */}
+        {syrupLayers.map((layer, idx) => (
+          <path
+            key={`syrup-${idx}-${layer.name}`}
+            d={trapezoidPath(layer.y, layer.y + layer.height)}
+            fill={layer.color}
+            opacity={0.9}
+          />
+        ))}
+
+        {/* Individual other topping layers - each with unique color */}
+        {otherLayers.map((layer, idx) => (
+          <path
+            key={`other-${idx}-${layer.name}`}
+            d={trapezoidPath(layer.y, layer.y + layer.height)}
+            fill={layer.color}
+            opacity={0.8}
+          />
+        ))}
 
         {/* Ice cubes for iced drinks */}
         {customizations.ice && (
@@ -245,19 +389,19 @@ const LayeredCupVisualization: React.FC<LayeredCupVisualizationProps> = ({ custo
           </g>
         )}
 
-        {/* Other toppings as small decorative elements on top layer */}
+        {/* Other toppings as decorative elements on top layer - using their actual colors */}
         {otherToppings.length > 0 && (
           <g>
-            {otherToppings.slice(0, 3).map((_, idx) => (
+            {otherToppings.slice(0, 5).map((topping, idx) => (
               <circle
-                key={`other-${idx}`}
+                key={`other-decor-${idx}-${topping.name}`}
                 cx={outerTopLeft.x + 30 + (idx % 3) * 25}
                 cy={innerTopLeft.y + 15 - (idx % 2) * 8}
-                r={3}
-                fill="#D2691E"
-                stroke="#8B4513"
+                r={4}
+                fill={topping.color}
+                stroke={topping.color}
                 strokeWidth={1}
-                opacity={0.7}
+                opacity={0.8}
               />
             ))}
           </g>

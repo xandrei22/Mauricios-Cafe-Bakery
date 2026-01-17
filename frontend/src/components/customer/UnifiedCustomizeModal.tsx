@@ -148,7 +148,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
       try {
         // Use only the global ingredients endpoint
         const response = await fetch(`${API_BASE}/api/menu/ingredients`, {
-          credentials: 'include'
+          credentials: 'omit'
         });
         
         if (response.ok) {
@@ -245,7 +245,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     const fetchItemAllowedIngredients = async () => {
       try {
         if (!item?.id) return setFallbackOptions();
-        const res = await fetch(`${API_BASE}/api/menu/items/${item.id}/ingredients`, { credentials: 'include' });
+        const res = await fetch(`${API_BASE}/api/menu/items/${item.id}/ingredients`, { credentials: 'omit' });
         if (!res.ok) return setFallbackOptions();
         const data = await res.json();
         if (!data?.success || !Array.isArray(data.ingredients)) return setFallbackOptions();
@@ -313,7 +313,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
+        credentials: 'omit',
         body: JSON.stringify(requestBody)
       });
       
@@ -477,7 +477,10 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     customizationOptions.forEach((opt) => {
       const label = (opt.label || '').toLowerCase();
       if (label && tokens.some((t) => label.includes(t))) {
-        matchedOptionIds.push(opt.id);
+        const category = (opt.category || '').toLowerCase();
+        if (!category.includes('milk') && !category.includes('sweetener')) {
+          matchedOptionIds.push(opt.id);
+        }
       }
     });
 
@@ -521,10 +524,20 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
     const newCustomizations = { ...customizations } as { [key: string]: { selected: boolean; quantity: number } };
     combination.customizations.forEach((customization) => {
       const option = customizationOptions.find((opt) => (opt.label || '').toLowerCase() === customization.toLowerCase());
-      if (option) {
-        const defaultQty = option.defaultQuantity || 1;
-        newCustomizations[option.id] = { selected: true, quantity: Math.max(defaultQty, 1) };
+      if (!option) {
+        return;
       }
+      const category = (option.category || '').toLowerCase();
+      if (category.includes('milk')) {
+        setMilk(option.label);
+        return;
+      }
+      if (category.includes('sweetener')) {
+        setSweetener(option.label);
+        return;
+      }
+      const defaultQty = option.defaultQuantity || 1;
+      newCustomizations[option.id] = { selected: true, quantity: Math.max(defaultQty, 1) };
     });
     setCustomizations(newCustomizations);
     setShowAISuggestions(false);
@@ -574,42 +587,42 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
   }, [filteredAISuggestions, filteredAICombinations, customizationOptions]);
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm bg-white/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b p-4 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Coffee className="w-6 h-6 text-orange-600" />
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">Customize {item.name}</h2>
-                <p className="text-sm text-gray-600">Make it your perfect drink</p>
+    <div className="fixed inset-0 backdrop-blur-sm bg-white/30 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-lg max-w-6xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+        <div className="sticky top-0 bg-white border-b p-3 sm:p-4 rounded-t-lg z-10 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <Coffee className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 shrink-0" />
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-xl font-bold text-gray-800 truncate">Customize {item.name}</h2>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Make it your perfect drink</p>
               </div>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 shrink-0 h-8 w-8 sm:h-10 sm:w-10 p-0"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1 min-h-0">
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Column - Customization Options */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Size */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Size</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Size</label>
                 <div className="flex gap-2">
                   {Object.entries(sizePrices).map(([sizeOption, price]) => (
                     <button
                       key={sizeOption}
                       onClick={() => setSize(sizeOption)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
+                      className={`px-3 sm:px-4 py-2 rounded-lg border-2 transition-colors text-sm sm:text-base min-h-[44px] sm:min-h-[40px] ${
                         size === sizeOption
                           ? 'bg-[#a87437] text-white border-[#a87437]'
                           : 'bg-white text-gray-700 border-gray-300 hover:border-[#a87437]/50'
@@ -624,13 +637,13 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
               {/* Temperature */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Temperature</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Temperature</label>
                 <div className="flex gap-2">
                   {['Hot', 'Iced'].map((temp) => (
                     <button
                       key={temp}
                       onClick={() => setTemperature(temp)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-colors ${
+                      className={`px-3 sm:px-4 py-2 rounded-lg border-2 transition-colors text-sm sm:text-base min-h-[44px] sm:min-h-[40px] flex-1 ${
                         temperature === temp
                           ? 'bg-[#a87437] text-white border-[#a87437]'
                           : 'bg-white text-gray-700 border-gray-300 hover:border-[#a87437]/50'
@@ -644,11 +657,11 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
               {/* Milk Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Milk Type</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Milk Type</label>
                 <select
                   value={milk}
                   onChange={(e) => setMilk(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437] text-sm sm:text-base min-h-[44px] sm:min-h-[40px]"
                   title="Select milk type"
                   aria-label="Milk type selection"
                 >
@@ -662,11 +675,11 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
               {/* Sweetener */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Sweetener</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Sweetener</label>
                 <select
                   value={sweetener}
                   onChange={(e) => setSweetener(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437]"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437] text-sm sm:text-base min-h-[44px] sm:min-h-[40px]"
                   title="Select sweetener"
                   aria-label="Sweetener selection"
                 >
@@ -680,15 +693,15 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
               {/* Sugar Level */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Sugar Level: {sugarLevel}%
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
+                  <span className="block sm:inline">Sugar Level: {sugarLevel}%</span>
                   {currentSugarLevel > 0 && sugarLevel !== currentSugarLevel && (
-                    <span className="text-xs text-blue-600 ml-2">
+                    <span className="text-xs text-blue-600 ml-0 sm:ml-2 block sm:inline">
                       (Manual override)
                     </span>
                   )}
                   {currentSugarLevel > 0 && sugarLevel === currentSugarLevel && (
-                    <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-gray-500 ml-0 sm:ml-2 block sm:inline">
                       (Based on ingredients)
                     </span>
                   )}
@@ -700,7 +713,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                   step="25"
                   value={sugarLevel}
                   onChange={(e) => setSugarLevel(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                  className="w-full h-2 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                   title="Adjust sugar level to control drink sweetness"
                   aria-label="Sugar level slider"
                 />
@@ -735,28 +748,162 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                 />
               </div>
 
+              {/* AI Suggestions Teaser */}
+              {!showAISuggestions && (
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-blue-800 flex items-center gap-2 text-sm sm:text-base">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>AI-Powered Suggestions</span>
+                      </h3>
+                      <p className="text-xs sm:text-sm text-blue-700 mt-1">Get personalized ingredient recommendations</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="text-blue-700 border-blue-300 hover:bg-blue-100 text-xs sm:text-sm w-full sm:w-auto min-h-[44px] sm:min-h-[36px] shrink-0"
+                      onClick={() => setShowAISuggestions(true)}
+                    >
+                      Show Suggestions
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* AI Suggestions Panel */}
+              {showAISuggestions && (
+                <Card className="bg-blue-50 border-blue-200">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
+                      <h3 className="font-semibold text-blue-800 flex items-center gap-2 text-sm sm:text-base">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>AI Recommendations</span>
+                      </h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAISuggestions(false)}
+                        className="text-blue-700 border-blue-300 hover:bg-blue-100 text-xs sm:text-sm min-h-[44px] sm:min-h-[32px] px-2 sm:px-3 shrink-0"
+                      >
+                        <span className="hidden sm:inline">Hide Suggestions</span>
+                        <span className="sm:hidden">Hide</span>
+                      </Button>
+                    </div>
+                    
+                    {loadingAI ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="text-sm text-blue-600 mt-2">Getting suggestions...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* AI Suggestions */}
+                        {(filteredAISuggestions.length > 0 || localFallbackSuggestions.suggs.length > 0) && (
+                          <div>
+                            <h4 className="font-semibold text-blue-800 mb-2 sm:mb-3 flex items-center gap-2 text-xs sm:text-sm">
+                              <Star className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                              <span>Recommended Combinations</span>
+                            </h4>
+                            <div className="space-y-2">
+                              {(filteredAISuggestions.length > 0 ? filteredAISuggestions : localFallbackSuggestions.suggs).map((suggestion, index) => (
+                                <div key={index} className="bg-white p-2 sm:p-3 rounded-lg border border-blue-200">
+                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="font-medium text-gray-900 text-sm sm:text-base">{suggestion.name}</h5>
+                                      <p className="text-xs sm:text-sm text-gray-600 mt-1">{suggestion.description}</p>
+                                      <p className="text-xs text-blue-600 mt-1">{suggestion.dietaryNotes}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                      <span className="text-xs sm:text-sm font-medium text-green-600 shrink-0">{suggestion.price}</span>
+                                      <Button
+                                        onClick={() => applyAISuggestion(suggestion)}
+                                        size="sm"
+                                        className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm min-h-[44px] sm:min-h-[32px] px-3 sm:px-4 shrink-0"
+                                      >
+                                        Apply
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* AI Combinations */}
+                        {(filteredAICombinations.length > 0 || localFallbackSuggestions.combos.length > 0) && (
+                          <div>
+                            <h4 className="font-semibold text-blue-800 mb-2 sm:mb-3 flex items-center gap-2 text-xs sm:text-sm">
+                              <Zap className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                              <span>Popular Combinations</span>
+                            </h4>
+                            <div className="space-y-2">
+                              {(filteredAICombinations.length > 0 ? filteredAICombinations : localFallbackSuggestions.combos).map((combination, index) => (
+                                <div key={index} className="bg-white p-2 sm:p-3 rounded-lg border border-blue-200">
+                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="font-medium text-gray-900 text-sm sm:text-base">{combination.name}</h5>
+                                      <p className="text-xs sm:text-sm text-gray-600 mt-1">{combination.description}</p>
+                                      <div className="flex items-center gap-1 sm:gap-2 mt-1 flex-wrap">
+                                        {combination.customizations.map((customization, idx) => (
+                                          <Badge key={idx} variant="secondary" className="text-xs">
+                                            {customization}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                      <span className="text-xs sm:text-sm font-medium text-green-600 shrink-0">{combination.totalPrice}</span>
+                                      <Button
+                                        onClick={() => applyAICombination(combination)}
+                                        size="sm"
+                                        className="bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm min-h-[44px] sm:min-h-[32px] px-3 sm:px-4 shrink-0"
+                                      >
+                                        Apply
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {filteredAISuggestions.length === 0 && filteredAICombinations.length === 0 && localFallbackSuggestions.suggs.length === 0 && localFallbackSuggestions.combos.length === 0 && !loadingAI && (
+                          <div className="text-center py-4 text-gray-500">
+                            <Sparkles className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                            <p className="text-sm">No AI suggestions available right now.</p>
+                            <p className="text-xs">Check back later or ask our staff for recommendations.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Special Instructions */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Special Instructions</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Special Instructions</label>
                 <textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   placeholder="Any special requests or modifications..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437] h-20 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#a87437] focus:border-[#a87437] h-20 resize-none text-sm sm:text-base"
                 />
               </div>
             </div>
 
             {/* Right Column - Drink Preview and Order Summary */}
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* Your Drink Layers */}
               <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200">
-                <CardContent className="p-6">
-                  <div className="text-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Your Drink Layers</h3>
-                    <p className="text-sm text-gray-600">See how your customizations build up</p>
+                <CardContent className="p-3 sm:p-4 lg:p-6">
+                  <div className="text-center mb-3 sm:mb-4">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 sm:mb-2">Your Drink Layers</h3>
+                    <p className="text-xs sm:text-sm text-gray-600">See how your customizations build up</p>
                   </div>
-                  <div className="flex justify-center">
+                  <div className="flex justify-center overflow-hidden">
                     <LayeredCupVisualization
                       customizations={{
                         base: item.name,
@@ -769,7 +916,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                         size: size === 'Large' ? 'large' : 'medium',
                         sugarLevel: sugarLevel
                       } as any}
-                      className="w-full h-80"
+                      className="w-full h-48 sm:h-64 lg:h-80"
                     />
                   </div>
                   
@@ -798,12 +945,12 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
 
               {/* Order Summary */}
               <Card className="bg-amber-50 border-amber-200">
-                <CardContent className="p-6">
-                  <h3 className="font-bold mb-4">Order Summary</h3>
+                <CardContent className="p-3 sm:p-4 lg:p-6">
+                  <h3 className="font-bold mb-3 sm:mb-4 text-base sm:text-lg">Order Summary</h3>
                   <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>{item.name} ({size})</span>
-                      <span>₱{(() => {
+                    <div className="flex justify-between text-sm sm:text-base">
+                      <span className="truncate pr-2">{item.name} ({size})</span>
+                      <span className="shrink-0">₱{(() => {
                         const price = basePrice + (sizePrices[size as keyof typeof sizePrices] || 0);
                         return isNaN(price) ? '0.00' : price.toFixed(2);
                       })()}</span>
@@ -814,9 +961,9 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                         const option = customizationOptions.find(opt => opt.id === id);
                         if (option) {
                           return (
-                            <div key={id} className="flex justify-between text-sm">
-                              <span>{option.label} (x{config.quantity})</span>
-                              <span>₱{(option.pricePerUnit * config.quantity).toFixed(2)}</span>
+                            <div key={id} className="flex justify-between text-xs sm:text-sm">
+                              <span className="truncate pr-2">{option.label} (x{config.quantity})</span>
+                              <span className="shrink-0">₱{(option.pricePerUnit * config.quantity).toFixed(2)}</span>
                             </div>
                           );
                         }
@@ -824,7 +971,7 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                       return null;
                     })}
                     
-                    <div className="border-t pt-2 flex justify-between font-bold">
+                    <div className="border-t pt-2 flex justify-between font-bold text-sm sm:text-base">
                       <span>Total</span>
                       <span>₱{(() => {
                         const total = calculateTotalPrice();
@@ -834,154 +981,30 @@ const UnifiedCustomizeModal: React.FC<UnifiedCustomizeModalProps> = ({
                   </div>
                 </CardContent>
               </Card>
-
-              {/* AI Suggestions Teaser (below Order Summary) */}
-              {!showAISuggestions && (
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-blue-800 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" />
-                        AI-Powered Suggestions
-                      </h3>
-                      <p className="text-sm text-blue-700">Get personalized ingredient recommendations</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                      onClick={() => setShowAISuggestions(true)}
-                    >
-                      Show Suggestions
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* AI Suggestions Panel */}
-              {showAISuggestions && (
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="font-semibold text-blue-800 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" />
-                        AI Recommendations
-                      </h3>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowAISuggestions(false)}
-                        className="text-blue-700 border-blue-300 hover:bg-blue-100"
-                      >
-                        Hide Suggestions
-                      </Button>
-                    </div>
-                    
-                    {loadingAI ? (
-                      <div className="text-center py-4">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="text-sm text-blue-600 mt-2">Getting suggestions...</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {/* AI Suggestions */}
-                        {(filteredAISuggestions.length > 0 || localFallbackSuggestions.suggs.length > 0) && (
-                          <div>
-                            <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                              <Star className="w-4 h-4" />
-                              Recommended Combinations
-                            </h4>
-                            <div className="space-y-2">
-                              {(filteredAISuggestions.length > 0 ? filteredAISuggestions : localFallbackSuggestions.suggs).map((suggestion, index) => (
-                                <div key={index} className="bg-white p-3 rounded-lg border border-blue-200">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <h5 className="font-medium text-gray-900">{suggestion.name}</h5>
-                                      <p className="text-sm text-gray-600">{suggestion.description}</p>
-                                      <p className="text-xs text-blue-600">{suggestion.dietaryNotes}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-green-600">{suggestion.price}</span>
-                                      <Button
-                                        onClick={() => applyAISuggestion(suggestion)}
-                                        size="sm"
-                                        className="bg-blue-600 hover:bg-blue-700"
-                                      >
-                                        Apply
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AI Combinations */}
-                        {(filteredAICombinations.length > 0 || localFallbackSuggestions.combos.length > 0) && (
-                          <div>
-                            <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                              <Zap className="w-4 h-4" />
-                              Popular Combinations
-                            </h4>
-                            <div className="space-y-2">
-                              {(filteredAICombinations.length > 0 ? filteredAICombinations : localFallbackSuggestions.combos).map((combination, index) => (
-                                <div key={index} className="bg-white p-3 rounded-lg border border-blue-200">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <h5 className="font-medium text-gray-900">{combination.name}</h5>
-                                      <p className="text-sm text-gray-600">{combination.description}</p>
-                                      <div className="flex items-center gap-2 mt-1">
-                                        {combination.customizations.map((customization, idx) => (
-                                          <Badge key={idx} variant="secondary" className="text-xs">
-                                            {customization}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-green-600">{combination.totalPrice}</span>
-                                      <Button
-                                        onClick={() => applyAICombination(combination)}
-                                        size="sm"
-                                        className="bg-blue-600 hover:bg-blue-700"
-                                      >
-                                        Apply
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {filteredAISuggestions.length === 0 && filteredAICombinations.length === 0 && localFallbackSuggestions.suggs.length === 0 && localFallbackSuggestions.combos.length === 0 && !loadingAI && (
-                          <div className="text-center py-4 text-gray-500">
-                            <Sparkles className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                            <p className="text-sm">No AI suggestions available right now.</p>
-                            <p className="text-xs">Check back later or ask our staff for recommendations.</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 justify-end pt-6 border-t">
-            <Button variant="outline" onClick={onClose}>
+        </div>
+
+        {/* Action Buttons - Sticky at bottom */}
+        <div className="sticky bottom-0 bg-white border-t p-3 sm:p-4 flex flex-col sm:flex-row gap-2 sm:gap-3 justify-end flex-shrink-0">
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              className="w-full sm:w-auto min-h-[44px] sm:min-h-[40px] text-sm sm:text-base"
+            >
               Cancel
             </Button>
-            <Button onClick={handleAdd} className="bg-[#a87437] hover:bg-[#8f652f]">
-              Add to Cart - ₱{(() => {
+            <Button 
+              onClick={handleAdd} 
+              className="bg-[#a87437] hover:bg-[#8f652f] w-full sm:w-auto min-h-[44px] sm:min-h-[40px] text-sm sm:text-base"
+            >
+              <span className="hidden sm:inline">Add to Cart - </span>
+              <span>₱{(() => {
                 const total = calculateTotalPrice();
                 return isNaN(total) ? '0.00' : total.toFixed(2);
-              })()}
+              })()}</span>
             </Button>
-          </div>
         </div>
       </div>
     </div>

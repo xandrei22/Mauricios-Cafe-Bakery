@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 import { Star, ShoppingBag, Monitor } from "lucide-react";
 import { useCart } from "../../contexts/CartContext";
+import { io, Socket } from 'socket.io-client';
+import axiosInstance from "../../utils/axiosInstance";
 
 interface DashboardData {
   loyaltyPoints: number;
@@ -11,6 +13,7 @@ interface DashboardData {
   ordersThisMonth: number;
   currentOrder: {
     id: string;
+    orderNumber?: string;
     status: string;
     items: Array<{ name: string; quantity: number; price: number }>;
     total: number;
@@ -41,6 +44,50 @@ export default function CustomerDasboard() {
   const [popularItems, setPopularItems] = useState<any[]>([]);
   const [redeemableItems, setRedeemableItems] = useState<any[]>([]);
   const [redeeming, setRedeeming] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Handle Google OAuth token from URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const token = urlParams.get('token');
+    const isGoogleAuth = urlParams.get('google') === 'true';
+    
+    if (token && isGoogleAuth) {
+      console.log('✅ Google OAuth: Token received in URL, storing in localStorage');
+      
+      // Extract user info from token (decode JWT payload)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userData = {
+          id: payload.id,
+          username: payload.username,
+          email: payload.email,
+          name: payload.name,
+          role: payload.role
+        };
+        
+        // Store token and user in localStorage (same as regular login)
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('customerUser', JSON.stringify(userData));
+        localStorage.setItem('loginTimestamp', Date.now().toString());
+        
+        console.log('✅ Google OAuth: Token and user data stored successfully');
+        
+        // Remove token from URL (clean URL)
+        const newUrl = window.location.pathname + (location.search.replace(/[?&]token=[^&]*/, '').replace(/[?&]google=[^&]*/, '').replace(/^\?$/, '') || '');
+        window.history.replaceState({}, '', newUrl);
+        
+        // Trigger auth context update without full page reload
+        // The AuthContext will detect the new token in localStorage
+        if (window.dispatchEvent) {
+          window.dispatchEvent(new Event('storage'));
+        }
+      } catch (error) {
+        console.error('❌ Error processing Google OAuth token:', error);
+        navigate('/customer-login?error=GOOGLE_AUTH_ERROR');
+      }
+    }
+  }, [location.search, navigate]);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -49,70 +96,123 @@ export default function CustomerDasboard() {
     }
 
     if (authenticated && user?.id) {
+      // Initialize Socket.IO connection for real-time updates
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const newSocket = io(API_URL, {
+        transports: ['polling', 'websocket'],
+        path: '/socket.io',
+        withCredentials: false, // JWT-only: No cookies needed
+        timeout: 30000,
+        forceNew: false, // Reuse existing connection if available
+        autoConnect: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
+      });
+      setSocket(newSocket);
+
+      // Join customer room for real-time updates
+      const joinRoom = () => {
+        if (newSocket.connected) {
+          newSocket.emit('join-customer-room', { customerEmail: user.email });
+        }
+      };
+      
+      if (newSocket.connected) {
+        joinRoom();
+      }
+      newSocket.on('connect', joinRoom);
+      
+      // Prevent reconnection loops
+      newSocket.on('reconnect_attempt', () => {
+        console.log('Socket reconnecting...');
+      });
+      
+      newSocket.on('reconnect_failed', () => {
+        console.warn('Socket reconnection failed - will not retry');
+        newSocket.disconnect();
+      });
+
+      // Listen for real-time updates
+      const refreshAll = () => {
+        fetchDashboardData();
+        fetchPopularItems();
+        fetchRedeemableItems();
+      };
+
+      newSocket.on('order-updated', (data) => {
+        console.log('Order updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      newSocket.on('payment-updated', (data) => {
+        console.log('Payment updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      newSocket.on('loyalty-updated', (data) => {
+        console.log('Loyalty updated in CustomerDashboard:', data);
+        refreshAll();
+      });
+
+      // Initial data fetch
       fetchDashboardData();
       fetchPopularItems();
       fetchRedeemableItems();
+
+      return () => {
+        newSocket.close();
+      };
     }
-  }, [loading, authenticated, user, navigate]);
+  }, [loading, authenticated, user?.id, navigate]); // Changed from 'user' to 'user?.id'
 
   const fetchDashboardData = async () => {
     try {
       if (!user) return;
       
       setLoadingDashboard(true);
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       console.log('Fetching dashboard data for user ID:', user.id);
       
-      // Use the dedicated dashboard API endpoint
-      const response = await fetch(`${API_URL}/api/customer/dashboard?customerId=${user.id}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/customer/dashboard?customerId=${user.id}`);
       
       console.log('Dashboard API response status:', response.status);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Dashboard API response data:', data);
-        
-        if (data.success) {
-          // Calculate points from last order
-          let pointsFromLastOrder = 0;
-          if (data.orders && data.orders.recent && data.orders.recent.length > 0) {
-            const lastOrder = data.orders.recent[0];
-            pointsFromLastOrder = Math.floor(lastOrder.total || 0);
-          }
-          
-          // Calculate orders this month
-          const currentMonth = new Date().getMonth();
-          const currentYear = new Date().getFullYear();
-          let ordersThisMonth = 0;
-          if (data.orders && data.orders.recent) {
-            ordersThisMonth = data.orders.recent.filter((order: any) => {
-              const orderDate = new Date(order.orderTime);
-              return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-            }).length;
-          }
-          
-          // Set dashboard data with real values
-          setDashboardData({
-            loyaltyPoints: data.loyalty?.points || 0,
-            pointsFromLastOrder,
-            totalOrders: data.orders?.total || 0,
-            ordersThisMonth,
-            currentOrder: data.orders?.current && data.orders.current.length > 0 ? data.orders.current[0] : null,
-            recentOrders: data.orders?.recent || [],
-            popularItems: data.favorites || []
-          });
-        } else {
-          throw new Error('Dashboard API returned unsuccessful response');
+      const data = response.data;
+      console.log('Dashboard API response data:', data);
+      
+      if (data.success) {
+        // Calculate points from last order
+        let pointsFromLastOrder = 0;
+        if (data.orders && data.orders.recent && data.orders.recent.length > 0) {
+          const lastOrder = data.orders.recent[0];
+          pointsFromLastOrder = Math.floor(lastOrder.total || 0);
         }
+        
+        // Calculate orders this month
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        let ordersThisMonth = 0;
+        if (data.orders && data.orders.recent) {
+          ordersThisMonth = data.orders.recent.filter((order: any) => {
+            const orderDate = new Date(order.orderTime);
+            return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
+          }).length;
+        }
+        
+        // Set dashboard data with real values
+        setDashboardData({
+          loyaltyPoints: data.loyalty?.points || 0,
+          pointsFromLastOrder,
+          totalOrders: data.orders?.total || 0,
+          ordersThisMonth,
+          currentOrder: data.orders?.current && data.orders.current.length > 0 ? data.orders.current[0] : null,
+          recentOrders: data.orders?.recent || [],
+          popularItems: data.favorites || []
+        });
       } else {
-        console.error('Dashboard API failed:', response.status, response.statusText);
-        throw new Error(`Dashboard API failed: ${response.status}`);
+        throw new Error('Dashboard API returned unsuccessful response');
       }
       
     } catch (error) {
@@ -134,22 +234,12 @@ export default function CustomerDasboard() {
 
   const fetchPopularItems = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/menu/popular?limit=5`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          console.log('Popular items data:', data.popular_items);
-          setPopularItems(data.popular_items);
-        }
-      } else {
-        console.error('Failed to fetch popular items:', response.status, response.statusText);
+      // Use axiosInstance for consistency (popular items endpoint may be public, but axiosInstance handles it)
+      const response = await axiosInstance.get('/api/menu/popular?limit=5');
+      const data = response.data;
+      if (data.success) {
+        console.log('Popular items data:', data.popular_items);
+        setPopularItems(data.popular_items);
       }
     } catch (error) {
       console.error('Error fetching popular items:', error);
@@ -159,16 +249,9 @@ export default function CustomerDasboard() {
   const fetchRedeemableItems = async () => {
     try {
       if (!user?.id) return;
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/loyalty/available-rewards/${user.id}`, {
-        credentials: 'include'
-      });
-      if (!response.ok) {
-        // 401 or any error -> hide section by clearing items
-        setRedeemableItems([]);
-        return;
-      }
-      const data = await response.json();
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/loyalty/available-rewards/${user.id}`);
+      const data = response.data;
       const rewards = (data?.availableRewards || []) as any[];
       const normalized = rewards.map((r: any) => ({
         id: r.id,
@@ -177,9 +260,9 @@ export default function CustomerDasboard() {
         image: r.image_url || '/images/mc2.jpg'
       }));
       setRedeemableItems(normalized);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching redeemable items:', error);
-      // Hide section on error
+      // Hide section on error (401 or any error)
       setRedeemableItems([]);
     }
   };
@@ -218,35 +301,37 @@ export default function CustomerDasboard() {
       return;
     }
 
+    if (!authenticated || !user) {
+      alert('Please log in to claim rewards');
+      return;
+    }
+
     setRedeeming(item.id);
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
+      const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
           customerId: user.id,
           rewardId: item.id,
           orderId: null,
           redemptionProof: 'Claimed through customer dashboard',
           staffId: null
-        })
       });
 
-      const data = await response.json();
-      if (data.success) {
+      if (res.status === 200) {
+        const data = res.data;
         alert(`Successfully claimed "${item.name}"! Your claim code is ${data.claimCode}. Show this code to staff to redeem.`);
         // Refresh dashboard data to update points
         fetchDashboardData();
+        // Refresh redeemable items to update the list
+        fetchRedeemableItems();
       } else {
-        alert(`Failed to claim reward: ${data.error || 'Unknown error'}`);
+        const errorData = res.data as any;
+        alert(`Failed to claim reward: ${(errorData && (errorData.error || errorData.message)) || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error claiming reward:', error);
-      alert('Failed to claim reward. Please try again.');
+      const errorMessage = error?.response?.data?.error || error?.response?.data?.message || 'Failed to claim reward. Please try again.';
+      alert(`Failed to claim reward: ${errorMessage}`);
     } finally {
       setRedeeming(null);
     }
@@ -296,9 +381,9 @@ export default function CustomerDasboard() {
       <main className="flex-1 bg-[#f5f5f5] p-0 m-0 w-full min-h-screen overflow-y-auto">
         <div className="w-full h-full flex flex-col m-0 p-0">
           {/* Welcome Header */}
-          <div className="w-full px-4 sm:px-6 pt-6 sm:pt-8 pb-4 bg-[#f5f5f5]">
+          <div className="w-full px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-4 bg-[#f5f5f5]">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2">
-              <span className="text-black">Hi {user?.name || 'Customer'}! Welcome to </span>
+              <span className="text-black">Welcome to </span>
               <span className="text-[#a87437]">Mauricio's Cafe and Bakery</span>
             </h1>
             <p className="text-base sm:text-lg text-black">
@@ -307,11 +392,11 @@ export default function CustomerDasboard() {
           </div>
           
           {/* Dashboard Layout: Reference Image Style */}
-          <div className="w-full h-full px-4 sm:px-6 space-y-4 bg-[#f5f5f5] py-4 sm:py-6">
+          <div className="w-full h-full px-4 sm:px-6 lg:px-8 space-y-4 bg-[#f5f5f5] py-4 sm:py-6">
             {/* Top Row: 3 summary cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
               {/* Points Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <Star className="h-8 w-8 text-[#a87437]" />
                 </div>
@@ -322,7 +407,7 @@ export default function CustomerDasboard() {
                 </span>
               </div>
               {/* Total Orders Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <ShoppingBag className="h-8 w-8 text-[#a87437]" />
                 </div>
@@ -333,12 +418,12 @@ export default function CustomerDasboard() {
                 </span>
               </div>
               {/* Current Order Card */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl flex flex-col items-center text-center p-4 min-h-[120px] w-full justify-center hover:shadow-2xl transition-shadow duration-300">
                 <div className="flex items-center justify-center mb-3">
                   <Monitor className="h-8 w-8 text-[#a87437]" />
                 </div>
                 <span className="text-2xl font-bold text-[#6B5B5B] mb-1">
-                  {dashboardData?.currentOrder ? dashboardData.currentOrder.id.substring(0, 6) : 'None'}
+                  {dashboardData?.currentOrder ? (dashboardData.currentOrder.orderNumber || dashboardData.currentOrder.id.substring(0, 6)) : 'None'}
                 </span>
                 <span className="text-sm text-gray-500 mb-1">Current Order</span>
                 <span className={`text-xs ${getStatusColor(dashboardData?.currentOrder?.status || 'none')}`}>
@@ -351,14 +436,14 @@ export default function CustomerDasboard() {
             {/* Bottom Row: Redeem Points and Popular Items */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 w-full">
               {/* Redeem with your points (always visible; shows empty state when none) */}
-              <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
+              <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
                 <h2 className="text-xl sm:text-2xl font-bold text-[#6B5B5B] mb-4">Redeem with your points</h2>
                 {redeemableItems.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">No rewards available to redeem right now</div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {redeemableItems.map((item) => (
-                      <div key={item.id} className="flex flex-col items-center p-3 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                      <div key={item.id} className="flex flex-col items-center p-3 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                         <img 
                           src={item.image}
                           alt={item.name}
@@ -380,7 +465,7 @@ export default function CustomerDasboard() {
               </div>
 
                           {/* Popular items */}
-            <div className="bg-white rounded-2xl shadow-xl border-2 border-[#a87437] p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
+            <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 hover:shadow-2xl transition-shadow duration-300">
                 <h2 className="text-xl sm:text-2xl font-bold text-[#6B5B5B] mb-4">Popular items</h2>
                                 <div className="space-y-3">
                   {popularItems.length > 0 ? (
@@ -405,7 +490,7 @@ export default function CustomerDasboard() {
                           <p className="text-sm text-gray-500">₱{item.base_price || item.display_price}</p>
                         </div>
                         <button
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-[2.5rem] ${
                             hasTableAccess 
                               ? "bg-[#a87437] text-white hover:bg-[#8f652f] cursor-pointer" 
                               : "bg-gray-300 text-gray-500 cursor-not-allowed"
@@ -445,7 +530,7 @@ export default function CustomerDasboard() {
                           <p className="text-sm text-gray-500">₱{item.price}</p>
                         </div>
                         <button
-                          className={`p-2 rounded-lg transition-colors ${
+                          className={`p-2 rounded-lg transition-colors flex items-center justify-center min-w-[2.5rem] ${
                             hasTableAccess 
                               ? "bg-[#a87437] text-white hover:bg-[#8f652f] cursor-pointer" 
                               : "bg-gray-300 text-gray-500 cursor-not-allowed"

@@ -1,5 +1,6 @@
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const { sendWelcomeEmail, sendResetPasswordEmail } = require('../utils/emailService');
 const crypto = require('crypto');
@@ -7,6 +8,16 @@ const crypto = require('crypto');
 // Customer login controller
 async function login(req, res) {
     try {
+        console.log('🔐 CUSTOMER LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        // Note: JWT-only authentication - cookies not used
+        console.log('🔐 Request body received:', {
+            email: req.body && typeof req.body.email !== 'undefined' ? '***' : 'MISSING',
+            password: req.body && typeof req.body.password !== 'undefined' ? '***' : 'MISSING',
+            hasTable: !!(req.body && req.body.table),
+            hasRedirect: !!(req.body && req.body.redirect)
+        });
+
         const { email, password, table, redirect } = req.body;
 
         // Find customer by email
@@ -31,39 +42,58 @@ async function login(req, res) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        // Email verification check disabled temporarily
-        // if (!customer.email_verified) {
-        //     return res.status(403).json({
-        //         message: 'Please verify your email address before logging in. Check your email for the verification link.',
-        //         requiresVerification: true
-        //     });
-        // }
-        console.log('⚠️ Email verification check disabled - allowing login');
+        // Email verification check - REQUIRED before login
+        if (!customer.email_verified) {
+            console.log('⚠️ Login blocked - email not verified:', customer.email);
+            return res.status(403).json({
+                message: 'Please verify your email address before logging in. Check your email for the verification link. If you did not receive the email, you can request a new verification email.',
+                requiresVerification: true,
+                email: customer.email // Include email so frontend can offer resend option
+            });
+        }
 
-        // Set customer session with unique key
-        req.session.customerUser = {
-            id: customer.id,
-            username: customer.username,
-            email: customer.email,
-            name: customer.full_name,
-            role: 'customer'
-        };
+        console.log('✅ Email verified - allowing login for:', customer.email);
 
-        // Optionally set a post-login redirect when coming from a QR/table link
-        const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+        // Optionally compute a post-login redirect when coming from a QR/table link (no sessions used)
+        const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
         let postLoginRedirect = undefined;
         if (redirect) {
             postLoginRedirect = `${frontendBase}${String(redirect).startsWith('/') ? '' : '/'}${redirect}`;
         } else if (table) {
-            req.session.tableNumber = String(table);
             postLoginRedirect = `${frontendBase}/customer/dashboard?table=${encodeURIComponent(String(table))}`;
         }
+        // Issue JWT (client stores it in localStorage). No cookies/sessions are used for customers.
+        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
 
-        if (postLoginRedirect) {
-            req.session.postLoginRedirect = postLoginRedirect;
+        // Warn if using default secret, but allow login to work on all devices
+        // This ensures login works everywhere, even if JWT_SECRET is not configured
+        if (secret === 'change-me-in-prod') {
+            console.warn('⚠️ WARNING: Using default JWT_SECRET. For production, set JWT_SECRET environment variable for better security.');
         }
 
-        res.json({
+        let token;
+        try {
+            token = jwt.sign({
+                id: customer.id,
+                username: customer.username,
+                email: customer.email,
+                name: customer.full_name,
+                role: 'customer'
+            }, secret, { expiresIn: '1d' });
+
+            if (!token) {
+                console.error('❌ CRITICAL: jwt.sign returned null/undefined!');
+                return res.status(500).json({ message: 'Error generating authentication token' });
+            }
+
+            console.log('✅ JWT token generated successfully, length:', token.length);
+        } catch (signErr) {
+            console.error('❌ Error signing JWT:', signErr);
+            return res.status(500).json({ message: 'Error generating authentication token' });
+        }
+
+        console.log('✅ Customer login successful - returning token and user data');
+        return res.json({
             success: true,
             user: {
                 id: customer.id,
@@ -72,7 +102,8 @@ async function login(req, res) {
                 name: customer.full_name,
                 role: 'customer'
             },
-            redirect: postLoginRedirect || null
+            redirect: postLoginRedirect || null,
+            token: token
         });
 
     } catch (error) {
@@ -82,22 +113,33 @@ async function login(req, res) {
 }
 
 // Customer session check controller
+// Customer session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkSession(req, res) {
-    console.log('Session check - req.session:', req.session);
-    console.log('Session check - req.session.customerUser:', req.session.customerUser);
-    if (req.session.customerUser && req.session.customerUser.role === 'customer') {
-        console.log('Session check - returning authenticated user:', req.session.customerUser);
-        res.json({ authenticated: true, user: req.session.customerUser });
-    } else {
-        console.log('Session check - not authenticated');
-        res.json({ authenticated: false });
+    // req.user is set by authenticateJWT middleware
+    if (req.user && req.user.role === 'customer') {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                name: req.user.name,
+                role: req.user.role
+            }
+        });
     }
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Customer logout controller
+// Customer logout controller (JWT-only: just return success, client clears localStorage)
 function logout(req, res) {
-    // Only destroy customer session, preserve other user sessions
-    delete req.session.customerUser;
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
     res.json({ message: 'Logged out successfully' });
 }
 
@@ -123,18 +165,45 @@ async function signup(req, res) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Insert new customer WITHOUT email verification (disabled temporarily)
+        // Generate verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Insert new customer WITH email verification
         const [result] = await db.query(
-            'INSERT INTO customers (username, password, email, full_name, email_verified, created_at) VALUES (?, ?, ?, ?, TRUE, NOW())', [username, hashedPassword, email, fullName]
+            'INSERT INTO customers (username, password, email, full_name, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, FALSE, ?, ?, NOW())', [username, hashedPassword, email, fullName, verificationToken, verificationExpires]
         );
 
-        console.log('✅ Customer account created (email verification disabled)');
+        console.log('✅ Customer account created with email verification required');
+        console.log('📧 Verification token generated for:', email);
+
+        // Send verification email
+        try {
+            const { sendVerificationEmail } = require('../utils/emailService');
+            const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
+            const verificationUrl = `${frontendBase}/customer/verify-email?token=${verificationToken}`;
+            console.log('📧 Attempting to send verification email to:', email);
+            console.log('📧 Verification URL:', verificationUrl);
+            await sendVerificationEmail(email, fullName, verificationUrl);
+            console.log('✅ Verification email sent successfully to:', email);
+        } catch (emailError) {
+            console.error('❌ Error sending verification email:', emailError);
+            console.error('❌ Error details:', {
+                message: emailError.message,
+                stack: emailError.stack,
+                code: emailError.code,
+                response: emailError.response
+            });
+            // Don't fail signup if email fails, but log it
+            // Still return success but warn user to check spam folder
+        }
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully. You can now log in.',
+            message: 'Account created successfully! Please check your email (including spam folder) to verify your account. You must verify your email before you can log in.',
             customerId: result.insertId,
-            requiresVerification: false
+            requiresVerification: true,
+            email: email // Include email so frontend can offer resend option
         });
 
     } catch (error) {
@@ -181,10 +250,26 @@ async function forgotPassword(req, res) {
         // Save token, expiry, and update request count/window
         await db.query('UPDATE customers SET reset_password_token = ?, reset_password_expires = ?, reset_request_count = ?, reset_request_window = ? WHERE id = ?', [token, expires, resetCount + 1, windowStart, customer.id]);
         // Send reset email
-        const resetLink = `http://localhost:5173/reset-password/${token}`;
-        await sendResetPasswordEmail(email, customer.full_name || customer.name || customer.username, resetLink);
-        // Specific message for registered accounts
-        return res.json({ message: 'A reset link has been sent to your registered email address.' });
+        try {
+            const frontendBase = process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop';
+            const resetLink = `${frontendBase}/customer/reset-password?token=${token}`;
+            console.log('📧 Sending password reset email to:', email);
+            console.log('📧 Reset link:', resetLink);
+
+            await sendResetPasswordEmail(email, customer.full_name || customer.name || customer.username, resetLink);
+            console.log('✅ Password reset email sent successfully to:', email);
+
+            // Specific message for registered accounts
+            return res.json({ message: 'A reset link has been sent to your registered email address.' });
+        } catch (emailError) {
+            console.error('❌ Error sending password reset email:', emailError);
+            // Still return success message for security (don't reveal if email failed)
+            // But log the error for debugging
+            return res.json({
+                message: 'A reset link has been sent to your registered email address.',
+                warning: 'If you do not receive the email, please check your spam folder or contact support.'
+            });
+        }
     } catch (error) {
         console.error('Forgot password error:', error);
         res.status(500).json({ message: 'Error processing request' });
@@ -196,9 +281,23 @@ async function resetPassword(req, res) {
     const { token, password } = req.body;
     if (!token || !password) return res.status(400).json({ message: 'Token and new password are required' });
     try {
+        console.log('🔑 Reset password request received');
+        console.log('🔑 Token length:', token ? token.length : 'missing');
+        console.log('🔑 Token (first 20 chars):', token ? token.substring(0, 20) + '...' : 'missing');
+        
         // Find customer by token and check expiry
         const [customers] = await db.query('SELECT * FROM customers WHERE reset_password_token = ? AND reset_password_expires > NOW()', [token]);
+        
+        console.log('🔑 Found customers with token:', customers.length);
+        
         if (customers.length === 0) {
+            // Check if token exists but expired
+            const [expiredCustomers] = await db.query('SELECT * FROM customers WHERE reset_password_token = ?', [token]);
+            if (expiredCustomers.length > 0) {
+                console.log('🔑 Token found but expired');
+                return res.status(400).json({ message: 'This reset link has expired. Please request a new password reset.' });
+            }
+            console.log('🔑 Token not found in database');
             return res.status(400).json({ message: 'Invalid or expired token' });
         }
         const customer = customers[0];
@@ -418,7 +517,7 @@ async function resendVerification(req, res) {
         // Send verification email
         try {
             const { sendVerificationEmail } = require('../utils/emailService');
-            const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
+            const verificationUrl = `${process.env.FRONTEND_URL || 'https://mauricios-cafe-bakery.shop'}/customer/verify-email?token=${verificationToken}`;
             await sendVerificationEmail(email, customer.full_name, verificationUrl);
         } catch (emailError) {
             console.error('Error sending verification email:', emailError);

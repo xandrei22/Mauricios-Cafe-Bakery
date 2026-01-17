@@ -51,7 +51,7 @@ const StaffInventory: React.FC = () => {
       
       // Use staff inventory endpoint
       const response = await fetch('/api/staff/inventory', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (!response.ok) {

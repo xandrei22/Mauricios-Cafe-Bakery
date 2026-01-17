@@ -20,6 +20,14 @@ export function CustomerNavbar() {
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  const navLinks = [
+    { href: "/", label: "Home", icon: Home },
+    { href: "#about", label: "About", icon: Info },
+    { href: "#best-sellers", label: "Best Sellers", icon: Star },
+    { href: "#why-love-us", label: "Offers", icon: Heart },
+    { href: "#location", label: "Location", icon: MapPin },
+  ];
+
   return (
     <nav className="fixed top-0 left-0 w-full bg-[#a87437] backdrop-blur border-b shadow-[0_8px_30px_rgba(0,0,0,0.15)] z-50">
       <div className="mx-auto max-w-[1600px] px-6 sm:px-10 lg:px-12">
@@ -37,26 +45,16 @@ export function CustomerNavbar() {
 
           {/* Desktop nav */}
           <div className="hidden lg:flex items-center gap-2 xl:gap-3 ml-4 xl:ml-8">
-            <a href="/" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <Home className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">Home</span>
-            </a>
-            <a href="#about" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <Info className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">About</span>
-            </a>
-            <a href="#best-sellers" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <Star className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">Best Sellers</span>
-            </a>
-            <a href="#why-love-us" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <Heart className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">Offers</span>
-            </a>
-            <a href="#location" className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200">
-              <MapPin className="h-4 w-4 xl:h-5 xl:w-5" />
-              <span className="text-sm xl:text-base">Location</span>
-            </a>
+            {navLinks.map(({ href, label, icon: Icon }) => (
+              <a
+                key={label}
+                href={href}
+                className="flex items-center gap-1 xl:gap-2 py-2 px-3 rounded-lg text-white/80 hover:text-white hover:bg-[#f6efe7]/20 hover:shadow-md hover:scale-105 transition-all duration-200"
+              >
+                <Icon className="h-4 w-4 xl:h-5 xl:w-5" />
+                <span className="text-sm xl:text-base">{label}</span>
+              </a>
+            ))}
             <div className="flex items-center gap-2 xl:gap-3 ml-4 xl:ml-6">
               <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center gap-1 px-3 xl:px-4 py-1.5 text-[#a87437] bg-white text-xs xl:text-sm font-semibold rounded-full hover:bg-[#f6efe7] hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-[0_8px_16px_rgba(0,0,0,0.12)]">
                 <User className="h-3 w-3 xl:h-4 xl:w-4" />
@@ -68,7 +66,7 @@ export function CustomerNavbar() {
 
           {/* Mobile menu button */}
           <button
-            className="lg:hidden inline-flex items-center justify-center w-11 h-11 rounded-md text-white hover:bg-white/20 shrink-0"
+            className="lg:hidden inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] rounded-md text-white hover:bg-white/20 shrink-0"
             onClick={() => setOpen(!open)}
             aria-label="Toggle menu"
           >
@@ -84,17 +82,21 @@ export function CustomerNavbar() {
       {open && (
         <div className="lg:hidden fixed top-16 left-0 right-0 bg-[#a87437] border-b shadow-xl z-50">
           <div className="mx-auto max-w-[1600px] px-6 sm:px-10 lg:px-12 py-2 divide-y divide-white/20">
-            <a href="/" className="block px-1 py-3 text-lg text-white hover:text-white/80">Home</a>
-            <a href="#about" className="block px-1 py-3 text-lg text-white hover:text-white/80">About</a>
-            <a href="#best-sellers" className="block px-1 py-3 text-lg text-white hover:text-white/80">Best Sellers</a>
-            <a href="#why-love-us" className="block px-1 py-3 text-lg text-white hover:text-white/80">Offers</a>
-            <a href="#location" className="block px-1 py-3 text-lg text-white hover:text-white/80">Location</a>
+            {navLinks.map(({ href, label }) => (
+              <a
+                key={label}
+                href={href}
+                className="block px-1 py-3 min-h-[44px] text-lg text-white hover:text-white/80 flex items-center"
+              >
+                {label}
+              </a>
+            ))}
             <div className="flex flex-col gap-3 my-4">
-              <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
+              <Link to={`/customer-login${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center gap-2 px-4 py-3 min-h-[44px] rounded-full text-[#a87437] bg-white text-base hover:bg-gray-100 shadow-[0_8px_16px_rgba(0,0,0,0.12)] w-full">
                 <User className="h-4 w-4" />
                 Login
               </Link>
-              <Link to={`/customer-signup${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-transparent text-white border border-white text-base font-semibold hover:bg-white/10 shadow-[0_8px_16px_rgba(0,0,0,0.08)] w-full">Signup</Link>
+              <Link to={`/customer-signup${tableParam ? `?table=${encodeURIComponent(tableParam)}` : ''}`} className="inline-flex items-center justify-center px-4 py-3 min-h-[44px] rounded-full bg-transparent text-white border border-white text-base font-semibold hover:bg-white/10 shadow-[0_8px_16px_rgba(0,0,0,0.08)] w-full">Signup</Link>
             </div>
           </div>
         </div>

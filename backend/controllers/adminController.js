@@ -1,6 +1,7 @@
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 const saltRounds = 10; // For bcrypt hashing
 const { sendResetPasswordEmail } = require('../utils/emailService');
@@ -36,7 +37,72 @@ function adminArea(req, res) {
 // Admin login controller
 async function login(req, res) {
     try {
+        console.log('🔐 ADMIN LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        // Note: JWT-only authentication - cookies not used
+
         const { username, password } = req.body;
+
+        // First check if this is a customer trying to access admin portal
+        const [customers] = await db.query(
+            'SELECT * FROM customers WHERE email = ?', [username]
+        );
+
+        if (customers.length > 0) {
+            return res.status(403).json({
+                message: 'Not authorized to access admin portal',
+                errorType: 'unauthorized_access'
+            });
+        }
+
+        // Check if this is a staff member with admin privileges
+        const [staff] = await db.query(
+            'SELECT * FROM users WHERE email = ? AND role IN ("staff", "manager", "admin")', [username]
+        );
+
+        if (staff.length > 0) {
+            const user = staff[0];
+
+            // Allow admin role staff to access admin portal
+            if (user.role === 'admin') {
+                // Compare password for admin staff
+                const isValidPassword = await bcrypt.compare(password, user.password);
+                if (!isValidPassword) {
+                    return res.status(401).json({
+                        message: 'Invalid username or password',
+                        errorType: 'invalid_credentials'
+                    });
+                }
+
+                // JWT-only: Generate token and return (no sessions/cookies)
+                const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+                const token = jwt.sign({
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    fullName: user.full_name,
+                    role: 'admin'
+                }, secret, { expiresIn: '1d' });
+
+                return res.json({
+                    success: true,
+                    user: {
+                        id: user.id,
+                        username: user.username,
+                        email: user.email,
+                        fullName: user.full_name,
+                        role: 'admin'
+                    },
+                    token
+                });
+            } else {
+                // Block regular staff from admin portal
+                return res.status(403).json({
+                    message: 'Not authorized to access admin portal',
+                    errorType: 'unauthorized_access'
+                });
+            }
+        }
 
         // Find admin by username or email
         const [admins] = await db.query(
@@ -44,29 +110,48 @@ async function login(req, res) {
         );
 
         if (admins.length === 0) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         const admin = admins[0];
+
+        // Additional check: Ensure this is a properly created admin account
+        if (!admin.full_name) {
+            return res.status(403).json({
+                message: 'Not authorized to access admin portal',
+                errorType: 'unauthorized_access'
+            });
+        }
 
         // Compare password
         const isValidPassword = await bcrypt.compare(password, admin.password);
         if (!isValidPassword) {
             console.log('Admin login failed: Invalid password for user', username);
-            return res.status(401).json({ message: 'Invalid username or password' });
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
-        // Set admin session with unique key
-        req.session.adminUser = {
-            id: admin.id,
-            username: admin.username,
-            email: admin.email,
-            fullName: admin.full_name,
-            role: 'admin'
-        };
-        console.log('Admin login successful. Session adminUser set:', req.session.adminUser);
+        // JWT-only auth for admin: no sessions or cookies
+        let token = null;
+        try {
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            token = jwt.sign({
+                id: admin.id,
+                username: admin.username,
+                email: admin.email,
+                fullName: admin.full_name,
+                role: 'admin'
+            }, secret, { expiresIn: '1d' });
+        } catch (signErr) {
+            console.error('Error signing admin JWT:', signErr);
+        }
 
-        res.json({
+        return res.json({
             success: true,
             user: {
                 id: admin.id,
@@ -74,7 +159,8 @@ async function login(req, res) {
                 email: admin.email,
                 fullName: admin.full_name,
                 role: 'admin'
-            }
+            },
+            token
         });
 
     } catch (error) {
@@ -83,95 +169,182 @@ async function login(req, res) {
     }
 }
 
-// Admin session check controller
+// Admin session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkSession(req, res) {
-    if (req.session.adminUser && req.session.adminUser.role === 'admin') {
-        res.json({ authenticated: true, user: req.session.adminUser });
-    } else {
-        res.json({ authenticated: false });
+    // req.user is set by authenticateJWT middleware
+    if (req.user && req.user.role === 'admin') {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                fullName: req.user.fullName || req.user.name,
+                role: req.user.role
+            }
+        });
     }
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Admin logout controller
+// Admin logout controller (JWT-only: client clears token from localStorage)
 function logout(req, res) {
-    // Only destroy admin session, preserve other user sessions
-    delete req.session.adminUser;
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
     res.json({ message: 'Logged out successfully' });
 }
 
 // Staff login controller (can be used by both admin and staff)
 async function staffLogin(req, res) {
     try {
+        console.log('🔐 STAFF LOGIN REQUEST RECEIVED');
+        console.log('🔐 Request origin:', req.headers.origin);
+        console.log('🔐 Request cookies:', req.headers.cookie || 'NONE');
+
         const { username, password } = req.body;
+        console.log('🔍 Staff login attempt:', { username, passwordLength: password ? password.length : undefined });
+
+        // Check if this email exists as a customer (for logging purposes)
+        const [customers] = await db.query(
+            'SELECT * FROM customers WHERE email = ?', [username]
+        );
+
+        if (customers.length > 0) {
+            console.log('ℹ️ Email exists as customer:', username);
+        }
 
         // Find user by username or email in the users table
+        console.log('🔍 Searching for user with:', username);
         const [users] = await db.query(
             'SELECT * FROM users WHERE username = ? OR email = ?', [username, username]
         );
+        console.log('📊 Query result:', {
+            foundUsers: users.length,
+            searchTerm: username
+        });
 
         if (users.length === 0) {
-            return res.status(401).json({ message: 'Invalid username or password' });
+            console.log('❌ User not found in users table:', username);
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
         const user = users[0];
+        console.log('✅ User found:', {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            position: user.position,
+            full_name: user.full_name
+        });
+
+        // Check if user has proper staff/admin role
+        if (!['staff', 'manager', 'admin'].includes(user.role)) {
+            console.log('❌ Invalid role:', user.role);
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
+        }
 
         // Check if user is active
         if (user.status !== 'active') {
-            return res.status(401).json({ message: 'Account is not active. Please contact administrator.' });
+            console.log('❌ User not active:', user.status);
+            return res.status(401).json({
+                message: 'Account is not active. Please contact administrator.',
+                errorType: 'inactive_account'
+            });
         }
 
         // Compare password
         const isValidPassword = await bcrypt.compare(password, user.password);
+        console.log('🔐 Password comparison:', {
+            providedPassword: password,
+            storedPasswordHash: user.password ? 'EXISTS' : 'MISSING',
+            isValidPassword,
+            passwordLength: user.password ? user.password.length : 0,
+            // DEBUG: Show first few characters of stored hash for debugging (remove in production)
+            storedHashPreview: user.password ? user.password.substring(0, 10) + '...' : 'NULL'
+        });
+
         if (!isValidPassword) {
-            console.log('Staff login failed: Invalid password for user', username);
-            return res.status(401).json({ message: 'Invalid username or password' });
+            console.log('❌ Invalid password for user:', username);
+            return res.status(401).json({
+                message: 'Invalid username or password',
+                errorType: 'invalid_credentials'
+            });
         }
 
-        // Set staff session with unique key
-        req.session.staffUser = {
+        console.log('✅ Password valid for user:', username);
+
+        // JWT-only auth for staff: no sessions or cookies
+        const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+        const token = jwt.sign({
             id: user.id,
             username: user.username,
             email: user.email,
             fullName: user.full_name,
-            role: user.role
-        };
-        console.log('Staff login successful. Session staffUser set:', req.session.staffUser);
+            role: user.role,
+            position: user.position || null
+        }, secret, { expiresIn: '1d' });
 
-        res.json({
+        return res.json({
             success: true,
             user: {
                 id: user.id,
                 username: user.username,
                 email: user.email,
                 fullName: user.full_name,
-                role: user.role
-            }
+                role: user.role,
+                position: user.position || null
+            },
+            token
         });
 
     } catch (error) {
-        console.error('Staff login error:', error);
+        console.error('❌ Staff login error:', error);
         res.status(500).json({ message: 'Error during login' });
     }
 }
 
-// Staff session check controller
+// Staff session check controller - uses authenticateJWT middleware
+// This function is called after authenticateJWT middleware, so req.user is already set
 function checkStaffSession(req, res) {
-    if (req.session.staffUser && (req.session.staffUser.role === 'admin' || req.session.staffUser.role === 'staff')) {
-        res.json({ authenticated: true, user: req.session.staffUser });
-    } else {
-        res.json({ authenticated: false });
+    // req.user is set by authenticateJWT middleware
+    if (req.user && (req.user.role === 'staff' || req.user.role === 'admin')) {
+        return res.json({
+            success: true,
+            authenticated: true,
+            user: {
+                id: req.user.id,
+                username: req.user.username,
+                email: req.user.email,
+                fullName: req.user.fullName || req.user.name,
+                role: req.user.role,
+                position: req.user.position || null
+            }
+        });
     }
+    return res.status(401).json({
+        success: false,
+        authenticated: false
+    });
 }
 
-// Staff logout controller
+// Staff logout controller (JWT-only: client clears token from localStorage)
 function staffLogout(req, res) {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ message: 'Error logging out' });
-        }
-        res.clearCookie('connect.sid');
-        res.json({ message: 'Logged out successfully' });
-    });
+    // JWT-only: No server-side session to destroy
+    // Client should clear localStorage on logout
+    res.json({ message: 'Logged out successfully' });
 }
 
 // Create new staff account
@@ -224,7 +397,13 @@ async function createStaff(req, res) {
         );
         console.log('createStaff: Insert result:', result);
 
-        res.status(201).json({ message: 'Staff account created successfully', userId: result.insertId });
+        res.status(201).json({
+            message: 'Staff account created successfully',
+            userId: result.insertId,
+            // Include the password for admin to communicate to staff (remove in production)
+            temporaryPassword: password,
+            note: 'Please communicate this password to the staff member securely'
+        });
     } catch (error) {
         console.error('Error creating staff account:', error);
         res.status(500).json({ message: 'Error creating staff account' });
@@ -261,39 +440,42 @@ async function editStaff(req, res) {
         let updateFields = [];
         let queryParams = [];
 
-        if (username) {
+        if (username !== undefined && username !== null && username !== '') {
             updateFields.push('username = ?');
             queryParams.push(username);
         }
 
-        if (email) {
+        if (email !== undefined && email !== null && email !== '') {
             updateFields.push('email = ?');
             queryParams.push(email);
         }
 
-        if (first_name || last_name) {
+        if (first_name !== undefined || last_name !== undefined) {
             // Get current values to construct full_name
             const [currentUser] = await db.query('SELECT first_name, last_name FROM users WHERE id = ?', [id]);
-            const newFirstName = first_name || currentUser[0].first_name;
-            const newLastName = last_name || currentUser[0].last_name;
-            const newFullName = `${newFirstName} ${newLastName}`;
-
-            if (first_name) {
-                updateFields.push('first_name = ?');
-                queryParams.push(first_name);
+            if (currentUser.length === 0) {
+                return res.status(404).json({ message: 'Staff account not found' });
             }
-            if (last_name) {
+            const newFirstName = first_name !== undefined ? (first_name || '') : currentUser[0].first_name;
+            const newLastName = last_name !== undefined ? (last_name || '') : currentUser[0].last_name;
+            const newFullName = `${newFirstName} ${newLastName}`.trim();
+
+            if (first_name !== undefined) {
+                updateFields.push('first_name = ?');
+                queryParams.push(first_name || '');
+            }
+            if (last_name !== undefined) {
                 updateFields.push('last_name = ?');
-                queryParams.push(last_name);
+                queryParams.push(last_name || '');
             }
             // Always update full_name when first_name or last_name changes
             updateFields.push('full_name = ?');
-            queryParams.push(newFullName);
+            queryParams.push(newFullName || '');
         }
 
-        if (age) {
+        if (age !== undefined && age !== null && age !== '') {
             updateFields.push('age = ?');
-            queryParams.push(age);
+            queryParams.push(parseInt(age) || 0);
         }
 
         if (password) {
@@ -307,60 +489,77 @@ async function editStaff(req, res) {
             queryParams.push(role);
         }
 
-        // Handle new HR fields
+        // Handle new HR fields - allow empty strings to be set to null
         if (phone !== undefined) {
             updateFields.push('phone = ?');
-            queryParams.push(phone);
+            queryParams.push(phone === '' ? null : phone);
         }
 
         if (address !== undefined) {
             updateFields.push('address = ?');
-            queryParams.push(address);
+            queryParams.push(address === '' ? null : address);
         }
 
         if (position !== undefined) {
             updateFields.push('position = ?');
-            queryParams.push(position);
+            // Allow empty string to be set to null, or keep the value if provided
+            queryParams.push(position === '' || position === null ? null : position);
         }
 
         if (work_schedule !== undefined) {
             updateFields.push('work_schedule = ?');
-            queryParams.push(work_schedule);
+            queryParams.push(work_schedule === '' ? null : work_schedule);
         }
 
         if (date_hired !== undefined) {
             updateFields.push('date_hired = ?');
-            queryParams.push(date_hired);
+            queryParams.push(date_hired === '' ? null : date_hired);
         }
 
         if (employee_id !== undefined) {
             updateFields.push('employee_id = ?');
-            queryParams.push(employee_id);
+            queryParams.push(employee_id === '' ? null : employee_id);
         }
 
         if (status !== undefined) {
             updateFields.push('status = ?');
-            queryParams.push(status);
+            queryParams.push(status === '' ? 'active' : status);
         }
 
         if (emergency_contact !== undefined) {
             updateFields.push('emergency_contact = ?');
-            queryParams.push(emergency_contact);
+            queryParams.push(emergency_contact === '' ? null : emergency_contact);
         }
 
         if (emergency_phone !== undefined) {
             updateFields.push('emergency_phone = ?');
-            queryParams.push(emergency_phone);
+            queryParams.push(emergency_phone === '' ? null : emergency_phone);
         }
 
         if (birthday !== undefined) {
             updateFields.push('birthday = ?');
-            queryParams.push(birthday);
+            queryParams.push(birthday === '' ? null : birthday);
         }
 
         if (gender !== undefined) {
             updateFields.push('gender = ?');
-            queryParams.push(gender);
+            queryParams.push(gender === '' ? null : gender);
+        }
+
+        if (updateFields.length === 0) {
+            return res.status(400).json({ message: 'No fields to update' });
+        }
+
+        // Check if staff member exists before updating
+        const [existingStaff] = await db.query('SELECT id, role FROM users WHERE id = ?', [id]);
+        if (existingStaff.length === 0) {
+            return res.status(404).json({ message: 'Staff account not found' });
+        }
+
+        // Allow updating if current role is 'staff' or 'manager' (staff members can be promoted to manager)
+        const currentRole = existingStaff[0].role;
+        if (currentRole !== 'staff' && currentRole !== 'manager') {
+            return res.status(400).json({ message: 'User is not a staff member' });
         }
 
         if (updateFields.length === 0) {
@@ -371,18 +570,58 @@ async function editStaff(req, res) {
         queryParams.push(id);
         console.log('editStaff: SQL Query:', query);
         console.log('editStaff: Query Params:', queryParams);
+        console.log('editStaff: Update Fields Count:', updateFields.length);
 
-        const [result] = await db.query(query, queryParams);
-        console.log('editStaff: Update result:', result);
+        try {
+            const [result] = await db.query(query, queryParams);
+            console.log('editStaff: Update result:', result);
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Staff account not found or no changes made' });
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ 
+                    success: false,
+                    message: 'Staff account not found or no changes made' 
+                });
+            }
+
+            console.log('editStaff: Successfully updated staff account:', id);
+            return res.json({ 
+                success: true, 
+                message: 'Staff account updated successfully' 
+            });
+        } catch (sqlError) {
+            console.error('editStaff: SQL Error:', sqlError);
+            throw sqlError; // Re-throw to be caught by outer catch
         }
-
-        res.json({ message: 'Staff account updated successfully' });
     } catch (error) {
         console.error('Error updating staff account:', error);
-        res.status(500).json({ message: 'Error updating staff account' });
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            sqlMessage: error.sqlMessage,
+            sqlState: error.sqlState,
+            errno: error.errno,
+            stack: error.stack
+        });
+        
+        // Provide more specific error messages
+        let errorMessage = 'Error updating staff account';
+        if (error.code === 'ER_BAD_FIELD_ERROR') {
+            errorMessage = `Database field error: ${error.sqlMessage || error.message}`;
+        } else if (error.code === 'ER_DUP_ENTRY') {
+            errorMessage = 'Duplicate entry: This username or email already exists';
+        } else if (error.sqlMessage) {
+            errorMessage = `Database error: ${error.sqlMessage}`;
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        
+        res.status(500).json({ 
+            success: false,
+            message: errorMessage,
+            error: error.message || 'Unknown error occurred',
+            code: error.code,
+            sqlMessage: error.sqlMessage
+        });
     }
 }
 

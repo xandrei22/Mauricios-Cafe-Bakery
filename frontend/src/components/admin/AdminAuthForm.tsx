@@ -11,7 +11,8 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
-import { getApiUrl } from "../../utils/apiConfig";
+import { adminLogin } from "../../utils/authUtils";
+import { mobileFriendlySwal } from "../../utils/sweetAlertConfig";
 
 export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [isSignUp, setIsSignUp] = useState(false)
@@ -23,64 +24,121 @@ export function AdminAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
-// Get the API URL from environment variable
-const API_URL = getApiUrl();
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-async function handleLogin(e: React.FormEvent) {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
-
-  try {
-    console.log('Attempting admin login with:', { username: usernameOrEmail });
-    
-    const res = await fetch(`${API_URL}/api/admin/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include", // must be above body for consistent handling
-      body: JSON.stringify({
-        username: usernameOrEmail,
-        password,
-      }),
-    });
-
-    console.log('Admin login response status:', res.status);
-    
-    const data = await res.json();
-    console.log('Admin login response data:', data);
-
-    if (!res.ok || !data.success) {
-      setError(data.message || "Login failed");
-      return;
-    }
-
-    console.log('Admin login successful, checking for alerts');
-    
     try {
-      if (data.user) {
-        localStorage.setItem("adminUser", JSON.stringify(data.user));
-      } else if (data.email) {
-        localStorage.setItem("adminUser", JSON.stringify({ email: data.email }));
+      console.log('Attempting admin login with:', { username: usernameOrEmail });
+      
+      await adminLogin(usernameOrEmail, password);
+      
+      console.log('Admin login successful, checking for alerts');
+      
+      // ⭐ CRITICAL: Verify token is saved before redirect (with retry)
+      console.log('🔍 Verifying admin token was saved...');
+      
+      let savedToken = localStorage.getItem('authToken');
+      let savedUser = localStorage.getItem('adminUser');
+      
+      // Wait up to 1 second for token to be saved (for slow devices)
+      for (let i = 0; i < 10; i++) {
+        if (savedToken && savedUser) {
+          console.log(`✅ Admin token verified after ${i * 100}ms`);
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('adminUser');
       }
-    } catch {}
+      
+      // Final check
+      if (!savedToken || !savedUser) {
+        console.error('❌ CRITICAL: Admin token not found after login!', {
+          token: !!savedToken,
+          user: !!savedUser,
+          allKeys: Object.keys(localStorage)
+        });
+        setError("Authentication failed. Please try again.");
+        return;
+      }
+      
+      console.log('✅ ADMIN LOGIN SUCCESSFUL - Redirecting...');
+      console.log('Token exists:', !!savedToken);
+      console.log('User exists:', !!savedUser);
 
-    // Check for alerts immediately after successful login
-    // Don't await - let it fail silently if there's an error
-    checkLowStockAlert().catch(err => {
-      console.error('Failed to check low stock alert:', err);
-      // Continue with navigation even if alert check fails
-    });
-    
-    // Navigate immediately, don't wait for alert check
-    navigate("/admin/dashboard");
+      // ⭐ CRITICAL: Ensure loginTimestamp is set for ProtectedRoute to recognize recent login
+      // (authUtils already sets it, but ensure it's set right before redirect)
+      localStorage.setItem('loginTimestamp', Date.now().toString());
 
-  } catch (err) {
-    console.error("Admin login error:", err);
-    setError("Network error. Please try again.");
-  } finally {
-    setLoading(false);
+      // Check for alerts immediately after successful login
+      checkLowStockAlert().catch(err => {
+        console.error('Failed to check low stock alert:', err);
+      });
+      
+      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and ProtectedRoute can read it
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 800 : 600; // Increased delay to ensure token is saved
+      
+      setTimeout(() => {
+        const tokenCheck = localStorage.getItem('authToken');
+        const userCheck = localStorage.getItem('adminUser');
+        console.log(`Admin login redirect - Token saved: ${!!tokenCheck}, User saved: ${!!userCheck}`);
+        
+        if (!tokenCheck || !userCheck) {
+          console.warn('⚠️ Token or user not found, waiting a bit more...');
+          setTimeout(() => {
+            // ⭐ FORCE REDIRECT using window.location to bypass any routing issues
+            console.log('🔄 FORCING REDIRECT to /admin/dashboard');
+            window.location.href = "/admin/dashboard";
+          }, 300);
+        } else {
+          // Try React Router first, but fallback to window.location if needed
+          try {
+            navigate("/admin/dashboard", { replace: true });
+            // Backup: if still on login page after 1 second, force redirect
+            setTimeout(() => {
+              if (window.location.pathname.includes('/login')) {
+                console.log('🔄 React Router redirect failed, forcing with window.location');
+                window.location.href = "/admin/dashboard";
+              }
+            }, 1000);
+          } catch (navError) {
+            console.error('Navigate error, using window.location:', navError);
+            window.location.href = "/admin/dashboard";
+          }
+        }
+      }, delay);
+
+    } catch (err: any) {
+      console.error("Admin login error:", err);
+      
+      // Handle network/CORS errors
+      if (err.isNetworkError || err.message?.includes('Network') || err.message?.includes('CORS') || err.message?.includes('Failed to fetch')) {
+        console.error('🚨 Network/CORS error detected:', err);
+        setError("Cannot connect to server. Please check your connection and try again.");
+        return;
+      }
+      
+      // Handle different error types
+      if (err.response?.data?.errorType === 'unauthorized_access') {
+        await mobileFriendlySwal.error(
+          'Not Authorized',
+          'You are not authorized to access the admin portal. Please contact your administrator.'
+        );
+      } else if (err.response?.data?.errorType === 'inactive_account') {
+        await mobileFriendlySwal.warning(
+          'Account Inactive',
+          'Your account is not active. Please contact your administrator.'
+        );
+      } else {
+        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   return (
     <div className={cn("min-h-screen flex", className)} {...props}>

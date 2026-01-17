@@ -16,8 +16,10 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import StaffRewardProcessing from '../staff/StaffRewardProcessing';
+import AdminRewardProcessing from './AdminRewardProcessing';
 import Swal from 'sweetalert2';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 
 interface LoyaltyReward {
@@ -72,6 +74,7 @@ interface LoyaltyStats {
 }
 
 const AdminLoyalty: React.FC = () => {
+  const API_URL = getApiUrl();
   const [activeTab, setActiveTab] = useState('rewards');
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
   const [customers, setCustomers] = useState<CustomerLoyalty[]>([]);
@@ -115,26 +118,26 @@ const AdminLoyalty: React.FC = () => {
   };
 
   const fetchRewards = async () => {
-    const res = await fetch('/api/admin/loyalty/rewards');
-    if (res.ok) {
-      const data = await res.json();
-      setRewards(data.rewards);
+    const res = await axiosInstance.get(`${API_URL}/api/admin/loyalty/rewards`);
+    if (res && res.status >= 200 && res.status < 300) {
+      const data = res.data;
+      setRewards(data.rewards || []);
     }
   };
 
   const fetchCustomers = async () => {
-    const res = await fetch('/api/admin/loyalty/customers');
-    if (res.ok) {
-      const data = await res.json();
-      setCustomers(data.customers);
+    const res = await axiosInstance.get(`${API_URL}/api/admin/loyalty/customers`);
+    if (res && res.status >= 200 && res.status < 300) {
+      const data = res.data;
+      setCustomers(data.customers || []);
     }
   };
 
   const fetchStats = async () => {
-    const res = await fetch('/api/admin/loyalty/stats');
-    if (res.ok) {
-      const data = await res.json();
-      setStats(data.stats);
+    const res = await axiosInstance.get(`${API_URL}/api/admin/loyalty/stats`);
+    if (res && res.status >= 200 && res.status < 300) {
+      const data = res.data;
+      setStats(data.stats || null);
     }
   };
 
@@ -142,11 +145,9 @@ const AdminLoyalty: React.FC = () => {
 
   const toggleRewardStatus = async (rewardId: number) => {
     try {
-      const res = await fetch(`/api/admin/loyalty/rewards/${rewardId}/toggle`, {
-        method: 'PATCH'
-      });
+      const res = await axiosInstance.patch(`${API_URL}/api/admin/loyalty/rewards/${rewardId}/toggle`);
 
-      if (res.ok) {
+      if (res && res.status >= 200 && res.status < 300) {
         await fetchRewards();
         Swal.fire({
           title: 'Success!',
@@ -169,23 +170,20 @@ const AdminLoyalty: React.FC = () => {
 
     try {
       const url = editingReward 
-        ? `/api/admin/loyalty/rewards/${editingReward.id}`
-        : '/api/admin/loyalty/rewards';
+        ? `${API_URL}/api/admin/loyalty/rewards/${editingReward.id}`
+        : `${API_URL}/api/admin/loyalty/rewards`;
       
-      const method = editingReward ? 'PUT' : 'POST';
       const body = {
         ...rewardForm,
         points_required: parseInt(rewardForm.points_required),
         discount_percentage: rewardForm.discount_percentage ? parseFloat(rewardForm.discount_percentage) : null
       };
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const res = editingReward
+        ? await axiosInstance.put(url, body)
+        : await axiosInstance.post(url, body);
 
-      if (res.ok) {
+      if (res && res.status >= 200 && res.status < 300) {
         Swal.fire({
           title: 'Success!',
           text: `Reward ${editingReward ? 'updated' : 'created'} successfully!`,
@@ -210,11 +208,9 @@ const AdminLoyalty: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this reward?')) return;
 
     try {
-      const res = await fetch(`/api/admin/loyalty/rewards/${rewardId}`, {
-        method: 'DELETE'
-      });
+      const res = await axiosInstance.delete(`${API_URL}/api/admin/loyalty/rewards/${rewardId}`);
 
-      if (res.ok) {
+      if (res && res.status >= 200 && res.status < 300) {
         setMessage('Reward deleted successfully!');
         await fetchRewards();
       } else {
@@ -499,7 +495,7 @@ const AdminLoyalty: React.FC = () => {
 
           {/* Reward Processing Tab */}
           <TabsContent value="processing" className="space-y-6">
-            <StaffRewardProcessing />
+            <AdminRewardProcessing />
           </TabsContent>
         </Tabs>
 

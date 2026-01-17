@@ -3,12 +3,180 @@ const router = express.Router();
 const db = require('../config/db');
 const qrService = require('../services/qrService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
+const notificationService = require('../services/notificationService');
 const { v4: uuidv4 } = require('uuid');
+const { authenticateJWT } = require('../middleware/jwtAuth');
+
+// CRITICAL FIX: Initialize req.session as a safe object to prevent "Cannot read properties of undefined" errors
+// This MUST run before any other middleware that might access req.session
+router.use(function(req, res, next) {
+    // Ensure req.session is always a safe object (never undefined) to prevent errors
+    if (!req.session || typeof req.session !== 'object') {
+        // Create a safe object with null properties for common session properties
+        req.session = {
+            adminUser: null,
+            staffUser: null,
+            user: null,
+            customerUser: null,
+            admin: null,
+            staff: null
+        };
+    } else {
+        // If session exists but properties are undefined, set them to null
+        if (req.session.adminUser === undefined) req.session.adminUser = null;
+        if (req.session.staffUser === undefined) req.session.staffUser = null;
+        if (req.session.user === undefined) req.session.user = null;
+        if (req.session.customerUser === undefined) req.session.customerUser = null;
+    }
+    next();
+});
+
+// Apply JWT authentication middleware (requires token)
+router.use(authenticateJWT);
+
+// Generate random 5-character order code (letters and numbers)
+function generateShortOrderCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function normalizeOrderIdentifier(raw) {
+    if (raw === null || raw === undefined) {
+        return { normalized: '', numericId: null };
+    }
+    const normalized = String(raw).trim();
+    const numericId = normalized && /^\d+$/.test(normalized) ? parseInt(normalized, 10) : null;
+    return { normalized, numericId };
+}
+
+async function findOrderByIdentifier(identifier, connection = null) {
+    const { normalized, numericId } = normalizeOrderIdentifier(identifier);
+    if (!normalized) {
+        return null;
+    }
+
+    const executor = connection && typeof connection.query === 'function'
+        ? connection.query.bind(connection)
+        : db.query.bind(db);
+
+    let sql = `
+        SELECT * FROM orders
+        WHERE order_id = ? OR order_number = ?
+    `;
+    const params = [normalized, normalized];
+
+    if (numericId !== null) {
+        sql += ' OR id = ?';
+        params.push(numericId);
+    }
+
+    sql += ' LIMIT 1';
+
+    const [rows] = await executor(sql, params);
+    return rows.length ? rows[0] : null;
+}
+
+function resolveOrderIdentifiers(order, fallback) {
+    const fallbackId = fallback ? String(fallback).trim() : null;
+    if (!order) {
+        return {
+            internalId: fallbackId,
+            publicId: fallbackId
+        };
+    }
+
+    // Always treat the long ORD-... value as the canonical "orderId"
+    // and never substitute the 5-character display code for sockets/APIs.
+    const internalId = order.order_id || order.id || fallbackId;
+    const publicId = internalId;
+
+    return {
+        internalId,
+        publicId
+    };
+}
+
+router.param('orderId', async(req, res, next, orderIdParam) => {
+    try {
+        const order = await findOrderByIdentifier(orderIdParam);
+        req.requestedOrderId = String(orderIdParam);
+        req.orderRecord = order || null;
+        req.orderIdentifiers = resolveOrderIdentifiers(order, orderIdParam);
+        next();
+    } catch (error) {
+        console.error('Error resolving order identifier:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to resolve order identifier'
+        });
+    }
+});
 
 // Create a new order
 router.post('/', async(req, res) => {
+    // CRITICAL: Initialize session FIRST before anything else
     try {
-        const { customer_info, items, total_amount, payment_method, notes, orderType = 'dine_in' } = req.body;
+        if (!req.session || typeof req.session !== 'object') {
+            req.session = {
+                adminUser: null,
+                staffUser: null,
+                user: null,
+                customerUser: null,
+                admin: null,
+                staff: null
+            };
+        }
+    } catch (sessionInitError) {
+        console.error('❌ Error initializing session:', sessionInitError);
+        req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+    }
+
+    // Wrap everything in a try-catch to catch any session access errors
+    try {
+        // CRITICAL: Ensure req.user exists (set by authenticateJWT middleware)
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                error: 'Authentication required. Please log in again.'
+            });
+        }
+
+        // req.session is already safely initialized by middleware above
+        // Handle both camelCase and snake_case field names
+        const {
+            customer_info,
+            items,
+            total_amount,
+            payment_method,
+            notes,
+            orderType = req.body.order_type || 'dine_in'
+        } = req.body;
+
+        // Validate required fields
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Order must contain at least one item'
+            });
+        }
+
+        if (!customer_info || !customer_info.name) {
+            return res.status(400).json({
+                success: false,
+                error: 'Customer name is required'
+            });
+        }
+
+        if (!total_amount || isNaN(total_amount) || total_amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Valid total amount is required'
+            });
+        }
 
         // Extract customer info from the frontend structure
         const customerId = customer_info.id || null;
@@ -17,20 +185,60 @@ router.post('/', async(req, res) => {
         const totalPrice = total_amount;
         const paymentMethod = payment_method;
 
-        // Get staff ID from session (for admin/staff orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
-            null;
+        // Get staff ID from JWT authentication only (no session access)
+        // optionalJWT middleware sets req.user if JWT token is present
+        let staffId = null;
+
+        // Only use JWT user - no session access to avoid undefined errors
+        if (req.user && typeof req.user === 'object' && req.user.id) {
+            // Check if user is admin or staff
+            if (req.user.role === 'admin' || req.user.role === 'staff') {
+                staffId = req.user.id;
+            }
+        }
+
+        // staffId will be null for guest orders, which is fine
 
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Get next queue position
-        const [queueResult] = await db.query(`
-            SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position 
-            FROM orders 
-            WHERE DATE(order_time) = CURDATE() AND status IN ('pending', 'preparing', 'ready')
-        `);
-        const queuePosition = queueResult[0].next_position;
+        // Generate random 5-character display code
+        let shortOrderCode;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        // Ensure uniqueness (check against existing order_number values)
+        while (!isUnique && attempts < maxAttempts) {
+            shortOrderCode = generateShortOrderCode();
+            const [existing] = await db.query(
+                'SELECT id FROM orders WHERE order_number = ?', [shortOrderCode]
+            );
+            if (existing.length === 0) {
+                isUnique = true;
+            }
+            attempts++;
+        }
+
+        // Fallback: if we couldn't generate a unique code, use a timestamp-based one
+        if (!isUnique) {
+            shortOrderCode = generateShortOrderCode() + Date.now().toString().slice(-2);
+        }
+
+        // Get next queue position - handle both order_time and created_at columns
+        let queuePosition = 1;
+        try {
+            const [queueResult] = await db.query(`
+                SELECT COALESCE(MAX(queue_position), 0) + 1 as next_position 
+                FROM orders 
+                WHERE DATE(COALESCE(order_time, created_at)) = CURDATE() 
+                AND status IN ('pending', 'preparing', 'ready', 'pending_verification')
+            `);
+            queuePosition = (queueResult[0] && queueResult[0].next_position) || 1;
+        } catch (queueError) {
+            console.warn('⚠️ Error getting queue position, using default:', queueError.message);
+            // If query fails, just use 1 as default
+            queuePosition = 1;
+        }
 
         // Calculate estimated ready time (15 minutes from now for dine-in, 10 minutes for takeout)
         const estimatedReadyTime = new Date();
@@ -41,19 +249,40 @@ router.post('/', async(req, res) => {
         await connection.beginTransaction();
 
         try {
-            // Create order - Admin POS orders should go to payment verification
-            const isImmediatePay = paymentMethod === 'cash' || paymentMethod === 'gcash' || paymentMethod === 'paymaya';
-            const orderStatus = isImmediatePay ? 'pending_verification' : 'pending';
-            const paymentStatus = isImmediatePay ? 'pending' : 'pending';
+            // Create order - All orders start with pending payment status
+            // Flow: Order placed → Pending Payments → (if verified) Preparing → (if cancelled) Cancelled Orders
+            // For digital payments (gcash/paymaya), customer will upload receipt → pending_verification
+            // For cash, staff will verify → pending
+            const isDigitalPayment = paymentMethod === 'gcash' || paymentMethod === 'paymaya';
+            const orderStatus = 'pending'; // All new orders start as pending
+            const paymentStatus = isDigitalPayment ? 'pending_verification' : 'pending'; // Digital payments need receipt verification
 
-            // Generate a unique order number for display purposes
-            const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            console.log('🔧 Creating order with data:', {
+                orderId,
+                shortOrderCode,
+                customerId,
+                customerName,
+                tableNumber,
+                itemsCount: items.length,
+                totalPrice,
+                orderStatus,
+                paymentStatus,
+                paymentMethod,
+                orderType,
+                queuePosition,
+                staffId
+            });
 
-            await connection.query(`
+            // Insert order with short order code
+            // CRITICAL: Include created_at explicitly to avoid "Field 'created_at' doesn't have a default value" error
+            const currentTime = new Date();
+            const insertResult = await connection.query(`
                 INSERT INTO orders 
-                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-            `, [orderId, orderNumber, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes, orderType, queuePosition, estimatedReadyTime, staffId]);
+                (order_id, order_number, customer_id, customer_name, table_number, items, total_price, status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, staff_id, created_at, order_time) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [orderId, shortOrderCode, customerId, customerName, tableNumber, JSON.stringify(items), totalPrice, orderStatus, paymentStatus, paymentMethod, notes || null, orderType, queuePosition, estimatedReadyTime, staffId, currentTime, currentTime]);
+
+            console.log('✅ Order inserted successfully:', (insertResult[0] && insertResult[0].insertId) || 'unknown');
 
             // Generate QR code for payment if needed
             let qrCode = null;
@@ -106,6 +335,7 @@ router.post('/', async(req, res) => {
                 success: true,
                 order: {
                     orderId,
+                    shortOrderCode,
                     customerId,
                     customerName,
                     tableNumber,
@@ -121,32 +351,114 @@ router.post('/', async(req, res) => {
                     paymentUrl: qrCode ? qrCode.url : null
                 }
             });
-        } catch (error) {
+        } catch (innerError) {
             await connection.rollback();
-            throw error;
+            console.error('❌ Transaction error in order creation:', innerError);
+            console.error('❌ Transaction error stack:', innerError.stack);
+            throw innerError;
         } finally {
             connection.release();
         }
     } catch (error) {
-        console.error('Error creating order:', error);
-        console.error('Error stack:', error.stack);
-        console.error('Request body:', req.body);
-        res.status(500).json({ success: false, error: 'Failed to create order', details: error.message });
+        // CRITICAL: Ensure session is safe BEFORE any error logging or processing
+        try {
+            if (!req.session || typeof req.session !== 'object') {
+                req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+            }
+        } catch (sessionError) {
+            // If we can't even initialize session, create a minimal safe object
+            req.session = { adminUser: null, staffUser: null, user: null, customerUser: null };
+        }
+
+        console.error('❌ Error creating order:', error);
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+
+        // Safely stringify request body (might fail if circular references)
+        try {
+            console.error('❌ Request body:', JSON.stringify(req.body, null, 2));
+        } catch (e) {
+            console.error('❌ Request body (stringify failed):', typeof req.body);
+        }
+
+        // Safely log headers
+        try {
+            console.error('❌ Request headers:', Object.keys(req.headers || {}));
+        } catch (e) {
+            console.error('❌ Request headers (access failed)');
+        }
+
+        // Check if error is related to session access
+        const isSessionError = error.message && (
+            error.message.includes('adminUser') ||
+            error.message.includes('staffUser') ||
+            error.message.includes('Cannot read properties')
+        );
+
+        if (isSessionError) {
+            console.error('❌ SESSION ACCESS ERROR DETECTED - This should not happen!');
+            const errorLocation = error.stack ? error.stack.split('\n').slice(0, 10).join('\n') : 'unknown';
+            console.error('❌ Error location:', errorLocation);
+            console.error('❌ req.session exists:', !!req.session);
+            console.error('❌ req.session type:', typeof req.session);
+            console.error('❌ req.user exists:', !!req.user);
+            console.error('❌ req.user:', req.user ? { id: req.user.id, role: req.user.role } : 'null');
+        }
+
+        // Provide more specific error messages
+        let errorMessage = 'Failed to create order';
+        let errorDetails = error.message || 'Unknown error';
+
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            errorMessage = 'Database table not found';
+            errorDetails = 'The orders table does not exist. Please check database setup.';
+        } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+            errorMessage = 'Database field error';
+            errorDetails = `Invalid field in database query: ${error.message}`;
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+            errorMessage = 'Database connection error';
+            errorDetails = 'Could not connect to database. Please check database server.';
+        } else if (error.message && error.message.includes('JSON')) {
+            errorMessage = 'Invalid data format';
+            errorDetails = 'Error processing order items. Please check the data format.';
+        } else if (error.message && (error.message.includes('adminUser') || error.message.includes('Cannot read properties'))) {
+            errorMessage = 'Authentication error';
+            errorDetails = 'Session access error. Please ensure you are logged in with a valid token.';
+        }
+
+        res.status(500).json({
+            success: false,
+            error: errorMessage,
+            details: errorDetails,
+            code: error.code || 'UNKNOWN_ERROR'
+        });
     }
 });
 
 // Get all orders
 router.get('/', async(req, res) => {
     try {
-        const { status, customerId, tableNumber, page = 1, limit = 20 } = req.query;
+        const { status, customerId, tableNumber, page = 1, limit = 100 } = req.query; // Increased default limit for POS dashboard
 
         let sql = 'SELECT * FROM orders WHERE 1=1';
         const params = [];
 
         // For POS dashboard, only show relevant orders by default
+        // Include orders with pending payment status even if order status is different
+        // Also include cancelled orders for the cancelled orders tab
         if (!status) {
-            sql += ' AND status IN (?, ?, ?, ?, ?, ?, ?)';
-            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled');
+            // Include orders that:
+            // 1. Have active statuses (pending, preparing, ready, etc.)
+            // 2. OR have pending/pending_verification payment status (regardless of order status, except completed+paid)
+            // 3. OR are cancelled
+            // This ensures ALL orders needing payment verification are shown
+            sql += ` AND (
+                status IN (?, ?, ?, ?, ?, ?, ?) 
+                OR COALESCE(payment_status, 'pending') IN (?, ?)
+            )`;
+            sql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
+            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification', 'completed', 'paid');
         } else if (status) {
             sql += ' AND status = ?';
             params.push(status);
@@ -164,10 +476,14 @@ router.get('/', async(req, res) => {
 
         sql += ' ORDER BY queue_position ASC, order_time ASC';
 
-        // Add pagination
-        const offset = (page - 1) * limit;
-        sql += ' LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
+        // Add pagination (only if limit is specified and reasonable)
+        // For POS dashboard, we need to see all active orders, so increase default limit
+        const limitNum = parseInt(limit) || 500; // Increased default to 500 to show all active orders
+        if (limitNum > 0 && limitNum <= 2000) { // Increased max limit to 2000
+            const offset = (parseInt(page) - 1) * limitNum;
+            sql += ' LIMIT ? OFFSET ?';
+            params.push(limitNum, offset);
+        }
 
         const [orders] = await db.query(sql, params);
 
@@ -214,27 +530,47 @@ router.get('/', async(req, res) => {
                 }
             }));
 
+            // Ensure paymentStatus is always set - default to 'pending' if null/undefined
+            const paymentStatus = order.payment_status || 'pending';
+
             return {
                 ...order,
                 id: order.id || order.order_id,
                 orderId: order.order_id,
+                shortOrderCode: order.order_number,
                 customerName: order.customer_name,
                 tableNumber: order.table_number,
-                totalPrice: order.total_amount,
-                orderTime: order.created_at,
-                paymentStatus: order.payment_status,
-                paymentMethod: order.payment_method,
+                totalPrice: order.total_price || order.total_amount || 0,
+                orderTime: order.created_at || order.order_time,
+                paymentStatus: paymentStatus,
+                paymentMethod: order.payment_method || '',
                 items: enrichedItems,
-                placedBy: order.staff_id ? 'staff' : 'customer',
-                receiptPath: order.receipt_path
+                placedBy: order.staff_id ?
+                    (
+                        req.user && order.staff_id === req.user.id ?
+                        (req.user.role === 'admin' ? 'admin' : 'staff') :
+                        'staff'
+                    ) : 'customer',
+                receiptPath: order.receipt_path,
+                cancelledBy: order.cancelled_by,
+                cancellationReason: order.cancellation_reason,
+                cancelledAt: order.cancelled_at
             };
         }));
 
-        // Get total count
+        // Get total count - must match the main query conditions
         let countSql = 'SELECT COUNT(*) as total FROM orders WHERE 1=1';
         const countParams = [];
 
-        if (status) {
+        // Match the same WHERE conditions as the main query
+        if (!status) {
+            countSql += ` AND (
+                status IN (?, ?, ?, ?, ?, ?, ?) 
+                OR COALESCE(payment_status, 'pending') IN (?, ?)
+            )`;
+            countSql += ` AND NOT (status = ? AND COALESCE(payment_status, 'pending') = ?)`;
+            countParams.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification', 'completed', 'paid');
+        } else if (status) {
             countSql += ' AND status = ?';
             countParams.push(status);
         }
@@ -514,30 +850,27 @@ router.get('/stats/staff-activities', async(req, res) => {
 // Get order by ID
 router.get('/:orderId', async(req, res) => {
     try {
-        const { orderId } = req.params;
+        const order = req.orderRecord;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        const [orders] = await db.query(`
-            SELECT * FROM orders WHERE order_id = ?
-        `, [orderId]);
-
-        if (orders.length === 0) {
+        if (!order || !internalId) {
             return res.status(404).json({ success: false, error: 'Order not found' });
         }
 
-        const order = orders[0];
-        order.items = JSON.parse(order.items);
+        const parsedOrder = { ...order };
+        parsedOrder.items = JSON.parse(order.items || '[]');
+        parsedOrder.id = order.id || order.order_id;
+        parsedOrder.orderId = publicId;
+        parsedOrder.internalOrderId = internalId;
+        parsedOrder.shortOrderCode = order.order_number || publicId;
+        parsedOrder.customerName = order.customer_name;
+        parsedOrder.tableNumber = order.table_number;
+        parsedOrder.totalPrice = order.total_price;
+        parsedOrder.orderTime = order.order_time;
+        parsedOrder.paymentStatus = order.payment_status;
+        parsedOrder.paymentMethod = order.payment_method;
 
-        // Map fields to match frontend interface
-        order.id = order.id || order.order_id;
-        order.orderId = order.order_id;
-        order.customerName = order.customer_name;
-        order.tableNumber = order.table_number;
-        order.totalPrice = order.total_price;
-        order.orderTime = order.order_time;
-        order.paymentStatus = order.payment_status;
-        order.paymentMethod = order.payment_method;
-
-        res.json({ success: true, order });
+        res.json({ success: true, order: parsedOrder });
     } catch (error) {
         console.error('Error fetching order:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch order' });
@@ -548,7 +881,13 @@ router.get('/:orderId', async(req, res) => {
 router.put('/:orderId/status', async(req, res) => {
     try {
         const { orderId } = req.params;
-        const { status, paymentStatus } = req.body;
+        const { status, paymentStatus, cancelledBy, cancellationReason, cancelledAt } = req.body;
+        const orderRecord = req.orderRecord;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         let updateFields = [];
         let params = [];
@@ -563,6 +902,18 @@ router.put('/:orderId/status', async(req, res) => {
             params.push(paymentStatus);
         }
 
+        // Handle cancellation details
+        if (status === 'cancelled') {
+            updateFields.push('cancelled_by = ?');
+            params.push(cancelledBy || (req.user && req.user.id) || 'admin');
+
+            updateFields.push('cancellation_reason = ?');
+            params.push(cancellationReason || 'Cancelled by admin');
+
+            updateFields.push('cancelled_at = ?');
+            params.push(cancelledAt || new Date());
+        }
+
         if (status === 'completed') {
             updateFields.push('completed_time = NOW()');
             // Automatically set payment status to 'paid' when order is completed
@@ -570,22 +921,37 @@ router.put('/:orderId/status', async(req, res) => {
             params.push('paid');
         }
 
+        // Update staff_id if admin/staff member is processing this order
+        // Use JWT authentication (req.user) instead of session
+        const currentStaffId =
+            req.user && (req.user.role === 'admin' || req.user.role === 'staff') ?
+            req.user.id :
+            null;
+
+        if (currentStaffId) {
+            updateFields.push('staff_id = ?');
+            params.push(currentStaffId);
+        }
+
         if (updateFields.length === 0) {
             return res.status(400).json({ success: false, error: 'No fields to update' });
         }
 
         // Get order details for ingredient deduction
-        const [orderResult] = await db.query(`
-            SELECT * FROM orders WHERE order_id = ?
-        `, [orderId]);
+        let order = orderRecord;
+        if (!order) {
+            const [orderResult] = await db.query(`
+                SELECT * FROM orders WHERE order_id = ?
+            `, [internalId]);
 
-        if (orderResult.length === 0) {
-            return res.status(404).json({ success: false, error: 'Order not found' });
+            if (orderResult.length === 0) {
+                return res.status(404).json({ success: false, error: 'Order not found' });
+            }
+
+            order = orderResult[0];
         }
 
-        const order = orderResult[0];
-
-        params.push(orderId);
+        params.push(internalId);
 
         await db.query(`
             UPDATE orders SET ${updateFields.join(', ')} WHERE order_id = ?
@@ -602,8 +968,8 @@ router.put('/:orderId/status', async(req, res) => {
                     name: item.name
                 }));
 
-                console.log('🔔 OrderRoutes status update: Deducting ingredients for order', orderId);
-                await ingredientDeductionService.deductIngredientsForOrder(order.id, itemsForDeduction, req);
+                console.log('🔔 OrderRoutes status update: Deducting ingredients for order', publicId);
+                await ingredientDeductionService.deductIngredientsForOrder(order.id || internalId, itemsForDeduction, req);
             } catch (deductionError) {
                 console.error('Failed to deduct ingredients during status update:', deductionError);
                 // Don't fail the status update if ingredient deduction fails
@@ -613,33 +979,35 @@ router.put('/:orderId/status', async(req, res) => {
         // Emit real-time update
         const io = req.app.get('io');
         if (io) {
+            const updatePayload = {
+                orderId: publicId,
+                internalOrderId: internalId,
+                status,
+                paymentStatus,
+                timestamp: new Date()
+            };
+            
             // Emit to specific order room
-            io.to(`order-${orderId}`).emit('order-updated', {
-                orderId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
+            io.to(`order-${publicId}`).emit('order-updated', updatePayload);
             // Emit to staff and admin rooms
-            io.to('staff-room').emit('order-updated', {
-                orderId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
-            io.to('admin-room').emit('order-updated', {
-                orderId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
-            // Broadcast to all customers
-            io.emit('order-updated', {
-                orderId,
-                status,
-                paymentStatus,
-                timestamp: new Date()
-            });
+            io.to('staff-room').emit('order-updated', updatePayload);
+            io.to('admin-room').emit('order-updated', updatePayload);
+            
+            // Emit to customer room if customer_id exists
+            if (order && order.customer_id) {
+                try {
+                    const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                    if (customer.length > 0 && customer[0].email) {
+                        io.to(`customer-${customer[0].email}`).emit('order-updated', updatePayload);
+                        console.log(`📤 OrderRoutes: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                    }
+                } catch (customerError) {
+                    console.warn('Failed to get customer email for room emission:', customerError.message);
+                }
+            }
+            
+            // Broadcast to all customers as fallback
+            io.emit('order-updated', updatePayload);
         }
 
         res.json({ success: true, message: 'Order status updated successfully' });
@@ -654,56 +1022,170 @@ router.post('/:orderId/verify-payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { verifiedBy, paymentMethod } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        // Update payment status and move to preparing status
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+
+        // Update payment status and move to payment_confirmed status (not preparing yet)
         await db.query(`
             UPDATE orders 
-            SET payment_status = 'paid', status = 'preparing' 
+            SET payment_status = 'paid', status = 'payment_confirmed' 
             WHERE order_id = ?
-        `, [orderId]);
+        `, [internalId]);
 
         // Note: Ingredient deduction now happens when order is marked as 'ready', not during payment verification
 
-        // Insert payment transaction to trigger status change
-        await db.query(`
-            INSERT INTO payment_transactions 
-            (order_id, payment_method, amount, status, verified_by, created_at) 
-            VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
-        `, [orderId, paymentMethod || 'cash', orderId, verifiedBy || 'admin']);
+        // Insert payment transaction to trigger status change.
+        // This is useful for reporting but should NOT cause verification to fail
+        // if the table or columns are missing in some environments.
+        try {
+            await db.query(`
+                INSERT INTO payment_transactions 
+                (order_id, payment_method, amount, status, verified_by, created_at) 
+                VALUES (?, ?, (SELECT total_price FROM orders WHERE order_id = ?), 'completed', ?, NOW())
+            `, [internalId, paymentMethod || 'cash', internalId, verifiedBy || 'admin']);
+        } catch (txError) {
+            console.error('⚠️ Non‑critical error inserting into payment_transactions:', txError);
+            // Do not throw – payment has already been marked as paid above.
+        }
+
+        // Get order details for notification
+        const [orderDetails] = await db.query(`
+            SELECT customer_name, total_price, order_type, table_number, customer_id, customer_email
+            FROM orders 
+            WHERE order_id = ?
+        `, [internalId]);
+
+        const order = orderDetails[0] || {};
+
+        // Create notification for admins about payment verification
+        try {
+            await notificationService.createNotification({
+                type: 'payment_update',
+                title: 'Payment Verified',
+                message: `Payment verified for Order ${publicId}. Customer: ${order.customer_name || 'Unknown'}, Amount: ₱${parseFloat(order.total_price || 0).toFixed(2)}, Method: ${(paymentMethod || 'cash').toUpperCase()}`,
+                data: {
+                    orderId: publicId,
+                    internalOrderId: internalId,
+                    customerName: order.customer_name,
+                    totalPrice: order.total_price,
+                    paymentMethod: paymentMethod || 'cash',
+                    verifiedBy: verifiedBy || 'admin'
+                },
+                userType: 'admin',
+                priority: 'medium'
+            });
+            console.log('📢 Notification created for payment verification:', publicId);
+        } catch (notificationError) {
+            console.error('⚠️ Failed to create payment verification notification (non-critical):', notificationError);
+            // Don't fail the request if notification fails
+        }
 
         // Emit real-time update
         const io = req.app.get('io');
         if (io) {
             // Emit order status update
-            io.to(`order-${orderId}`).emit('order-updated', {
-                orderId,
-                status: 'preparing',
+            io.to(`order-${publicId}`).emit('order-updated', {
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('staff-room').emit('order-updated', {
-                orderId,
-                status: 'preparing',
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.to('admin-room').emit('order-updated', {
-                orderId,
-                status: 'preparing',
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
             io.emit('order-updated', {
-                orderId,
-                status: 'preparing',
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 timestamp: new Date()
             });
-            // Emit payment update
+            // Emit payment update to both admin and staff rooms
             io.to('staff-room').emit('payment-updated', {
-                orderId,
+                orderId: publicId,
                 verifiedBy,
                 paymentMethod,
+                timestamp: new Date()
+            });
+            io.to('admin-room').emit('payment-updated', {
+                orderId: publicId,
+                verifiedBy,
+                paymentMethod,
+                timestamp: new Date()
+            });
+            
+            // Emit to customer room if customer_id exists
+            if (order && order.customer_id) {
+                try {
+                    const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                    if (customer.length > 0 && customer[0].email) {
+                        const customerEmail = String(customer[0].email).toLowerCase().trim();
+                        const customerRoom = `customer-${customerEmail}`;
+                        const updatePayload = {
+                            orderId: publicId,
+                            internalOrderId: internalId,
+                            status: 'payment_confirmed',
+                            paymentStatus: 'paid',
+                            paymentMethod: paymentMethod || 'cash',
+                            timestamp: new Date()
+                        };
+                        io.to(customerRoom).emit('order-updated', updatePayload);
+                        io.to(customerRoom).emit('payment-updated', {
+                            orderId: publicId,
+                            verifiedBy,
+                            paymentMethod,
+                            timestamp: new Date()
+                        });
+                        console.log(`📤 OrderRoutes: Emitted order-updated to customer room: ${customerRoom}`);
+                    }
+                } catch (customerError) {
+                    console.warn('Failed to get customer email for room emission:', customerError.message);
+                }
+            }
+            
+            // Also emit to customer room using customer_email if available (for guest orders with email)
+            if (order && order.customer_email) {
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                const updatePayload = {
+                    orderId: publicId,
+                    internalOrderId: internalId,
+                    status: 'payment_confirmed',
+                    paymentStatus: 'paid',
+                    paymentMethod: paymentMethod || 'cash',
+                    timestamp: new Date()
+                };
+                io.to(customerRoom).emit('order-updated', updatePayload);
+                io.to(customerRoom).emit('payment-updated', {
+                    orderId: publicId,
+                    verifiedBy,
+                    paymentMethod,
+                    timestamp: new Date()
+                });
+                console.log(`📤 OrderRoutes: Emitted order-updated to customer room: ${customerRoom}`);
+            }
+            
+            // Broadcast to all as final fallback
+            io.emit('order-updated', {
+                orderId: publicId,
+                internalOrderId: internalId,
+                status: 'payment_confirmed',
+                paymentStatus: 'paid',
                 timestamp: new Date()
             });
         }
@@ -711,7 +1193,26 @@ router.post('/:orderId/verify-payment', async(req, res) => {
         res.json({ success: true, message: 'Payment verified and order processed' });
     } catch (error) {
         console.error('Error verifying payment:', error);
-        res.status(500).json({ success: false, error: 'Failed to verify payment' });
+
+        // If the only problem is a missing payment_transactions table, still
+        // treat the verification as successful because the order has already
+        // been marked as paid above.
+        if (error && (error.code === 'ER_NO_SUCH_TABLE' || error.code === 'ER_BAD_TABLE_ERROR')) {
+            const msg = String(error.sqlMessage || error.message || '').toLowerCase();
+            if (msg.includes('payment_transactions')) {
+                console.warn('⚠️ payment_transactions table missing — treating verification as success');
+                return res.json({
+                    success: true,
+                    message: 'Payment verified (transaction log table missing on server)'
+                });
+            }
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Failed to verify payment',
+            details: error && (error.message || error.sqlMessage || error.code || null)
+        });
     }
 });
 
@@ -720,6 +1221,11 @@ router.post('/:orderId/payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod, amount, transactionId } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         const connection = await db.getConnection();
         await connection.beginTransaction();
@@ -730,14 +1236,14 @@ router.post('/:orderId/payment', async(req, res) => {
                 UPDATE orders 
                 SET payment_status = 'paid', payment_method = ?, status = 'pending' 
                 WHERE order_id = ?
-            `, [paymentMethod, orderId]);
+            `, [paymentMethod, internalId]);
 
             // Log payment transaction
             await connection.query(`
                 INSERT INTO payment_transactions 
                 (order_id, payment_method, amount, transaction_id, status) 
                 VALUES (?, ?, ?, ?, 'completed')
-            `, [orderId, paymentMethod, amount, transactionId]);
+            `, [internalId, paymentMethod, amount, transactionId]);
 
             await connection.commit();
 
@@ -748,39 +1254,43 @@ router.post('/:orderId/payment', async(req, res) => {
             const io = req.app.get('io');
             if (io) {
                 // Emit order status update
-                io.to(`order-${orderId}`).emit('order-updated', {
-                    orderId,
+                io.to(`order-${publicId}`).emit('order-updated', {
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.to('staff-room').emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.to('admin-room').emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 io.emit('order-updated', {
-                    orderId,
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'pending',
                     paymentStatus: 'paid',
                     timestamp: new Date()
                 });
                 // Emit payment update
-                io.to(`order-${orderId}`).emit('payment-updated', {
-                    orderId,
+                io.to(`order-${publicId}`).emit('payment-updated', {
+                    orderId: publicId,
                     status: 'paid',
                     method: paymentMethod,
                     timestamp: new Date()
                 });
                 io.to('staff-room').emit('payment-updated', {
-                    orderId,
+                    orderId: publicId,
                     status: 'paid',
                     method: paymentMethod,
                     timestamp: new Date()
@@ -790,7 +1300,7 @@ router.post('/:orderId/payment', async(req, res) => {
             res.json({
                 success: true,
                 message: 'Payment processed successfully',
-                orderId,
+                orderId: publicId,
                 paymentStatus: 'paid'
             });
         } catch (error) {
@@ -810,28 +1320,37 @@ router.post('/:orderId/qr-payment', async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        // Get order details
-        const [orders] = await db.query(`
-            SELECT total_price FROM orders WHERE order_id = ?
-        `, [orderId]);
-
-        if (orders.length === 0) {
+        if (!internalId) {
             return res.status(404).json({ success: false, error: 'Order not found' });
         }
 
-        const qrCode = await qrService.generatePaymentQR(orderId, orders[0].total_price, paymentMethod);
+        // Get order details
+        let order = req.orderRecord;
+        if (!order) {
+            const [orders] = await db.query(`
+                SELECT * FROM orders WHERE order_id = ?
+            `, [internalId]);
+
+            if (orders.length === 0) {
+                return res.status(404).json({ success: false, error: 'Order not found' });
+            }
+            order = orders[0];
+        }
+
+        const qrCode = await qrService.generatePaymentQR(publicId, order.total_price, paymentMethod, order.table_number);
 
         // Update order with QR code
         await db.query(`
             UPDATE orders SET qr_code = ? WHERE order_id = ?
-        `, [qrCode.qrCode, orderId]);
+        `, [qrCode.qrCode, internalId]);
 
         res.json({
             success: true,
             qrCode: qrCode.qrCode,
             paymentUrl: qrCode.url,
-            orderId
+            orderId: publicId
         });
     } catch (error) {
         console.error('Error generating payment QR code:', error);
@@ -843,8 +1362,16 @@ router.post('/:orderId/qr-payment', async(req, res) => {
 router.get('/:orderId/tracking-qr', async(req, res) => {
     try {
         const { orderId } = req.params;
+        const { internalId, publicId } = req.orderIdentifiers || {};
 
-        const qrCode = await qrService.generateOrderTrackingQR(orderId);
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+
+        const order = req.orderRecord || await findOrderByIdentifier(internalId);
+        const tableNumber = order && order.table_number ? order.table_number : null;
+
+        const qrCode = await qrService.generateOrderTrackingQR(publicId, tableNumber);
 
         res.json({
             success: true,
@@ -861,69 +1388,154 @@ router.get('/:orderId/tracking-qr', async(req, res) => {
 router.post('/:orderId/cancel', async(req, res) => {
     try {
         const { orderId } = req.params;
-        const { reason } = req.body;
+        const { reason, cancelledBy, cancellationReason, cancelledAt } = req.body;
+        const { internalId, publicId } = req.orderIdentifiers || {};
+
+        if (!internalId) {
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
 
         const connection = await db.getConnection();
         await connection.beginTransaction();
 
         try {
-            // Update order status
+            // Update order status with cancellation details
+            const updateFields = ['status = ?', 'updated_at = NOW()'];
+            const updateValues = ['cancelled'];
+            
+            if (reason || cancellationReason) {
+                updateFields.push('notes = ?');
+                updateValues.push(reason || cancellationReason || 'Order cancelled');
+            }
+            
+            if (cancelledBy) {
+                updateFields.push('cancelled_by = ?');
+                updateValues.push(cancelledBy);
+            }
+            
+            if (cancellationReason) {
+                updateFields.push('cancellation_reason = ?');
+                updateValues.push(cancellationReason);
+            }
+            
+            if (cancelledAt) {
+                updateFields.push('cancelled_at = ?');
+                updateValues.push(cancelledAt);
+            } else {
+                updateFields.push('cancelled_at = NOW()');
+            }
+            
+            updateValues.push(internalId);
+            
             await connection.query(`
                 UPDATE orders 
-                SET status = 'cancelled', notes = ? 
+                SET ${updateFields.join(', ')}
                 WHERE order_id = ?
-            `, [reason, orderId]);
+            `, updateValues);
 
-            // Restore inventory
-            const [orders] = await connection.query(`
-                SELECT items FROM orders WHERE order_id = ?
-            `, [orderId]);
+            // Restore inventory – this is helpful but should not cause the
+            // whole cancellation to fail if inventory tables are missing.
+            try {
+                const [orders] = await connection.query(`
+                    SELECT items FROM orders WHERE order_id = ?
+                `, [internalId]);
 
-            if (orders.length > 0) {
-                const items = JSON.parse(orders[0].items);
+                if (orders.length > 0) {
+                    const items = JSON.parse(orders[0].items);
 
-                for (const item of items) {
-                    if (item.ingredients) {
-                        for (const ingredient of item.ingredients) {
-                            await connection.query(`
-                                UPDATE ingredients 
-                                SET stock_quantity = stock_quantity + ? 
-                                WHERE id = ?
-                            `, [ingredient.quantity || 1, ingredient.id]);
+                    for (const item of items) {
+                        if (item.ingredients) {
+                            for (const ingredient of item.ingredients) {
+                                try {
+                                    await connection.query(`
+                                        UPDATE ingredients 
+                                        SET stock_quantity = stock_quantity + ? 
+                                        WHERE id = ?
+                                    `, [ingredient.quantity || 1, ingredient.id]);
 
-                            // Log inventory restoration
-                            await connection.query(`
-                                INSERT INTO inventory_logs 
-                                (ingredient_id, action, quantity_change, previous_quantity, new_quantity, reason, order_id) 
-                                SELECT id, 'add', ?, stock_quantity - ?, stock_quantity, 'Order cancellation', ? 
-                                FROM ingredients WHERE id = ?
-                            `, [ingredient.quantity || 1, ingredient.quantity || 1, orderId, ingredient.id]);
+                                    // Log inventory restoration (best‑effort only)
+                                    await connection.query(`
+                                        INSERT INTO inventory_logs 
+                                        (ingredient_id, action, quantity_change, previous_quantity, new_quantity, reason, order_id) 
+                                        SELECT id, 'add', ?, stock_quantity - ?, stock_quantity, 'Order cancellation', ? 
+                                        FROM ingredients WHERE id = ?
+                                    `, [ingredient.quantity || 1, ingredient.quantity || 1, internalId, ingredient.id]);
+                                } catch (invError) {
+                                    console.error('⚠️ Non‑critical inventory restore error during cancellation:', invError);
+                                }
+                            }
                         }
                     }
                 }
+            } catch (restoreError) {
+                console.error('⚠️ Non‑critical error loading items for inventory restore:', restoreError);
             }
 
             await connection.commit();
 
-            // Emit cancellation update
+            // Get order details for notification
+            const [orderDetails] = await connection.query(`
+                SELECT customer_name, total_price, order_type, table_number 
+                FROM orders 
+                WHERE order_id = ?
+            `, [internalId]);
+
+            const order = orderDetails[0] || {};
+
+            // Create notification for admins about order cancellation
+            try {
+                await notificationService.createNotification({
+                    type: 'order_update',
+                    title: 'Order Cancelled',
+                    message: `Order ${publicId} has been cancelled${cancelledBy ? ` by ${cancelledBy}` : ''}. Customer: ${order.customer_name || 'Unknown'}, Total: ₱${parseFloat(order.total_price || 0).toFixed(2)}`,
+                    data: {
+                        orderId: publicId,
+                        internalOrderId: internalId,
+                        customerName: order.customer_name,
+                        totalPrice: order.total_price,
+                        cancelledBy: cancelledBy || null,
+                        cancellationReason: cancellationReason || reason || null,
+                        cancelledAt: cancelledAt || new Date().toISOString()
+                    },
+                    userType: 'admin',
+                    priority: 'high'
+                });
+                console.log('📢 Notification created for order cancellation:', publicId);
+            } catch (notificationError) {
+                console.error('⚠️ Failed to create cancellation notification (non-critical):', notificationError);
+                // Don't fail the request if notification fails
+            }
+
+            // Emit cancellation update to all relevant rooms
             const io = req.app.get('io');
             if (io) {
-                io.to(`order-${orderId}`).emit('order-updated', {
-                    orderId,
+                const cancellationPayload = {
+                    orderId: publicId,
+                    internalOrderId: internalId,
                     status: 'cancelled',
+                    cancelledBy: cancelledBy || null,
+                    cancellationReason: cancellationReason || reason || null,
+                    cancelledAt: cancelledAt || new Date().toISOString(),
                     timestamp: new Date()
-                });
-                io.to('staff-room').emit('order-updated', {
-                    orderId,
-                    status: 'cancelled',
-                    timestamp: new Date()
-                });
+                };
+                
+                // Emit to specific order room
+                io.to(`order-${publicId}`).emit('order-updated', cancellationPayload);
+                
+                // Emit to staff and admin rooms
+                io.to('staff-room').emit('order-updated', cancellationPayload);
+                io.to('admin-room').emit('order-updated', cancellationPayload);
+                
+                // Broadcast to all clients for real-time updates
+                io.emit('order-updated', cancellationPayload);
+                
+                console.log('📤 Cancellation event emitted:', cancellationPayload);
             }
 
             res.json({
                 success: true,
                 message: 'Order cancelled successfully',
-                orderId
+                orderId: publicId
             });
         } catch (error) {
             await connection.rollback();
@@ -984,6 +1596,18 @@ router.put('/:orderId/payment-status', async(req, res) => {
         if (payment_status === 'paid') {
             updateFields.push('status = ?');
             updateValues.push('pending');
+        }
+
+        // Update staff_id if admin/staff member is processing this payment
+        // Use JWT authentication (req.user) instead of session
+        const currentStaffId =
+            req.user && (req.user.role === 'admin' || req.user.role === 'staff') ?
+            req.user.id :
+            null;
+
+        if (currentStaffId) {
+            updateFields.push('staff_id = ?');
+            updateValues.push(currentStaffId);
         }
 
         updateValues.push(orderId);
@@ -1262,7 +1886,7 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
 
         // Get current active order (pending, preparing, ready)
         const [currentOrderResult] = await db.query(`
-            SELECT order_id, status, items, total_price, order_time 
+            SELECT order_id, order_number, status, items, total_price, order_time 
             FROM orders 
             WHERE customer_id = ? AND status IN ('pending', 'preparing', 'ready')
             ORDER BY order_time DESC 
@@ -1270,6 +1894,7 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
         `, [customerId]);
         const currentOrder = currentOrderResult[0] ? {
             id: currentOrderResult[0].order_id,
+            orderNumber: currentOrderResult[0].order_number,
             status: currentOrderResult[0].status,
             items: JSON.parse(currentOrderResult[0].items),
             total: currentOrderResult[0].total_price,
@@ -1349,3 +1974,5 @@ router.get('/customer/:customerId/dashboard', async(req, res) => {
         res.status(500).json({ success: false, error: 'Failed to fetch dashboard data' });
     }
 });
+
+module.exports = router;

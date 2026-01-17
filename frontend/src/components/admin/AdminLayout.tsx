@@ -31,12 +31,12 @@ const AdminLayout: React.FC = () => {
   
   return (
     <SidebarProvider>
-      <div className="flex w-full h-screen bg-[#f5f5f5]">
+      <div className="flex w-full min-h-screen bg-[#f5f5f5] overflow-x-hidden">
         <SidebarComponent />
-        <div className="flex-1 flex flex-col w-full sm:ml-0 overflow-hidden">
+        <div className="flex-1 flex flex-col w-full min-w-0 sm:ml-0 overflow-hidden">
           <NavbarComponent />
-          <main className="flex-1 w-full pt-16 lg:pt-16 md:pt-16 sm:pt-16 overflow-y-auto bg-[#f5f5f5]">
-            <div className="w-full">
+          <main className="flex-1 w-full pt-16 lg:pt-16 md:pt-16 sm:pt-16 overflow-y-auto overflow-x-hidden bg-[#f5f5f5]">
+            <div className="w-full max-w-full">
               <Outlet />
             </div>
           </main>

@@ -19,6 +19,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useAuth } from './AuthContext';
 import { io, Socket } from 'socket.io-client';
 import { getApiUrl } from '../../utils/apiConfig';
+import axiosInstance from '../../utils/axiosInstance';
+import { useNavigate } from 'react-router-dom';
 
 interface LoyaltyReward {
   id: number;
@@ -55,6 +57,7 @@ interface CustomerLoyaltyData {
 }
 
 const CustomerLoyalty: React.FC = () => {
+  const navigate = useNavigate();
   const { user, authenticated, loading: authLoading } = useAuth();
   const [loyaltyData, setLoyaltyData] = useState<CustomerLoyaltyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,7 +108,7 @@ const CustomerLoyalty: React.FC = () => {
       const newSocket = io(API_URL, {
         transports: ['polling', 'websocket'],
         path: '/socket.io',
-        withCredentials: true,
+        withCredentials: false,
         timeout: 30000,
         forceNew: true,
         autoConnect: true,
@@ -208,7 +211,7 @@ const CustomerLoyalty: React.FC = () => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [authenticated, user]);
+  }, [authenticated, user?.id]); // Changed from 'user' to 'user?.id'
 
   const fetchLoyaltyData = async () => {
     try {
@@ -224,22 +227,21 @@ const CustomerLoyalty: React.FC = () => {
 
       // Get customer ID from authenticated user
       const customerId = user.id;
-      const API_URL = getApiUrl();
+      const API_URL = getApiUrl(); // can be '' on Vercel; axiosInstance handles baseURL
 
+      // Use axios instance so Authorization header is attached automatically
       const [pointsRes, rewardsRes, historyRes, pointsHistoryRes] = await Promise.all([
-        fetch(`${API_URL}/api/customers/${customerId}/loyalty`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/loyalty/available-rewards/${customerId}`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/loyalty/redemption-history/${customerId}`, { credentials: 'include' }),
-        fetch(`${API_URL}/api/customers/${customerId}/points-earned-history`, { credentials: 'include' })
+        axiosInstance.get(`${API_URL}/api/customers/${customerId}/loyalty`),
+        axiosInstance.get(`${API_URL}/api/loyalty/available-rewards/${customerId}`),
+        axiosInstance.get(`${API_URL}/api/loyalty/redemption-history/${customerId}`),
+        axiosInstance.get(`${API_URL}/api/customers/${customerId}/points-earned-history`)
       ]);
 
-      if (pointsRes.ok && rewardsRes.ok && historyRes.ok && pointsHistoryRes.ok) {
-        const [pointsData, rewardsData, historyData, pointsHistoryData] = await Promise.all([
-          pointsRes.json(),
-          rewardsRes.json(),
-          historyRes.json(),
-          pointsHistoryRes.json()
-        ]);
+      if (pointsRes.status === 200 && rewardsRes.status === 200 && historyRes.status === 200 && pointsHistoryRes.status === 200) {
+        const pointsData = pointsRes.data;
+        const rewardsData = rewardsRes.data;
+        const historyData = historyRes.data;
+        const pointsHistoryData = pointsHistoryRes.data;
 
         setLoyaltyData({
           loyalty_points: pointsData.loyalty_points || 0,
@@ -309,21 +311,16 @@ const CustomerLoyalty: React.FC = () => {
       const customerId = user.id;
       const API_URL = getApiUrl();
       
-      const res = await fetch(`${API_URL}/api/loyalty/redeem-reward`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
+      const res = await axiosInstance.post(`${API_URL}/api/loyalty/redeem-reward`, {
           customerId,
           rewardId: reward.id,
           orderId: null,
           redemptionProof: 'Claimed through customer interface',
           staffId: null
-        })
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.status === 200) {
+        const data = res.data;
         setMessage(`Successfully claimed "${reward.name}"! Your claim code is ${data.claimCode}. Show this code to staff to redeem.`);
         
         // Add to claimed rewards with countdown
@@ -353,8 +350,8 @@ const CustomerLoyalty: React.FC = () => {
         
         setTimeout(() => setMessage(null), 5000);
       } else {
-        const errorData = await res.json();
-        setError(errorData.error || 'Failed to claim reward');
+        const errorData = res.data as any;
+        setError((errorData && (errorData.error || errorData.message)) || 'Failed to claim reward');
       }
     } catch (error) {
       setError('Failed to claim reward');
@@ -479,10 +476,10 @@ const CustomerLoyalty: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] py-4 px-2 sm:px-3 lg:px-4">
+    <div className="min-h-screen bg-[#f5f5f5] py-4 px-4 sm:px-6 lg:px-8">
       <div className="max-w-full mx-auto space-y-6">
         {/* Header */}
-        <div className="space-y-4 sm:space-y-6 pl-0 sm:pl-1 lg:pl-2 pr-2 sm:pr-3 lg:pr-4">
+        <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Loyalty Program</h1>
@@ -492,7 +489,7 @@ const CustomerLoyalty: React.FC = () => {
         </div>
 
         {/* Points Overview */}
-        <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300 mx-2 sm:mx-3 lg:mx-4">
+        <Card className="bg-white shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-[#6B5B5B]">
               <Coins className="h-6 w-6" />
@@ -501,18 +498,18 @@ const CustomerLoyalty: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-[#a87437] mb-2">{loyaltyData?.loyalty_points || 0}</div>
                 <p className="text-gray-600">Current Points</p>
                 <p className="text-xs text-green-600 mt-1">
                   +{(loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (loyaltyData.points_earned_history[0].points_earned || 0) : 0)} from last order
                 </p>
               </div>
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-green-600 mb-2">{loyaltyData?.total_earned || 0}</div>
                 <p className="text-gray-600">Total Earned</p>
               </div>
-              <div className="text-center p-4 border-2 border-[#a87437] rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <div className="text-center p-4 border border-gray-300 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                 <div className="text-3xl font-bold text-purple-600 mb-2">{loyaltyData?.total_redeemed || 0}</div>
                 <p className="text-gray-600">Total Redeemed</p>
               </div>
@@ -526,7 +523,7 @@ const CustomerLoyalty: React.FC = () => {
             /* Mobile Dropdown */
             <div className="w-full">
               <Select value={activeTab} onValueChange={setActiveTab}>
-                <SelectTrigger className="w-full bg-white border-2 border-[#a87437]/60 shadow-lg rounded-lg h-12">
+                <SelectTrigger className="w-full bg-white border border-gray-300 shadow-lg rounded-lg h-12">
                   <SelectValue placeholder="Select a section" />
                 </SelectTrigger>
                 <SelectContent>
@@ -554,7 +551,7 @@ const CustomerLoyalty: React.FC = () => {
                       {loyaltyData.available_rewards
                         .filter(reward => !isRewardClaimed(reward.id))
                         .map((reward) => (
-                        <Card key={reward.id} className="bg-white border-2 border-[#a87437] shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <Card key={reward.id} className="bg-white border border-gray-300 shadow-lg hover:shadow-xl transition-shadow duration-300">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-[#6B5B5B]">
                               <span className="text-lg">{reward.name}</span>
@@ -595,7 +592,7 @@ const CustomerLoyalty: React.FC = () => {
                   {loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (
                     <div className="space-y-3">
                       {loyaltyData.points_earned_history.map((history, index) => (
-                        <Card key={index} className="bg-white border-2 border-[#a87437] shadow-lg">
+                        <Card key={index} className="bg-white border border-gray-300 shadow-lg">
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                               <div>
@@ -604,7 +601,7 @@ const CustomerLoyalty: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-semibold text-green-600">+{history.points_earned} points</p>
-                                <p className="text-sm text-gray-600">₱{history.order_total}</p>
+                                <p className="text-sm text-gray-600">₱{history.total_amount}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -654,7 +651,7 @@ const CustomerLoyalty: React.FC = () => {
           ) : (
             /* Desktop Content */
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid grid-cols-3 bg-white border-2 border-[#a87437]/60 shadow-lg rounded-lg mx-auto w-[98%] sm:w-[96%] lg:w-[94%]">
+              <TabsList className="grid grid-cols-3 bg-white border border-gray-300 shadow-lg rounded-lg mx-auto w-[98%] sm:w-[96%] lg:w-[94%]">
                 {tabOptions.map((option) => (
                   <TabsTrigger 
                     key={option.value}
@@ -701,7 +698,7 @@ const CustomerLoyalty: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <Card className="bg-white border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
+              <Card className="bg-white border border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
                 <CardContent className="text-center py-8">
                   <Gift className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No rewards available at the moment</p>
@@ -732,7 +729,7 @@ const CustomerLoyalty: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {claimedRewards.map((claimedReward) => (
-                    <Card key={claimedReward.id} className="border-2 border-[#a87437]/60 bg-amber-50 shadow-md">
+                    <Card key={claimedReward.id} className="border border-gray-300 bg-amber-50 shadow-md">
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-[#6B5B5B]">
                           <span className="text-lg">{claimedReward.name}</span>
@@ -772,7 +769,7 @@ const CustomerLoyalty: React.FC = () => {
             {loyaltyData?.points_earned_history && loyaltyData.points_earned_history.length > 0 ? (
               <div className="space-y-4">
                 {loyaltyData.points_earned_history.map((history, index) => (
-                  <Card key={index} className="bg-white border-2 border-[#a87437]/60 shadow-md">
+                  <Card key={index} className="bg-white border border-gray-300 shadow-md">
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -892,3 +889,4 @@ const CustomerLoyalty: React.FC = () => {
 };
 
 export default CustomerLoyalty;
+

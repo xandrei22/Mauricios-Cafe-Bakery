@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -19,9 +19,13 @@ import {
   Eye
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface Order {
   orderId: string;
+  displayOrderId?: string;
   customerName: string;
   tableNumber?: number;
   items: any[];
@@ -35,6 +39,112 @@ interface Order {
   paymentMethod: string;
   notes?: string;
 }
+
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  
+  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+  try {
+    const encoded = encodeId(raw);
+    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = encoded.replace(/\D/g, '').slice(-2);
+    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  } catch {
+    // Fallback: last 5 non-separator characters
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
+  }
+};
+
+const transformOrderRecord = (order: any): Order => {
+  try {
+    const rawStatus = (order.status || '').toLowerCase();
+    const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
+    
+    // Handle items - can be array, string, or undefined
+    let itemsArray: any[] = [];
+    if (Array.isArray(order.items)) {
+      itemsArray = order.items;
+    } else if (typeof order.items === 'string') {
+      try {
+        itemsArray = JSON.parse(order.items || '[]');
+      } catch (parseError) {
+        console.warn('Failed to parse items JSON:', parseError);
+        itemsArray = [];
+      }
+    }
+    
+    const orderId = order.orderId || order.order_id || order.id;
+
+    if (!orderId || orderId === '0' || orderId === 0) {
+      console.warn('⚠️ Invalid order ID detected:', {
+        order,
+        orderId,
+        orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
+      });
+      // Return a placeholder order instead of throwing
+      return {
+        orderId: 'INVALID',
+        customerName: order.customerName || order.customer_name || 'Unknown',
+        tableNumber: order.tableNumber || order.table_number || undefined,
+        items: itemsArray,
+        totalPrice: 0,
+        status: 'pending' as Order['status'],
+        paymentStatus: 'pending' as Order['paymentStatus'],
+        orderType: 'dine_in' as Order['orderType'],
+        queuePosition: 0,
+        estimatedReadyTime: '',
+        orderTime: new Date().toISOString(),
+        paymentMethod: 'cash',
+        notes: order.notes
+      };
+    }
+
+    const transformed: Order = {
+      orderId: String(orderId),
+      displayOrderId: formatOrderId(orderId),
+      customerName: order.customerName || order.customer_name || 'Unknown Customer',
+      tableNumber: order.tableNumber ?? order.table_number ?? undefined,
+      items: itemsArray,
+      totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
+      status: normalizedStatus as Order['status'],
+      paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as Order['paymentStatus'],
+      orderType: (order.orderType || order.order_type || 'dine_in') as Order['orderType'],
+      queuePosition: order.queuePosition ?? order.queue_position ?? 0,
+      estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time || '',
+      orderTime: order.orderTime || order.order_time || new Date().toISOString(),
+      paymentMethod: (order.paymentMethod || order.payment_method || 'cash').toLowerCase(),
+      notes: order.notes || undefined
+    };
+    
+    return transformed;
+  } catch (error) {
+    console.error('❌ Error transforming order record:', error, order);
+    // Return a safe default order
+    return {
+      orderId: order.id || order.order_id || 'ERROR',
+      customerName: 'Error Loading Order',
+      tableNumber: undefined,
+      items: [],
+      totalPrice: 0,
+      status: 'pending' as Order['status'],
+      paymentStatus: 'pending' as Order['paymentStatus'],
+      orderType: 'dine_in' as Order['orderType'],
+      queuePosition: 0,
+      estimatedReadyTime: '',
+      orderTime: new Date().toISOString(),
+      paymentMethod: 'cash',
+      notes: undefined
+    };
+  }
+};
+
+const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
+  return ordersData.map(transformOrderRecord);
+};
 
 const AdminOrders: React.FC = () => {
   const navigate = useNavigate();
@@ -50,8 +160,42 @@ const AdminOrders: React.FC = () => {
   const [activeTab, setActiveTab] = useState('preparing');
   const [isMobile, setIsMobile] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const API_URL = getApiUrl();
 
   // Tab options for dropdown - will be defined after orders are loaded
+
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioConstructor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioConstructor) return;
+
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioConstructor();
+    }
+
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+    oscillator.start(now);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+    oscillator.stop(now + 0.8);
+  }, []);
 
   // Screen size detection
   useEffect(() => {
@@ -91,8 +235,6 @@ const AdminOrders: React.FC = () => {
     };
   }, []);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-
   useEffect(() => {
     fetchOrders();
     // Removed periodic polling to avoid UI flicker from repeated loading states
@@ -116,47 +258,14 @@ const AdminOrders: React.FC = () => {
           timeout: 30000,
           forceNew: true,
           autoConnect: true,
-          withCredentials: true
+          withCredentials: false
         });
         socketRef.current = socket;
 
         const silentRefetch = async () => {
           if (!isMounted) return;
           try {
-            // Use admin-specific endpoint
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-            const response = await fetch(`${API_URL}/api/admin/orders`, { credentials: 'include' });
-            if (response.ok) {
-              const data = await response.json();
-              if (data.success && isMounted) {
-                const transformed = (data.orders || []).map((order: any) => {
-                  const itemsArray = Array.isArray(order.items)
-                    ? order.items
-                    : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-                  const rawStatus = (order.status || '').toLowerCase();
-                  const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-                  
-                  const orderId = order.orderId || order.order_id || order.id;
-                  
-                  return {
-                    orderId: String(orderId),
-                    customerName: order.customer_name,
-                    tableNumber: order.table_number,
-                    items: itemsArray,
-                    totalPrice: Number(order.total_price || 0),
-                    status: normalizedStatus as any,
-                    paymentStatus: (order.payment_status || 'pending') as any,
-                    orderType: (order.order_type || 'dine_in') as any,
-                    queuePosition: 0,
-                    estimatedReadyTime: order.estimated_ready_time,
-                    orderTime: order.order_time,
-                    paymentMethod: (order.payment_method || '').toLowerCase(),
-                    notes: order.notes
-                  };
-                });
-                setOrders(transformed);
-              }
-            }
+            await fetchOrders({ silent: true });
           } catch (error) {
             console.warn('Silent refetch error:', error);
           }
@@ -176,10 +285,19 @@ const AdminOrders: React.FC = () => {
           console.warn('Socket error:', error);
         });
 
-        // When any order is created/updated/paid, refresh silently
-        socket.on('new-order-received', silentRefetch);
-        socket.on('order-updated', silentRefetch);
-        socket.on('payment-updated', silentRefetch);
+        // When any order is created/updated/paid, refresh silently and play sound
+        socket.on('new-order-received', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
+        socket.on('order-updated', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
+        socket.on('payment-updated', () => {
+          playNotificationSound();
+          silentRefetch();
+        });
         socket.on('inventory-updated', silentRefetch);
 
       } catch (error) {
@@ -200,68 +318,89 @@ const AdminOrders: React.FC = () => {
         }
       }
       socketRef.current = null;
+      if (audioContextRef.current) {
+        audioContextRef.current.close?.().catch(() => {});
+      }
     };
-  }, [API_URL]);
+  }, [API_URL, playNotificationSound]);
 
   const fetchOrders = async (options: { silent?: boolean } = {}) => {
     const { silent = false } = options;
     try {
       if (!silent) setLoading(true);
-      // Use staff orders endpoint to ensure pending_verification orders and camelCase fields
-      const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'include' });
-      const data = response.ok ? await response.json() : null;
+      const response = await axiosInstance.get('/api/staff/orders');
+      const data = response.data;
 
-      if (data && data.success) {
-        const transformedOrders: Order[] = (data.orders || []).map((order: any) => {
-          const rawStatus = (order.status || '').toLowerCase();
-          // Keep all statuses as-is for proper filtering
-          const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-
-          const itemsArray = Array.isArray(order.items)
-            ? order.items
-            : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-
-          const orderId = order.orderId || order.order_id || order.id;
-          
-          // Debug logging for order ID and status
-          if (!orderId || orderId === '0' || orderId === 0) {
-            console.warn('Invalid order ID detected:', {
-              order: order,
-              orderId: orderId,
-              orderIdSource: order.orderId ? 'orderId' : order.order_id ? 'order_id' : 'id'
-            });
-          }
-          
-          // Debug logging for order status
-          console.log('Order status debug:', {
-            orderId: orderId,
-            originalStatus: order.status,
-            normalizedStatus: normalizedStatus,
-            paymentMethod: order.payment_method || order.paymentMethod,
-            customerName: order.customer_name || order.customerName,
-            fullOrder: order
-          });
-
-          return {
-            orderId: String(orderId),
-            customerName: order.customerName || order.customer_name,
-            tableNumber: order.tableNumber || order.table_number,
-            items: itemsArray,
-            totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
-            status: normalizedStatus as any,
-            paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as any,
-            orderType: (order.orderType || order.order_type || 'dine_in') as any,
-            queuePosition: order.queuePosition || 0,
-            estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
-            orderTime: order.orderTime || order.order_time,
-            paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
-            notes: order.notes
-          };
-        });
-        setOrders(transformedOrders);
+      console.log('📋 AdminOrders - Raw API response:', data);
+      console.log('📋 AdminOrders - Response type:', typeof data);
+      console.log('📋 AdminOrders - Response keys:', data ? Object.keys(data) : 'null');
+      
+      let ordersList: Order[] = [];
+      
+      // Handle different response formats
+      if (data && data.success && Array.isArray(data.orders)) {
+        console.log('📋 AdminOrders - Processing orders from data.orders:', data.orders.length);
+        if (data.orders.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data.orders[0]);
+        }
+        ordersList = transformOrdersResponse(data.orders);
+      } else if (data && Array.isArray(data.orders)) {
+        console.log('📋 AdminOrders - Processing orders from data.orders (no success flag):', data.orders.length);
+        if (data.orders.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data.orders[0]);
+        }
+        ordersList = transformOrdersResponse(data.orders);
+      } else if (data && Array.isArray(data)) {
+        // Sometimes the response is just an array
+        console.log('📋 AdminOrders - Processing orders from direct array:', data.length);
+        if (data.length > 0) {
+          console.log('📋 AdminOrders - Sample raw order:', data[0]);
+        }
+        ordersList = transformOrdersResponse(data);
+      } else {
+        console.warn('📋 AdminOrders - Unexpected response format:', data);
+        console.warn('📋 AdminOrders - Data structure:', JSON.stringify(data, null, 2));
+        ordersList = [];
       }
-    } catch (error) {
-      console.error('Error fetching orders:', error);
+      
+      console.log('📋 AdminOrders - Transformed orders:', ordersList.length);
+      console.log('📋 AdminOrders - Sample order:', ordersList[0]);
+      
+      setOrders(ordersList);
+      
+      // Debug logging
+      console.log('📋 AdminOrders - Fetched orders:', ordersList.length);
+      console.log('📋 AdminOrders - Orders by status:', {
+        pending: ordersList.filter(o => o.status === 'pending').length,
+        pending_verification: ordersList.filter(o => o.status === 'pending_verification').length,
+        preparing: ordersList.filter(o => o.status === 'preparing').length,
+        ready: ordersList.filter(o => o.status === 'ready').length,
+        cancelled: ordersList.filter(o => o.status === 'cancelled').length,
+        completed: ordersList.filter(o => o.status === 'completed').length
+      });
+      console.log('📋 AdminOrders - Orders by payment status:', {
+        pending: ordersList.filter(o => o.paymentStatus === 'pending').length,
+        pending_verification: ordersList.filter(o => o.paymentStatus === 'pending_verification').length,
+        paid: ordersList.filter(o => o.paymentStatus === 'paid').length
+      });
+    } catch (error: any) {
+      console.error('❌ AdminOrders - Error fetching orders:', error);
+      console.error('❌ AdminOrders - Error response:', error?.response?.data);
+      console.error('❌ AdminOrders - Error status:', error?.response?.status);
+      
+      // Show error toast
+      if (!silent) {
+        toast.error('Failed to load orders. Please refresh the page.');
+      }
+      
+      if (error?.response?.status === 401) {
+        console.warn('❌ AdminOrders - Unauthorized, redirecting to login');
+        navigate('/admin-login');
+        setOrders([]);
+      } else {
+        // Set empty array on error to show empty state
+        setOrders([]);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -269,63 +408,34 @@ const AdminOrders: React.FC = () => {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
-      // Use full API URL for consistency
-      const response = await fetch(`${API_URL}/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        // Always refresh orders to get the latest status
-        // This ensures orders move between tabs correctly
+      await axiosInstance.put(`/api/orders/${orderId}/status`, { status });
         await fetchOrders({ silent: true });
-        
-        // Show success message
-        toast.success(`Order ${orderId} status updated to ${status}`);
-      } else {
-        const errorData = await response.json();
-        toast.error(`Failed to update order: ${errorData.error || 'Unknown error'}`);
-      }
-    } catch (error) {
+      toast.success(`Order ${formatOrderId(orderId)} status updated to ${status}`);
+    } catch (error: any) {
       console.error('Error updating order status:', error);
-      toast.error('Failed to update order status');
+      const message = error?.response?.data?.error || error?.message || 'Failed to update order status';
+      toast.error(message);
     }
   };
 
   const verifyPayment = async (orderId: string, paymentMethod: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/orders/${orderId}/verify-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ 
+      await axiosInstance.post(`/api/orders/${orderId}/verify-payment`, {
           verifiedBy: 'admin', 
-          paymentMethod 
-        }),
+        paymentMethod,
       });
 
-      if (response.ok) {
         console.log('Payment verification successful');
-        // Close payment modal first
         setShowPaymentModal(false);
         
-        // Get order details for success modal
         const order = orders.find(o => o.orderId === orderId);
-        console.log('Found order for success modal:', order);
         if (order) {
           setPaymentSuccessData({
-            orderId: order.orderId,
+          orderId: order.displayOrderId || formatOrderId(order.orderId),
             amount: order.totalPrice,
-            change: 0 // For admin verification, no change needed
+          change: 0,
           });
           
-          // Show success modal after a short delay to ensure smooth transition
           setTimeout(() => {
             console.log('Showing success modal');
             setShowSuccessModal(true);
@@ -334,73 +444,35 @@ const AdminOrders: React.FC = () => {
           console.warn('Order not found for success modal');
         }
         
-        // Temporarily disable Socket.IO updates to prevent race condition
         if (socketRef.current) {
           socketRef.current.off('order-updated');
           socketRef.current.off('payment-updated');
         }
         
-        // Refresh orders after a longer delay to ensure backend has processed and user sees success modal
         setTimeout(() => {
           fetchOrders({ silent: true });
           
-          // Re-enable Socket.IO updates after refresh
           if (socketRef.current) {
-            const silentRefetch = async () => {
-              try {
-                const response = await fetch(`${API_URL}/api/staff/orders`, { credentials: 'include' });
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data.success) {
-                    const transformed = (data.orders || []).map((order: any) => {
-                      const itemsArray = Array.isArray(order.items)
-                        ? order.items
-                        : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []);
-                      const rawStatus = (order.status || '').toLowerCase();
-                      // Keep all statuses as-is for proper filtering
-                      const normalizedStatus = rawStatus === 'processing' ? 'preparing' : rawStatus;
-                      
-                      const orderId = order.orderId || order.order_id || order.id;
-                      
-                      return {
-                        orderId: String(orderId),
-                        customerName: order.customerName || order.customer_name,
-                        tableNumber: order.tableNumber || order.table_number,
-                        items: itemsArray,
-                        totalPrice: Number(order.totalPrice ?? order.total_price ?? 0),
-                        status: normalizedStatus as any,
-                        paymentStatus: (order.paymentStatus || order.payment_status || 'pending') as any,
-                        orderType: (order.orderType || order.order_type || 'dine_in') as any,
-                        queuePosition: order.queuePosition || 0,
-                        estimatedReadyTime: order.estimatedReadyTime || order.estimated_ready_time,
-                        orderTime: order.orderTime || order.order_time,
-                        paymentMethod: (order.paymentMethod || order.payment_method || '').toLowerCase(),
-                        notes: order.notes
-                      };
-                    });
-                    setOrders(transformed);
-                  }
-                }
-              } catch {}
-            };
-            socketRef.current.on('order-updated', silentRefetch);
-            socketRef.current.on('payment-updated', silentRefetch);
+          const refetchHandler = () => {
+            fetchOrders({ silent: true });
+          };
+          socketRef.current.on('order-updated', refetchHandler);
+          socketRef.current.on('payment-updated', refetchHandler);
           }
         }, 5000);
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.error || 'Failed to verify payment');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying payment:', error);
-      toast.error('Failed to verify payment');
+      const message = error?.response?.data?.error || error?.message || 'Failed to verify payment';
+      toast.error(message);
     }
   };
 
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.orderId.toLowerCase().includes(searchTerm.toLowerCase());
+    const loweredSearch = searchTerm.toLowerCase();
+    const normalizedOrderId = (order.displayOrderId || order.orderId || '').toLowerCase();
+    const matchesSearch = order.customerName.toLowerCase().includes(loweredSearch) ||
+                         normalizedOrderId.includes(loweredSearch);
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesType = orderTypeFilter === 'all' || order.orderType === orderTypeFilter;
     
@@ -415,31 +487,32 @@ const AdminOrders: React.FC = () => {
   const readyStatuses = ['ready'];
 
   const preparingOrders = filteredOrders.filter(order => {
-    const status = order.status;
-    const pay = order.paymentStatus;
+    const status = String(order.status || '').toLowerCase();
+    const pay = String(order.paymentStatus || '').toLowerCase();
     
     // Exclude cancelled, completed, and ready orders
     if (status === 'cancelled' || status === 'completed' || status === 'ready') return false;
     
-    // Include preparing orders
+    // Include preparing orders (regardless of payment status - they're already verified)
     if (status === 'preparing') return true;
     
     // Include confirmed and processing orders
-    if (preparingStatuses.includes(String(status))) return true;
+    if (preparingStatuses.includes(status)) return true;
     
-    // Treat paid+pending as preparing so staff can work it (match StaffOrders logic)
-    if (pay === 'paid' && status === 'pending') return true;
+    // Include orders that are paid and in pending/pending_verification status (should move to preparing)
+    // These are orders that were verified but status hasn't been updated yet
+    if (pay === 'paid' && (status === 'pending' || status === 'pending_verification')) return true;
     
-    // Also include paid orders that are pending_verification
-    if (status === 'pending_verification' && pay === 'paid') return true;
-    
-    console.log('Preparing filter check:', { 
-      orderId: order.orderId, 
-      status: order.status, 
-      paymentStatus: order.paymentStatus,
-      shouldShow: false,
-      preparingStatuses 
-    });
+    // Debug log for orders that don't match
+    if (status !== 'cancelled' && status !== 'completed' && status !== 'ready') {
+      console.log('Preparing filter - excluded order:', { 
+        orderId: order.orderId, 
+        status: order.status, 
+        paymentStatus: order.paymentStatus,
+        pay,
+        preparingStatuses 
+      });
+    }
     return false;
   }).map((order, index) => ({
     ...order,
@@ -548,11 +621,23 @@ const AdminOrders: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <RefreshCw className="w-8 h-8 animate-spin text-gray-500" />
+      <div className="flex flex-col justify-center items-center py-16">
+        <RefreshCw className="w-8 h-8 animate-spin text-gray-500 mb-4" />
+        <p className="text-gray-600">Loading orders...</p>
       </div>
     );
   }
+
+  // Debug: Log current state
+  console.log('📋 AdminOrders - Render state:', {
+    totalOrders: orders.length,
+    preparingCount: preparingOrders.length,
+    readyCount: readyOrders.length,
+    filteredCount: filteredOrders.length,
+    searchTerm,
+    statusFilter,
+    orderTypeFilter
+  });
 
   return (
       <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-4">
@@ -562,7 +647,17 @@ const AdminOrders: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Orders</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Monitor and manage customer orders in real-time</p>
         </div>
-        <div className="flex items-center gap-3" />
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => fetchOrders()}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Order Statistics */}
@@ -602,14 +697,21 @@ const AdminOrders: React.FC = () => {
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">{
               filteredOrders.filter(o => {
-                const s = String(o.status);
+                const s = String(o.status || '').toLowerCase();
+                const pay = String(o.paymentStatus || '').toLowerCase();
+                // Include all active orders (not cancelled, not completed)
+                // This includes orders with pending payment that need verification
                 return (
-                  s === 'pending' ||
-                  s === 'pending_verification' ||
-                  s === 'confirmed' ||
-                  s === 'preparing' ||
-                  s === 'processing' ||
-                  s === 'ready'
+                  s !== 'cancelled' &&
+                  s !== 'completed' &&
+                  (s === 'pending' ||
+                   s === 'pending_verification' ||
+                   s === 'confirmed' ||
+                   s === 'preparing' ||
+                   s === 'processing' ||
+                   s === 'ready' ||
+                   pay === 'pending' ||
+                   pay === 'pending_verification')
                 );
               }).length
             }</div>
@@ -868,6 +970,16 @@ const AdminOrders: React.FC = () => {
                   </div>
                   <p className="text-lg font-medium">No orders being prepared</p>
                   <p className="text-sm">Orders will appear here when preparation starts</p>
+                  {orders.length === 0 && (
+                    <Button
+                      onClick={() => fetchOrders()}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Refresh Orders
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -882,7 +994,7 @@ const AdminOrders: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                            <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-mono text-xs">#{order.orderId}</span>
                             <span>•</span>
                             <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                             <span>•</span>
@@ -922,12 +1034,12 @@ const AdminOrders: React.FC = () => {
                       )}
                       
                       {/* Receipt Viewing for Digital Payments */}
-                      {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && (
+                      {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
-                              <p className="text-xs text-blue-700">Customer has uploaded a receipt for verification</p>
+                              <p className="text-xs text-blue-700">Customer or guest has uploaded a receipt for verification</p>
                             </div>
                             <Button
                               size="sm"
@@ -989,6 +1101,16 @@ const AdminOrders: React.FC = () => {
                   </div>
                   <p className="text-lg font-medium">No orders ready</p>
                   <p className="text-sm">Orders will appear here when they're ready for pickup</p>
+                  {orders.length === 0 && (
+                    <Button
+                      onClick={() => fetchOrders()}
+                      variant="outline"
+                      className="mt-4"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Refresh Orders
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -1056,7 +1178,7 @@ const AdminOrders: React.FC = () => {
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
               <h2 className="text-xl font-bold mb-4">Verify Payment</h2>
               <p className="text-gray-600 mb-6">
-                Verify payment for order #{selectedOrder.orderId}
+                Verify payment for order #{selectedOrder.displayOrderId || selectedOrder.orderId}
               </p>
               
               <div className="space-y-4">
@@ -1104,7 +1226,7 @@ const AdminOrders: React.FC = () => {
                 <p className="text-gray-600 mb-4">Payment has been processed and verified. Order is now pending preparation.</p>
                 <div className="bg-green-50 rounded-lg p-4 mb-4">
                   <p className="text-sm text-green-800">
-                    <strong>Order ID:</strong> {paymentSuccessData.orderId}
+                    <strong>Order ID:</strong> {formatOrderId(paymentSuccessData.orderId)}
                   </p>
                   <p className="text-sm text-green-800">
                     <strong>Amount Paid:</strong> ₱{paymentSuccessData.amount}
@@ -1145,3 +1267,4 @@ const AdminOrders: React.FC = () => {
 };
 
 export default AdminOrders; 
+

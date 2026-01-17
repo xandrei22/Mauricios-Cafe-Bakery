@@ -41,6 +41,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   const [loading, setLoading] = useState(false);
   const [userEvents, setUserEvents] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get minimum date (tomorrow)
   const getMinDate = () => {
@@ -60,8 +61,18 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
   // Fetch user's event requests
   const fetchUserEvents = async () => {
     try {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, {
-        credentials: 'include'
+        credentials: 'omit',
+        headers: headers
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -80,7 +91,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -113,65 +124,137 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
     };
   }, [customer_id, customer_name]);
 
+  // Validate contact number format (Philippines format)
+  const validateContactNumber = (number: string): boolean => {
+    // Remove spaces, dashes, and other characters
+    const cleaned = number.replace(/[\s\-\(\)\+]/g, '');
+    // Check if it's a valid Philippine mobile number
+    // Format: 09XXXXXXXXX (11 digits) or 0XXXXXXXXXX (11 digits starting with 0)
+    // Also allow +639XXXXXXXXX format
+    if (cleaned.length < 10 || cleaned.length > 11) {
+      return false;
+    }
+    // Must start with 09 or 0 (for 11 digits) or +639 (for 10 digits after +639)
+    const phMobileRegex = /^(09|0)\d{9}$/; // 11 digits: 09XXXXXXXXX or 0XXXXXXXXXX
+    const phMobileRegexPlus = /^\+639\d{9}$/; // +639XXXXXXXXX format
+    return phMobileRegex.test(cleaned) || phMobileRegexPlus.test(number.replace(/[\s\-\(\)]/g, ''));
+  };
+
   // Validate form
   const validateForm = () => {
+    console.log('🔍 Starting form validation...');
+    console.log('🔍 Form values:', {
+      eventDate,
+      eventStartTime,
+      eventEndTime,
+      cups,
+      contactName,
+      contactNumber,
+      address,
+      selectedOccasion,
+      customOccasion
+    });
+
     if (!eventDate) {
+      console.log('❌ Validation failed: Event Date is missing');
       toast('Event Date is required', { description: 'Please select an event date.' });
       return false;
     }
     if (!eventStartTime) {
+      console.log('❌ Validation failed: Event Start Time is missing');
       toast('Event Start Time is required', { description: 'Please select an event start time.' });
       return false;
     }
     if (!eventEndTime) {
+      console.log('❌ Validation failed: Event End Time is missing');
       toast('Event End Time is required', { description: 'Please select an event end time.' });
       return false;
     }
     if (eventEndTime <= eventStartTime) {
+      console.log('❌ Validation failed: End time must be after start time');
       toast('Invalid Time Range', { description: 'End time must be after start time.' });
       return false;
     }
-    if (!cups || Number(cups) < 80) {
-      toast('Number of Cups is required', { description: 'Minimum order is 80 cups.' });
+    // Validate cups - must be at least 80
+    const cupsNum = Number(cups);
+    if (!cups || isNaN(cupsNum) || cupsNum < 80) {
+      console.log('❌ Validation failed: Invalid cups:', cups, 'Number:', cupsNum);
+      toast('Invalid Number of Cups', { description: 'Minimum order is 80 cups. Please enter a valid number.' });
       return false;
     }
-    if (!contactName.trim()) {
+    if (!contactName || !contactName.trim()) {
+      console.log('❌ Validation failed: Contact Name is missing');
       toast('Contact Name is required', { description: 'Please enter your contact name.' });
       return false;
     }
-    if (!contactNumber.trim()) {
+    // Validate contact number
+    if (!contactNumber || !contactNumber.trim()) {
+      console.log('❌ Validation failed: Contact Number is missing');
       toast('Contact Number is required', { description: 'Please enter your contact number.' });
       return false;
     }
-    if (!address.trim()) {
+    const cleanedContact = contactNumber.replace(/[\s\-\(\)\+]/g, '');
+    console.log('🔍 Contact number validation:', {
+      original: contactNumber,
+      cleaned: cleanedContact,
+      length: cleanedContact.length
+    });
+    if (!validateContactNumber(contactNumber)) {
+      console.log('❌ Validation failed: Invalid contact number format:', contactNumber, 'Cleaned:', cleanedContact);
+      toast('Invalid Contact Number', { 
+        description: `Please enter a valid Philippine mobile number (11 digits: 09XXXXXXXXX or 0XXXXXXXXXX). You entered ${cleanedContact.length} digits.` 
+      });
+      return false;
+    }
+    if (!address || !address.trim()) {
+      console.log('❌ Validation failed: Address is missing');
       toast('Address is required', { description: 'Please enter the event address.' });
       return false;
     }
     if (!selectedOccasion) {
+      console.log('❌ Validation failed: Event Type is missing');
       toast('Event Type is required', { description: 'Please select an event type.' });
       return false;
     }
-    if (selectedOccasion === 'other' && !customOccasion.trim()) {
+    if (selectedOccasion === 'other' && (!customOccasion || !customOccasion.trim())) {
+      console.log('❌ Validation failed: Custom Event Type is missing');
       toast('Custom Event Type is required', { description: 'Please specify the custom event type.' });
       return false;
     }
+    console.log('✅ All validations passed!');
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     
-    if (!validateForm()) {
+    // Prevent double submission
+    if (isSubmitting || loading) {
+      console.log('⚠️ Form is already submitting, ignoring duplicate submission');
       return;
     }
     
+    console.log('🔄 Form submit triggered');
+    
+    // Validate form
+    if (!validateForm()) {
+      console.log('❌ Form validation failed');
+      return;
+    }
+    
+    console.log('✅ Form validation passed');
+    setIsSubmitting(true);
     setLoading(true);
+    
+    // Clean contact number before sending (remove spaces, dashes, etc.)
+    const cleanedContactNumber = contactNumber.replace(/[\s\-\(\)\+]/g, '');
     
     const formData = {
       customer_id,
       customer_name,
       contact_name: contactName,
-      contact_number: contactNumber,
+      contact_number: cleanedContactNumber,
       event_date: eventDate,
       event_start_time: eventStartTime,
       event_end_time: eventEndTime,
@@ -181,22 +264,85 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
       cups: Number(cups),
     };
     
-    console.log('Submitting event form with data:', formData);
+    console.log('📤 Submitting event form with data:', formData);
+    console.log('📡 API URL:', `${API_URL}/api/events`);
+    
+    // Get JWT token from localStorage
+    const token = localStorage.getItem('authToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    
+    // Add JWT token to headers if available
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('✅ JWT token added to request headers');
+    } else {
+      console.warn('⚠️ No JWT token found in localStorage');
+    }
     
     try {
+      console.log('📤 Making POST request to:', `${API_URL}/api/events`);
+      console.log('📤 Request headers:', headers);
+      console.log('📤 Request body:', formData);
+      
       const res = await fetch(`${API_URL}/api/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: headers,
+        credentials: 'omit',
         body: JSON.stringify(formData),
       });
       
-      console.log('Response status:', res.status);
-      const data = await res.json();
-      console.log('Response data:', data);
+      console.log('📥 Response status:', res.status);
+      console.log('📥 Response ok:', res.ok);
+      console.log('📥 Response headers:', Object.fromEntries(res.headers.entries()));
       
-      if (res.ok && data.success) {
-        toast('Event request submitted!', { description: 'Your event request has been sent to the admin.' });
+      // Handle authentication errors first
+      if (res.status === 401) {
+        const responseText = await res.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch {
+          errorData = { message: 'Authentication failed. Please log in again.' };
+        }
+        console.error('❌ Authentication error:', errorData);
+        toast.error('Authentication required', { 
+          description: errorData.message || 'Please log in again to submit event requests.',
+          duration: 7000
+        });
+        setLoading(false);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Get response as text first to handle both JSON and non-JSON
+      const responseText = await res.text();
+      console.log('📥 Raw response text:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('📥 Parsed response data:', data);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response as JSON:', parseError);
+        console.error('❌ Response text was:', responseText);
+        toast.error('Server error', { 
+          description: `Server returned an invalid response: ${responseText.substring(0, 100)}`,
+          duration: 7000
+        });
+        setLoading(false);
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (res.status >= 200 && res.status < 300 && data.success) {
+        console.log('✅ Event request submitted successfully! Event ID:', data.eventId);
+        toast.success('Event request submitted!', { 
+          description: data.message || 'Your event request has been sent to the admin. You will be notified once it is reviewed.',
+          duration: 5000
+        });
         // Reset form
         setEventDate('');
         setEventStartTime('');
@@ -208,16 +354,57 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         setSelectedOccasion('');
         setCustomOccasion('');
         setNotes('');
-        // Refresh user events
-        fetchUserEvents();
+        // Refresh user events after a short delay to ensure backend has processed
+        setTimeout(() => {
+          fetchUserEvents();
+        }, 1000);
       } else {
-        toast('Submission failed', { description: data.message || 'Please try again.' });
+        console.error('❌ Submission failed:', data);
+        let errorMessage = data.message || data.error?.message || data.error || 'Please try again.';
+        
+        // Handle validation errors
+        if (res.status === 400) {
+          errorMessage = data.message || data.error || 'Please check your form and try again.';
+        }
+        
+        // Show more detailed error in development
+        if (import.meta.env.DEV && data.error) {
+          console.error('Full error object:', data.error);
+          if (data.error.hint) {
+            errorMessage += ` (${data.error.hint})`;
+          }
+        }
+        
+        toast.error('Submission failed', { 
+          description: errorMessage,
+          duration: 7000
+        });
       }
-    } catch (err) {
-      console.error('Network error:', err);
-      toast('Network error', { description: 'Please try again.' });
+    } catch (err: any) {
+      console.error('❌ Network error:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
+      
+      // Check if it's a network error or CORS error
+      let errorMessage = 'Failed to connect to server. Please check your connection and try again.';
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err.message.includes('CORS')) {
+        errorMessage = 'CORS error. Please contact support.';
+      } else {
+        errorMessage = err.message || errorMessage;
+      }
+      
+      toast.error('Network error', { 
+        description: errorMessage,
+        duration: 7000
+      });
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -254,7 +441,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Event Form - Left Side */}
-          <Card className="xl:col-span-2 border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300">
+          <Card className="xl:col-span-2 shadow-xl hover:shadow-2xl transition-shadow duration-300">
             <CardContent className="p-6">
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <h2 className="text-2xl font-bold text-[#6B5B5B] mb-6">Reserve for a Special Event</h2>
@@ -264,7 +451,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               <Label htmlFor="occasion" className="text-sm font-medium text-[#6B5B5B] mb-2 block">Event Type/Occasion *</Label>
               <Select value={selectedOccasion} onValueChange={setSelectedOccasion} required>
                 <SelectTrigger 
-                  className="w-full h-12 min-h-[48px] border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 flex items-center justify-between"
+                  className="w-full h-12 min-h-[48px] border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 flex items-center justify-between"
                   style={{ height: '48px', minHeight: '48px' }}
                 >
                   <SelectValue placeholder="Select an occasion" />
@@ -287,7 +474,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 min={getMinDate()}
                 onChange={e => setEventDate(e.target.value)}
                 required
-                className="h-12 min-h-[48px] border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 min-h-[48px] border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 style={{ height: '48px', minHeight: '48px' }}
               />
               <p className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap text-center">Minimum 1 day advance booking</p>
@@ -303,7 +490,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={eventStartTime}
                 onChange={e => setEventStartTime(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
             <div className="md:col-span-2">
@@ -314,7 +501,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={eventEndTime}
                 onChange={e => setEventEndTime(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
             <div className="md:col-span-2">
@@ -323,12 +510,27 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 id="cups"
                 type="number"
                 min={80}
+                step={1}
                 value={cups}
-                onChange={e => setCups(e.target.value)}
-                placeholder="Minimum order is 80 cups"
+                onChange={e => {
+                  const value = e.target.value;
+                  // Allow typing freely - only allow numbers
+                  if (value === '' || /^\d+$/.test(value)) {
+                    setCups(value);
+                  }
+                }}
+                onBlur={e => {
+                  // Validate on blur - show warning if less than 80
+                  const value = Number(e.target.value);
+                  if (e.target.value !== '' && value < 80) {
+                    toast('Minimum 80 cups', { description: 'The minimum order is 80 cups. Please enter at least 80.' });
+                  }
+                }}
+                placeholder="Enter number of cups (min: 80)"
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />
+              <p className="text-[10px] text-gray-500 mt-0.5 text-center">Minimum order: 80 cups</p>
             </div>
           </div>
           
@@ -342,7 +544,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
                 value={customOccasion}
                 onChange={e => setCustomOccasion(e.target.value)}
                 required
-                className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+                className="h-12 border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
               />
             </div>
           )}
@@ -356,7 +558,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               value={contactName}
               onChange={e => setContactName(e.target.value)}
               required
-              className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="h-12 !border-gray-300 border rounded-xl focus:!border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           
@@ -365,12 +567,20 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
             <Input
               id="contact-number"
               type="tel"
-              placeholder="e.g., 0921473335"
+              placeholder="e.g., 09123456789 or 09214733335"
               value={contactNumber}
-              onChange={e => setContactNumber(e.target.value)}
+              onChange={e => {
+                // Allow numbers, spaces, dashes, parentheses, and + for formatting
+                const value = e.target.value.replace(/[^\d\s\-\(\)\+]/g, '');
+                // Limit to 13 characters to allow for formatting but prevent too long numbers
+                const limitedValue = value.length > 13 ? value.slice(0, 13) : value;
+                setContactNumber(limitedValue);
+              }}
+              maxLength={13}
               required
-              className="h-12 border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="h-12 !border-gray-300 border rounded-xl focus:!border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
+            <p className="text-[10px] text-gray-500 mt-0.5">Format: 09XXXXXXXXX (11 digits)</p>
           </div>
           
           <div>
@@ -382,7 +592,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               onChange={e => setAddress(e.target.value)}
               required
               rows={3}
-              className="border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           
@@ -394,23 +604,33 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
-              className="border-2 border-[#a87437] rounded-xl focus:border-[#a87437] focus:ring-2 focus:ring-[#a87437]/20"
+              className="border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200"
             />
           </div>
           
           <Button 
             type="submit" 
-            className="w-full h-12 bg-[#a87437] hover:bg-[#8f652f] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300" 
-            disabled={loading}
+            className="w-full h-12 bg-[#a87437] hover:bg-[#8f652f] text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed" 
+            disabled={loading || isSubmitting}
+            onClick={(e) => {
+              console.log('🖱️ Submit button clicked');
+              // Prevent default to let form's onSubmit handle it
+              if (!loading && !isSubmitting) {
+                // Form submission will be handled by onSubmit
+              } else {
+                e.preventDefault();
+                console.log('⚠️ Button click ignored - form is submitting');
+              }
+            }}
           >
-            {loading ? 'Submitting...' : 'Submit Event Request'}
+            {loading || isSubmitting ? 'Submitting...' : 'Submit Event Request'}
           </Button>
               </form>
             </CardContent>
           </Card>
 
           {/* Your Event Requests - Right Side */}
-          <Card className="xl:col-span-1 border-2 border-[#a87437] shadow-xl hover:shadow-2xl transition-shadow duration-300 xl:sticky xl:top-4">
+          <Card className="xl:col-span-1 shadow-xl hover:shadow-2xl transition-shadow duration-300 xl:sticky xl:top-4">
             <CardContent className="p-6">
               <h3 className="text-xl font-bold text-[#6B5B5B] mb-6">Your Event Requests</h3>
         
@@ -427,7 +647,7 @@ const CustomerEventForm: React.FC<CustomerEventFormProps> = ({ customer_id, cust
               ) : (
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
                   {userEvents.map((event) => (
-                    <div key={event.id} className="border-2 border-[#a87437] rounded-xl p-4 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <div key={event.id} className="rounded-xl p-4 bg-white shadow-lg hover:shadow-xl transition-shadow duration-300">
                       <div className="flex justify-between items-start mb-3">
                         <h4 className="font-semibold text-[#6B5B5B]">{event.event_type}</h4>
                         <span className={`text-xs font-medium px-3 py-1 rounded-full ${getStatusColor(event.status)} bg-white border border-gray-200`}>

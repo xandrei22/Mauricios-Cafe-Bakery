@@ -4,34 +4,31 @@
  */
 
 export const getApiUrl = (): string => {
-  // First, try to use the explicit VITE_API_URL if provided
-  const envApiUrl = import.meta.env.VITE_API_URL;
-  
-  if (envApiUrl && envApiUrl.trim() !== '') {
-    return envApiUrl;
-  }
-  
-  // Check if we're in development (localhost)
-  const isLocalhost = window.location.hostname === 'localhost' || 
+  // Detect localhost development
+  const isLocalhost = window.location.hostname === 'localhost' ||
                       window.location.hostname === '127.0.0.1';
-  
-  // Check if we're accessing from mobile/LAN IP
-  const isMobileAccess = window.location.hostname.startsWith('192.168.') ||
-                        window.location.hostname.startsWith('10.') ||
-                        window.location.hostname.startsWith('172.');
-  
-  if (isMobileAccess) {
-    // For mobile access, use the same hostname but backend port
-    return `http://${window.location.hostname}:5001`;
-  }
-  
+
   if (isLocalhost) {
-    // In development, use localhost backend
+    // In development, allow explicit override or fall back to local backend
+    const envApiUrl = import.meta.env.VITE_API_URL;
+    if (envApiUrl && envApiUrl.trim() !== '') return envApiUrl;
     return 'http://localhost:5001';
   }
-  
-  // In production on Vercel, use the Render backend URL directly
-  // This avoids proxy issues and ensures requests go directly to the backend
+
+  // In production, first respect explicit override if provided
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  if (envApiUrl && envApiUrl.trim() !== '') {
+    return envApiUrl.trim().replace(/\/+$/, '');
+  }
+
+  // If running on Vercel, use same-origin (empty base) to leverage rewrites
+  const hostname = window.location.hostname || '';
+  if (hostname.endsWith('.vercel.app')) {
+    // All frontend calls should use relative paths like `/api/...`
+    return '';
+  }
+
+  // Default: use direct Render backend URL
   return 'https://mauricios-cafe-bakery.onrender.com';
 };
 

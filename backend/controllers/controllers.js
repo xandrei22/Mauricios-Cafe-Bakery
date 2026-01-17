@@ -1,4 +1,5 @@
-const { ensureAuthenticated, authorizeRoles } = require('../middleware/middleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authorizeRoles } = require('../middleware/middleware');
 
 function home(req, res) {
     res.send('Welcome to CafeIQ');

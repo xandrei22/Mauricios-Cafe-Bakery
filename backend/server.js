@@ -1,15 +1,243 @@
-// server.js - Main entry point for the backend server
-// Import required modules
+// server.js - Main backend entry point
 const express = require('express');
 const session = require('express-session');
 const MySQLStore = require('express-mysql-session')(session);
 const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
-const https = require('https');
-const fs = require('fs');
-const helmet = require('helmet');
+const path = require('path');
 const socketIo = require('socket.io');
+const passport = require('passport');
+const db = require('./config/db');
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5001;
+const server = http.createServer(app);
+
+// -------------------
+// ⭐ CRITICAL: Log ALL incoming headers BEFORE CORS (for debugging)
+// -------------------
+app.use((req, res, next) => {
+    // Only log for check-session requests
+    if (req.path && req.path.includes('check-session')) {
+        console.log('🔍 RAW REQUEST HEADERS (before CORS):', {
+            method: req.method,
+            path: req.path,
+            headers: Object.keys(req.headers),
+            authorization: req.headers['authorization'] || req.headers['Authorization'] || 'NOT FOUND',
+            allHeaderKeys: Object.keys(req.headers)
+        });
+    }
+    next();
+});
+app.use(cors({
+    origin: function(origin, callback) {
+        if (!origin) return callback(null, true); // allow Postman, mobile apps, etc.
+
+        // Allow your main domain and any Vercel preview deployments
+        if (
+            origin.endsWith('.vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.onrender.com') ||
+            origin === 'https://mauricios-cafe-bakery.shop' ||
+            origin === 'https://www.mauricios-cafe-bakery.shop' ||
+            origin.startsWith('http://localhost:5173') ||
+            origin.startsWith('http://127.0.0.1:5173')
+        ) {
+            return callback(null, true);
+        }
+
+        // Allow all in dev
+        if (process.env.NODE_ENV !== 'production') return callback(null, true);
+
+        console.warn('❌ Blocked by CORS:', origin);
+        return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'authorization', // lowercase variant
+        'AUTHORIZATION', // uppercase variant
+        'X-Requested-With',
+        'Accept',
+        'Accept-Language',
+        'Origin',
+        'X-Auth-Token' // Additional header variant
+    ],
+    exposedHeaders: ['Authorization'],
+    credentials: true, // ⭐ Allow credentials (JWT in headers) - frontend uses withCredentials: false so no cookies sent
+    optionsSuccessStatus: 204,
+    maxAge: 86400
+}));
+
+
+// -------------------
+// CORS - SIMPLE AND WORKING
+// -------------------
+// CORS configuration that works with both old and new frontend builds
+/*app.use(cors({
+    origin: function(origin, callback) {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+
+        // Allow Vercel frontend and Render backend
+        if (origin.includes('vercel.app') ||
+            origin.includes('mauricios-cafe-bakery.vercel.app') ||
+            origin.includes('onrender.com') ||
+            origin === 'http://localhost:5173' ||
+            origin === 'http://127.0.0.1:5173') {
+            return callback(null, true);
+        }
+
+        // Allow all origins in development
+        if (process.env.NODE_ENV !== 'production') {
+            return callback(null, true);
+        }
+
+        callback(null, true); // Allow all for now
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'authorization',
+        'AUTHORIZATION',
+        'X-Authorization',
+        'x-authorization',
+        'X-Requested-With',
+        'Accept',
+        'Accept-Language',
+        'Content-Language'
+    ],
+    exposedHeaders: ['Authorization', 'authorization'],
+    credentials: false, // JWT-only authentication - no cookies/credentials needed
+    optionsSuccessStatus: 204,
+    preflightContinue: false,
+    maxAge: 86400 // Cache preflight for 24 hours
+}));*/
+
+// -------------------
+// Body parsing
+// -------------------
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// -------------------
+// Serve uploads
+// -------------------
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express.static(path.join(__dirname, 'uploads')));
+
+// -------------------
+// Security headers
+// -------------------
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+
+    if (req.path.includes('/admin') || req.path.includes('/staff') || req.path.includes('/customer')) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+    }
+    next();
+});
+
+// -------------------
+// Session (Google OAuth only)
+// -------------------
+const sessionStore = new MySQLStore({
+    clearExpired: true,
+    checkExpirationInterval: 900000,
+    expiration: 86400000,
+    createDatabaseTable: true,
+    schema: {
+        tableName: 'sessions',
+        columnNames: { session_id: 'session_id', expires: 'expires', data: 'data' }
+    }
+}, db.pool);
+
+const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET || 'change-me-in-prod',
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    rolling: false,
+    proxy: true,
+    name: 'connect.sid',
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 3600000,
+        path: '/'
+    }
+});
+
+// -------------------
+// Passport.js
+// -------------------
+const passportConfig = require('./controllers/passport');
+passportConfig(passport, db);
+app.use(passport.initialize());
+// Apply session middleware to all Google OAuth routes (including callback)
+app.use('/api/auth/google', sessionMiddleware);
+app.use('/api/auth/google', passport.session());
+
+// -------------------
+// CRITICAL: Initialize req.session globally to prevent "Cannot read properties of undefined" errors
+// This MUST run BEFORE any routes, middleware, or code that might access req.session
+// This runs for ALL routes, not just Google OAuth
+// -------------------
+app.use(function(req, res, next) {
+    try {
+        // CRITICAL: Always ensure req.session exists and is a safe object
+        // This prevents "Cannot read properties of undefined" errors
+        if (req.session === undefined || req.session === null || typeof req.session !== 'object') {
+            // Create a safe object with null properties for common session properties
+            req.session = {
+                adminUser: null,
+                staffUser: null,
+                user: null,
+                customerUser: null,
+                admin: null,
+                staff: null
+            };
+        } else {
+            // If session exists but properties are undefined, set them to null
+            // This prevents "Cannot read properties of undefined" when accessing nested properties
+            if (req.session.adminUser === undefined) req.session.adminUser = null;
+            if (req.session.staffUser === undefined) req.session.staffUser = null;
+            if (req.session.user === undefined) req.session.user = null;
+            if (req.session.customerUser === undefined) req.session.customerUser = null;
+            if (req.session.admin === undefined) req.session.admin = null;
+            if (req.session.staff === undefined) req.session.staff = null;
+        }
+    } catch (initError) {
+        // If initialization fails, create a minimal safe object
+        console.error('❌ Error initializing req.session in global middleware:', initError);
+        req.session = {
+            adminUser: null,
+            staffUser: null,
+            user: null,
+            customerUser: null,
+            admin: null,
+            staff: null
+        };
+    }
+    next();
+});
+
+// -------------------
+// Routes
+// -------------------
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const orderRoutes = require('./routes/orderRoutes');
@@ -28,419 +256,23 @@ const guestOrderRoutes = require('./routes/guestOrderRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const receiptRoutes = require('./routes/receiptRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const tableRoutes = require('./routes/tableRoutes');
 const userSettingsRoutes = require('./routes/userSettingsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const lowStockRoutes = require('./routes/lowStockRoutes');
 const cleanupRoutes = require('./routes/cleanupRoutes');
 const dailyResetRoutes = require('./routes/dailyResetRoutes');
-const db = require('./config/db');
-const passport = require('passport');
-const passportConfig = require('./controllers/passport');
 
-// Load environment variables from .env file
-dotenv.config();
-
-// Create Express app and set port
-const app = express();
-const server = http.createServer(app);
-
-// ✅ FIX: Proper Socket.IO CORS configuration
-const io = socketIo(server, {
-    cors: {
-        origin: function(origin, callback) {
-            // Allow requests with no origin (mobile apps, Postman, etc.)
-            if (!origin) return callback(null, true);
-
-            const allowedOrigins = [
-                process.env.FRONTEND_URL,
-                "https://mauricios-cafe-bakery.vercel.app",
-                "https://mauricios-cafe-bakery-d9b03t1n4-josh-sayats-projects.vercel.app",
-                "https://mauricios-cafe-bakery.onrender.com",
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://192.168.88.54:5173", // Mobile LAN access
-                "http://192.168.88.87:5173" // Alternative LAN IP
-            ];
-
-            try {
-                const hostname = new URL(origin).hostname;
-                if (
-                    allowedOrigins.includes(origin) ||
-                    hostname.endsWith(".vercel.app") ||
-                    hostname.endsWith("vercel.app") ||
-                    hostname.startsWith("192.168.") // Allow any LAN IP
-                ) {
-                    console.log("✅ Socket.IO CORS allowed for origin:", origin);
-                    return callback(null, true);
-                }
-                console.error("❌ Socket.IO CORS blocked for origin:", origin);
-                return callback(new Error('Not allowed by CORS'));
-            } catch (err) {
-                console.error("❌ Socket.IO CORS error:", err);
-                return callback(new Error('Invalid origin'));
-            }
-        },
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
-
-const PORT = process.env.PORT || 5001;
-
-// ✅ FIX: Apply CORS middleware early
-const corsOptions = {
-    origin: function(origin, callback) {
-        if (!origin) return callback(null, true); // Allow mobile/postman
-
-        const allowedOrigins = [
-            process.env.FRONTEND_URL,
-            "https://mauricios-cafe-bakery.vercel.app",
-            "https://mauricios-cafe-bakery.onrender.com",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://192.168.88.54:5173", // Mobile LAN access
-            "http://192.168.88.87:5173" // Alternative LAN IP
-        ];
-
-        // ✅ Allow listed origins + any vercel.app preview domain + LAN IPs
-        try {
-            const hostname = new URL(origin).hostname;
-            if (
-                allowedOrigins.includes(origin) ||
-                hostname.endsWith(".vercel.app") ||
-                hostname.endsWith("vercel.app") ||
-                hostname.startsWith("192.168.") // Allow any LAN IP
-            ) {
-                console.log("✅ CORS allowed for origin:", origin);
-                callback(null, true);
-            } else {
-                console.error("❌ CORS blocked for origin:", origin);
-                callback(new Error('Not allowed by CORS'));
-            }
-        } catch (err) {
-            console.error("❌ CORS error:", err);
-            callback(new Error('Invalid origin'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-};
-
-// ✅ HTTPS redirection (keep this after cors)
-if (process.env.NODE_ENV === 'production') {
-    app.use((req, res, next) => {
-        if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
-            return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
-        }
-        next();
-    });
-}
-
-
-// Optional: redirect HTTP to HTTPS when behind a proxy/production
-if (process.env.NODE_ENV === 'production') {
-    app.use((req, res, next) => {
-        if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] !== 'https') {
-            return res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
-        }
-        next();
-    });
-}
-app.use(cors(corsOptions));
-
-// Parse JSON and URL-encoded request bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve static files from uploads directory and allow cross-origin resource policy for images
-const path = require('path');
-app.use('/uploads', (req, res, next) => {
-    // Required for loading images from a different origin (e.g., Vite on 5173)
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    next();
-}, express.static(path.join(__dirname, 'uploads')));
-
-// Removed legacy route rewrite that caused paths like /inventoryapi/inventory
-
-// Trust proxy (needed if behind proxies and for correct cookie handling)
-app.set('trust proxy', 1);
-
-// Session configuration for user authentication with MySQL store
-// IMPORTANT: Reuse the main DB pool to avoid a second pool that may drop
-const sessionOptions = {
-    clearExpired: true,
-    checkExpirationInterval: 900000,
-    expiration: 86400000,
-    createDatabaseTable: true,
-    schema: {
-        tableName: 'sessions',
-        columnNames: { session_id: 'session_id', expires: 'expires', data: 'data' }
-    }
-};
-const sessionStore = new MySQLStore(sessionOptions, db.pool);
-
-// Handle session store errors
-sessionStore.on('error', (error) => {
-    console.error('Session store error:', error);
-});
-
-sessionStore.on('connect', () => {
-    console.log('Session store connected successfully');
-});
-
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    store: sessionStore,
-    cookie: {
-        secure: process.env.NODE_ENV === 'production', // Requires HTTPS in production
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-origin in production, lax in dev
-        httpOnly: true,
-        rolling: true, // Added: refresh cookie on each request
-        domain: process.env.COOKIE_DOMAIN // Set this if cookies should work across subdomains
-    },
-    name: 'sessionId', // Added: custom session name
-    unset: 'destroy', // Added: properly destroy sessions
-    proxy: true // Trust proxy for correct secure flag handling
-}));
-
-// Initialize Passport.js for authentication
-passportConfig(passport, db);
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Session refresh middleware - extend session on each request
-app.use((req, res, next) => {
-    if (req.session) {
-        // Refresh session for admin users
-        if (req.session.adminUser) {
-            req.session.touch();
-            console.log(`Admin session refreshed for: ${req.session.adminUser.email || req.session.adminUser.id}`);
-        }
-        // Refresh session for staff users
-        if (req.session.staffUser) {
-            req.session.touch();
-            console.log(`Staff session refreshed for: ${req.session.staffUser.email || req.session.staffUser.id}`);
-        }
-        // Refresh session for customer users
-        if (req.session.customerUser) {
-            req.session.touch();
-            console.log(`Customer session refreshed for: ${req.session.customerUser.email || req.session.customerUser.id}`);
-        }
-    }
-    next();
-});
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
-
-    // Join order room for real-time updates
-    socket.on('join-order-room', (orderId) => {
-        // Accept either raw id or already prefixed value
-        const room = String(orderId).startsWith('order-') ? String(orderId) : `order-${orderId}`;
-        socket.join(room);
-        console.log(`Client ${socket.id} joined order room: ${room}`);
-    });
-
-    // Join staff room for POS updates
-    socket.on('join-staff-room', () => {
-        socket.join('staff-room');
-    });
-
-    // Join admin room for admin updates
-    socket.on('join-admin-room', () => {
-        socket.join('admin-room');
-    });
-
-    // Join customer room for customer updates
-    socket.on('join-customer-room', (data) => {
-        const roomName = `customer-${data.customerEmail}`;
-        socket.join(roomName);
-        console.log(`🔌 Client ${socket.id} joined customer room: ${roomName}`);
-        console.log(`📧 Customer email: ${data.customerEmail}`);
-
-        // Send a test event to confirm the room is working
-        socket.emit('test-customer-room', {
-            message: 'Customer room joined successfully',
-            room: roomName,
-            timestamp: new Date()
-        });
-    });
-
-    // Handle order status updates
-    socket.on('order-status-update', (data) => {
-        io.to(`order-${data.orderId}`).emit('order-updated', data);
-        io.to('staff-room').emit('order-updated', data);
-        io.to('admin-room').emit('order-updated', data);
-        // Broadcast to all customer rooms for order updates
-        io.emit('order-updated', data);
-    });
-
-    // Handle new order notifications
-    socket.on('new-order', (orderData) => {
-        io.to('staff-room').emit('new-order-received', orderData);
-        io.to('admin-room').emit('new-order-received', orderData);
-    });
-
-    // Handle inventory updates
-    socket.on('inventory-update', (data) => {
-        console.log('🔔 Server received inventory-update event:', data);
-        io.to('staff-room').emit('inventory-updated', data);
-        io.to('admin-room').emit('inventory-updated', data);
-    });
-
-
-    // Handle payment status updates
-    socket.on('payment-update', (data) => {
-        io.to(`order-${data.orderId}`).emit('payment-updated', data);
-        io.to('staff-room').emit('payment-updated', data);
-        io.to('admin-room').emit('payment-updated', data);
-        // Broadcast to all customer rooms for payment updates
-        io.emit('payment-updated', data);
-    });
-
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-    });
-});
-
-// Make io available to routes
-app.set('io', io);
-
-// Setup notification service with Socket.IO
-const notificationService = require('./services/notificationService');
-notificationService.setupSocketConnection(io);
-
-// Setup order processing service with Socket.IO
-const orderProcessingService = require('./services/orderProcessingService');
-orderProcessingService.setupSocketConnection(io);
-
-// Setup low stock monitor
-const lowStockMonitorService = require('./services/lowStockMonitorService');
-
-// Debug middleware to log all routes
-app.use((req, res, next) => {
-    console.log(`Route requested: ${req.method} ${req.url}`);
-    next();
-});
-
-// Add before route registrations
-app.use((req, res, next) => {
-    console.log('Request URL:', req.url);
-    next();
-});
-
-// Register routes with /api prefix
-// IMPORTANT: authRoutes must come FIRST to handle login endpoints before specific routes
 app.use('/api', authRoutes);
-
-// Test endpoints for export functionality (no authentication required)
-app.get('/api/test-export', async(req, res) => {
-    try {
-        console.log('Testing export packages...');
-
-        // Test write-excel-file
-        const writeExcelFile = require('write-excel-file/node');
-        const testData = [
-            ['Name', 'Value'],
-            ['Test', 123]
-        ];
-        const excelBuffer = await writeExcelFile(testData, {
-            schema: [
-                { column: 'Name', type: String, value: row => row[0] },
-                { column: 'Value', type: Number, value: row => row[1] }
-            ]
-        });
-
-        // Test PDF
-        const jsPDF = require('jspdf').jsPDF;
-        const doc = new jsPDF();
-        doc.text('Test PDF', 10, 10);
-        const pdfBuffer = doc.output('arraybuffer');
-
-        res.json({
-            success: true,
-            message: 'Export packages are working',
-            excelSize: excelBuffer.length,
-            pdfSize: pdfBuffer.byteLength
-        });
-    } catch (error) {
-        console.error('Test export error:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-app.get('/api/test-excel', async(req, res) => {
-    try {
-        const writeExcelFile = require('write-excel-file/node');
-        const testData = [
-            ['Order ID', 'Customer', 'Amount'],
-            ['TEST-001', 'Test Customer', 100.50],
-            ['TEST-002', 'Another Customer', 250.75]
-        ];
-
-        const excelBuffer = await writeExcelFile(testData, {
-            schema: [
-                { column: 'Order ID', type: String, value: row => row[0] },
-                { column: 'Customer', type: String, value: row => row[1] },
-                { column: 'Amount', type: Number, value: row => row[2] }
-            ]
-        });
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename="test-report.xlsx"');
-        res.setHeader('Content-Length', excelBuffer.length);
-        res.setHeader('Cache-Control', 'no-cache');
-
-        res.end(excelBuffer, 'binary');
-    } catch (error) {
-        console.error('Test Excel error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.get('/api/test-pdf', async(req, res) => {
-    try {
-        const jsPDF = require('jspdf').jsPDF;
-        const doc = new jsPDF();
-
-        doc.setFontSize(16);
-        doc.text('Test Sales Report', 14, 22);
-
-        doc.setFontSize(12);
-        doc.text('This is a test PDF file', 14, 35);
-        doc.text('Generated at: ' + new Date().toLocaleString(), 14, 45);
-
-        const pdfBuffer = doc.output('arraybuffer');
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename="test-report.pdf"');
-        res.setHeader('Content-Length', pdfBuffer.byteLength);
-        res.setHeader('Cache-Control', 'no-cache');
-
-        res.end(Buffer.from(pdfBuffer), 'binary');
-    } catch (error) {
-        console.error('Test PDF error:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.use('/api/inventory', inventoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/settings', userSettingsRoutes);
 app.use('/api/customer', customerOrderRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/guest', guestOrderRoutes);
-app.use('/api/orders', orderRoutes); // Add the missing order routes
+app.use('/api/orders', orderRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/admin/inventory', adminInventoryRoutes);
 app.use('/api', eventRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
@@ -451,157 +283,152 @@ app.use('/api/receipts', receiptRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/low-stock', lowStockRoutes);
 app.use('/api/cleanup', cleanupRoutes);
-
-// Use development or production payment routes based on environment
-if (process.env.NODE_ENV === 'development') {
-    console.log('🔧 Development mode: Using simulated payment system');
-    app.use('/api/payment', devPaymentRoutes);
-    app.use('/api/dev-payment', devPaymentRoutes); // Alternative endpoint for clarity
-} else {
-    console.log('🚀 Production mode: Using actual payment system');
-    app.use('/api/payment', actualPaymentRoutes);
-}
-
-// Daily reset routes
 app.use('/api/daily-reset', dailyResetRoutes);
+app.use('/api/table', tableRoutes);
 
+// -------------------
 // Health check endpoint
+// -------------------
 app.get('/api/health', (req, res) => {
     res.json({
-        status: 'OK',
+        success: true,
+        message: 'Server is running',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development',
-        paymentMode: process.env.NODE_ENV === 'development' ? 'simulated' : 'actual'
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
-// Global error handling middleware
+// Payment routes
+if (process.env.NODE_ENV === 'development') {
+    app.use('/api/payment', devPaymentRoutes);
+    app.use('/api/dev-payment', devPaymentRoutes);
+} else {
+    app.use('/api/payment', actualPaymentRoutes);
+}
+
+// -------------------
+// Socket.IO
+// -------------------
+const io = socketIo(server, {
+    cors: {
+        origin: (origin, callback) => callback(null, true),
+        methods: ["GET", "POST"],
+        credentials: false
+    }
+});
+app.set('io', io);
+
+// Initialize notification service with Socket.IO
+const notificationService = require('./services/notificationService');
+notificationService.setupSocketConnection(io);
+
+// -------------------
+// Automatic Database Schema Migration
+// -------------------
+// Ensure events table has required columns on server startup
+const ensureEventsTableSchema = require('./scripts/ensureEventsTableSchema');
+(async () => {
+    try {
+        const success = await ensureEventsTableSchema();
+        if (success) {
+            console.log('✅ Events table schema verified/updated on server startup');
+        } else {
+            console.warn('⚠️ Events table schema check completed with warnings');
+        }
+    } catch (err) {
+        console.error('⚠️ Events table schema check failed (non-critical):', err.message);
+        console.error('⚠️ Event requests may fail until schema is fixed. Run: node scripts/fix-events-table.js');
+        // Don't exit - allow server to start, migration will be attempted on first event creation
+    }
+})();
+
+// Socket.IO connection handlers
+io.on('connection', (socket) => {
+    console.log('✅ Socket.IO client connected:', socket.id);
+
+    // Handle admin room join
+    socket.on('join-admin-room', () => {
+        socket.join('admin-room');
+        console.log(`✅ Socket ${socket.id} joined admin-room`);
+    });
+
+    // Handle staff room join
+    socket.on('join-staff-room', () => {
+        socket.join('staff-room');
+        console.log(`✅ Socket ${socket.id} joined staff-room`);
+    });
+
+    // Handle customer room join
+    socket.on('join-customer-room', (data) => {
+        if (data && data.customerEmail) {
+            // Normalize email to lowercase for consistent room naming
+            const customerEmail = String(data.customerEmail).toLowerCase().trim();
+            const roomName = `customer-${customerEmail}`;
+            socket.join(roomName);
+            console.log(`✅ Socket ${socket.id} joined ${roomName} (original email: ${data.customerEmail})`);
+        }
+    });
+
+    // Handle order room join (for guest order tracking)
+    socket.on('join-order-room', (orderId) => {
+        if (orderId) {
+            const roomName = `order-${orderId}`;
+            socket.join(roomName);
+            console.log(`✅ Socket ${socket.id} joined ${roomName}`);
+        }
+    });
+
+    // Handle disconnect
+    socket.on('disconnect', () => {
+        console.log('❌ Socket.IO client disconnected:', socket.id);
+    });
+
+    // Handle errors
+    socket.on('error', (error) => {
+        console.error('❌ Socket.IO error:', error);
+    });
+});
+
+// -------------------
+// 404 handler
+// -------------------
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route not found'
+    });
+});
+
+// -------------------
+// Global error handler
+// -------------------
 app.use((err, req, res, next) => {
     console.error('Error details:', {
         message: err.message,
         stack: err.stack,
-        name: err.name
+        path: req.path,
+        method: req.method
     });
-    if (res.headersSent) {
-        return next(err);
-    }
-    try {
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error'
-        });
-    } catch (_) {
-        // prevent double-send crashes
-    }
-});
+    if (res.headersSent) return next(err);
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Promise Rejection:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name
+    // CORS is handled by cors middleware above, just send error
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal server error'
     });
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name
-    });
-    process.exit(1);
-});
-
-// Start the server and listen for incoming requests
+// -------------------
+// Start server
+// -------------------
 server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Socket.IO server ready for real-time updates`);
+    console.log(`✅ Server running on http://localhost:${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Payment System: ${process.env.NODE_ENV === 'development' ? 'Simulated (DEV MODE)' : 'Actual (Production)'}`);
-
-    // Start ingredient deduction queue service (guarded by env to reduce DB contention)
-    if (process.env.DISABLE_BACKGROUND_JOBS !== '1') {
-        (async() => {
-            try {
-                const ingredientDeductionQueueService = require('./services/ingredientDeductionQueueService');
-                const db = require('./config/db');
-                const [tables] = await db.query(`SHOW TABLES LIKE 'ingredient_deduction_queue'`);
-                if (tables.length > 0) {
-                    ingredientDeductionQueueService.start();
-                    console.log(`🍳 Ingredient deduction queue service started`);
-                } else {
-                    console.log(`⚠️  Ingredient deduction queue service not started - tables not ready`);
-                }
-            } catch (error) {
-                console.error('❌ Failed to start ingredient deduction queue service:', error.message);
-            }
-        })();
-    } else {
-        console.log('⏸ Ingredient deduction queue disabled by DISABLE_BACKGROUND_JOBS=1');
-    }
-
-    // Start low stock monitor (guarded)
-    if (process.env.DISABLE_BACKGROUND_JOBS !== '1') {
-        (async() => {
-            try {
-                const db = require('./config/db');
-                const [tables] = await db.query(`SHOW TABLES LIKE 'notifications'`);
-                if (tables.length > 0) {
-                    lowStockMonitorService.start(2);
-                    console.log(`🔍 Low stock monitor started`);
-                } else {
-                    console.log(`⚠️  Low stock monitor not started - notifications table not ready`);
-                }
-            } catch (error) {
-                console.error('❌ Failed to start low stock monitor:', error.message);
-            }
-        })();
-    } else {
-        console.log('⏸ Low stock monitor disabled by DISABLE_BACKGROUND_JOBS=1');
-    }
-
-    // Start scheduled notification service (guarded)
-    if (process.env.DISABLE_BACKGROUND_JOBS !== '1') {
-        (async() => {
-            try {
-                const db = require('./config/db');
-                const [tables] = await db.query(`SHOW TABLES LIKE 'notifications'`);
-                if (tables.length > 0) {
-                    const scheduledNotificationService = require('./services/scheduledNotificationService');
-                    scheduledNotificationService.start();
-                    console.log(`📧 Scheduled notification service started`);
-                } else {
-                    console.log(`⚠️  Scheduled notification service not started - notifications table not ready`);
-                }
-            } catch (error) {
-                console.error('❌ Failed to start scheduled notification service:', error.message);
-            }
-        })();
-    } else {
-        console.log('⏸ Scheduled notification service disabled by DISABLE_BACKGROUND_JOBS=1');
-    }
-
-    // Start daily cleanup job for old cancelled orders (guarded)
-    if (process.env.DISABLE_BACKGROUND_JOBS !== '1') {
-        (async() => {
-            try {
-                const { startCleanupJob } = require('./scripts/setup-daily-cleanup');
-                startCleanupJob();
-                console.log(`🧹 Daily cleanup job started`);
-            } catch (error) {
-                console.error('❌ Failed to start daily cleanup job:', error.message);
-            }
-        })();
-    } else {
-        console.log('⏸ Daily cleanup job disabled by DISABLE_BACKGROUND_JOBS=1');
-    }
+    console.log(`CORS: Allowing all origins (debugging mode)`);
 }).on('error', (err) => {
-    console.error('Server error:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name
-    });
+    console.error('❌ Server error:', err);
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Please use a different port.`);
+    }
+    process.exit(1);
 });

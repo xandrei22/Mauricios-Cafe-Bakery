@@ -1,4 +1,4 @@
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 
 function staffArea(req, res) {

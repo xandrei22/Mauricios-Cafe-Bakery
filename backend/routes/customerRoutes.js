@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
 // Get customer loyalty information (PUBLIC - no auth required for viewing)
 router.get('/:customerId/loyalty', async(req, res) => {
@@ -147,8 +148,8 @@ router.get('/:customerId/points-earned-history', async(req, res) => {
     }
 });
 
-// Apply authentication to data modification routes (require login for changes)
-router.use(ensureAuthenticated);
+// Apply authentication to data modification routes (require login for changes) - uses JWT
+router.use(authenticateJWT);
 
 // Earn points from order completion
 router.post('/:customerId/earn-points', async(req, res) => {

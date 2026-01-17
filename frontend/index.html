@@ -3,12 +3,112 @@
 
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/jpg" href="/images/mau.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
     <title>Mauricio's Cafe and Bakery</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <script>
+        // ⭐ CRITICAL: Detect and purge stale builds before anything else runs
+        (function() {
+            function extractBuildHash(url) {
+                if (!url) return null;
+                const match = url.match(/index-([A-Za-z0-9]+)\.js/);
+                return match ? match[1] : null;
+            }
+
+            function detectCurrentBuild() {
+                const scripts = Array.from(document.querySelectorAll('script[src]'));
+                for (const script of scripts) {
+                    const hash = extractBuildHash(script.src);
+                    if (hash) {
+                        return `index-${hash}`;
+                    }
+                }
+                return null;
+            }
+
+            function preserveAuthData(callback) {
+                const authToken = localStorage.getItem('authToken');
+                const adminUser = localStorage.getItem('adminUser');
+                const staffUser = localStorage.getItem('staffUser');
+                const customerUser = localStorage.getItem('customerUser');
+                const loginTimestamp = localStorage.getItem('loginTimestamp');
+
+                callback();
+
+                if (authToken) localStorage.setItem('authToken', authToken);
+                if (adminUser) localStorage.setItem('adminUser', adminUser);
+                if (staffUser) localStorage.setItem('staffUser', staffUser);
+                if (customerUser) localStorage.setItem('customerUser', customerUser);
+                if (loginTimestamp) localStorage.setItem('loginTimestamp', loginTimestamp);
+            }
+
+            function forceReload(reason, detectedBuild) {
+                const reloadUrl = window.location.origin + window.location.pathname + '?v=' + Date.now() + '&nocache=1&_cb=' + Date.now() + '&_force=' + Date.now();
+                console.error('❌ Stale build detected - forcing reload:', {
+                    reason,
+                    detectedBuild,
+                    reloadUrl
+                });
+                if ('caches' in window) {
+                    caches.keys().then(names => names.forEach(name => caches.delete(name)));
+                }
+                preserveAuthData(() => {
+                    localStorage.clear();
+                });
+                if (detectedBuild) localStorage.setItem('buildVersion', detectedBuild);
+                window.location.replace(reloadUrl);
+            }
+
+            function watchForScriptChanges(expectedBuild) {
+                const observer = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        mutation.addedNodes.forEach((node) => {
+                            if (node.tagName === 'SCRIPT' && node.src) {
+                                const hash = extractBuildHash(node.src);
+                                if (hash && expectedBuild && hash !== expectedBuild.replace('index-', '')) {
+                                    forceReload('Dynamic script mismatch', `index-${hash}`);
+                                }
+                            }
+                        });
+                    }
+                });
+
+                observer.observe(document.documentElement, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+
+            const detectedBuild = detectCurrentBuild();
+            const currentBuild = detectedBuild || ('inline-' + Date.now());
+            const lastBuildVersion = localStorage.getItem('buildVersion');
+
+            if (lastBuildVersion && detectedBuild && lastBuildVersion !== detectedBuild) {
+                forceReload('Build version mismatch', detectedBuild);
+                return;
+            }
+
+            localStorage.setItem('buildVersion', currentBuild);
+
+            if (detectedBuild) {
+                const scripts = Array.from(document.querySelectorAll('script[src]'));
+                scripts.forEach((script) => {
+                    const hash = extractBuildHash(script.src);
+                    if (hash && hash !== detectedBuild.replace('index-', '')) {
+                        forceReload('Script hash mismatch', `index-${hash}`);
+                    }
+                });
+            }
+
+            watchForScriptChanges(detectedBuild);
+        })();
+    </script>
 </head>
 
 <body>

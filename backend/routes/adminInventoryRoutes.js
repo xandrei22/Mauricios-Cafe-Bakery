@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const adminInventoryController = require('../controllers/adminInventoryController');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const db = require('../config/db');
 
-// Middleware to ensure admin authentication for all routes
-router.use(ensureAuthenticated);
+// Middleware to ensure admin authentication for all routes - uses JWT
+router.use(authenticateJWT);
 router.use(authorizeRoles(['admin']));
 
 // Drink Management Routes

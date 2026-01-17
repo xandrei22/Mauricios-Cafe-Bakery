@@ -4,10 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search } from "lucide-react";
+import { Coffee, Plus, Minus, Settings, Trash2, MoreVertical, Search, CreditCard } from "lucide-react";
 import UnifiedCustomizeModal from "../customer/UnifiedCustomizeModal";
 import { toast } from "sonner";
-import { io, Socket } from "socket.io-client";
+import { io } from "socket.io-client";
+import axiosInstance from "../../utils/axiosInstance";
+import { getApiUrl } from "../../utils/apiConfig";
 
 interface MenuItem {
 	id: number;
@@ -39,10 +41,11 @@ interface CustomerInfo {
 interface SimplePOSProps {
   hideSidebar?: boolean; // when true, render only menu grid (no customer/cart sidebar)
   sidebarOnly?: boolean; // when true, render only the sidebar (customer info + cart)
-  children?: React.ReactNode; // PaymentProcessor component to render under cart
+  children?: React.ReactNode; // PaymentProcessor component to render under cart (deprecated - use onOpenPaymentModal instead)
+  onOpenPaymentModal?: () => void; // Callback to open payment processing modal
 }
 
-export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, children }: SimplePOSProps) {
+export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, children, onOpenPaymentModal }: SimplePOSProps) {
 	const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 	const [cart, setCart] = useState<CartItem[]>([]);
 	const [searchTerm, setSearchTerm] = useState("");
@@ -50,7 +53,6 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 	const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
 	const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
 		name: '',
 		tableNumber: undefined,
@@ -62,14 +64,16 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 	const [showMoreMenu, setShowMoreMenu] = useState(false);
 	const moreMenuRef = useRef<HTMLDivElement>(null);
 
+	// Define API_URL at component level
+	const API_URL = getApiUrl() || import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 
   useEffect(() => {
 		// Initialize Socket.IO connection for real-time updates
-		const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 		const newSocket = io(API_URL, {
 			transports: ['polling', 'websocket'],
 			path: '/socket.io',
-			withCredentials: true,
+			withCredentials: false,
 			timeout: 30000,
 			forceNew: true,
 			autoConnect: true,
@@ -77,7 +81,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			reconnectionAttempts: 5,
 			reconnectionDelay: 1000
 		});
-		setSocket(newSocket);
+		// Socket is stored locally for cleanup, no need for state
 
 		// Listen for real-time menu updates
 		newSocket.on('menu-updated', (data) => {
@@ -95,8 +99,11 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			fetchMenuItems();
 		}
 
+		// Cleanup: disconnect socket on unmount
 		return () => {
-			newSocket.close();
+			if (newSocket) {
+				newSocket.disconnect();
+			}
 		};
 	}, [sidebarOnly]);
 
@@ -146,6 +153,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 		setCart([]);
 	};
 
+	// Remove duplicate API_URL declaration (already declared elsewhere or unnecessary)
+
 	const processOrder = async () => {
 		if (cart.length === 0 || !customerInfo.name.trim()) {
 			alert('Please add items to cart and enter customer name');
@@ -171,35 +180,46 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 		try {
 			const orderData = {
-				customer_info: customerInfo,
+				customer_info: {
+					id: null, // POS orders don't have customer IDs
+					name: customerInfo.name.trim(),
+					tableNumber: customerInfo.orderType === 'dine_in' ? customerInfo.tableNumber : null,
+					orderType: customerInfo.orderType
+				},
 				items: cart.map(item => ({
 					menu_item_id: item.id,
-					quantity: item.quantity,
-					notes: item.notes,
-					customizations: item.customizations,
-					custom_price: item.customPrice
+					name: item.name || '',
+					quantity: item.quantity || 1,
+					price: item.customPrice || item.base_price || 0,
+					notes: item.notes || '',
+					customizations: item.customizations || [],
+					custom_price: item.customPrice || null
 				})),
 				total_amount: totalAmount,
+				orderType: customerInfo.orderType, // Send both formats for compatibility
 				order_type: customerInfo.orderType,
-				payment_method: customerInfo.paymentMethod
+				payment_method: customerInfo.paymentMethod || 'cash',
+				notes: cart.map(item => item.notes).filter(Boolean).join('; ') || ''
 			};
 
 			console.log('Sending order data:', orderData);
+			
+			// Verify token exists before making request (backend now requires JWT authentication)
+			const token = localStorage.getItem('authToken');
+			if (!token) {
+				alert('You must be logged in to place orders. Please log in again.');
+				window.location.href = '/admin/login';
+				return;
+			}
+			console.log('✅ Token verified, sending order request...');
 
-			const response = await fetch('/api/orders', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				credentials: 'include',
-				body: JSON.stringify(orderData),
-			});
+			const response = await axiosInstance.post('/api/orders', orderData);
 
-            const result = await response.json();
+			const result: any = response?.data || {};
 
-            if (result.success) {
-                const newOrderId = result?.order?.orderId || result?.orderId || 'unknown';
-                alert(`Order placed successfully! Order ID: ${newOrderId}`);
+			if (response.status >= 200 && response.status < 300 && result.success) {
+				const newOrderId = result?.order?.orderId || result?.orderId || 'unknown';
+				alert(`Order placed successfully! Order ID: ${newOrderId}`);
 				clearCart();
 				setCustomerInfo({
 					name: '',
@@ -208,11 +228,59 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					paymentMethod: 'cash'
 				});
 			} else {
-				alert(`Failed to place order: ${result.message}`);
+				const errorMessage = result?.message || result?.error || result?.details || 'Unknown error';
+				alert(`Failed to place order: ${errorMessage}`);
 			}
-		} catch (error) {
-			console.error('Error placing order:', error);
-			alert('Failed to place order. Please try again.');
+		} catch (error: any) {
+			console.error('❌ Error placing order:', error);
+			console.error('❌ Error response:', error?.response?.data);
+			console.error('❌ Error status:', error?.response?.status);
+			console.error('❌ Error message:', error?.message);
+			console.error('❌ Full error object:', JSON.stringify(error, null, 2));
+			
+			// Check if it's an authentication error
+			if (error?.response?.status === 401) {
+				const token = localStorage.getItem('authToken');
+				console.error('❌ Authentication failed - Token check:', {
+					hasToken: !!token,
+					tokenLength: token?.length || 0,
+					errorMessage: error?.response?.data?.message || 'Unauthorized',
+					responseData: error?.response?.data
+				});
+				
+				alert('Authentication required. Please log in again.');
+				// Redirect to admin login if token is missing
+				if (!token) {
+					window.location.href = '/admin/login';
+					return;
+				}
+			}
+			
+			// Extract detailed error message
+			let errorMessage = 'Failed to place order. Please try again.';
+			if (error?.response?.data) {
+				const errorData = error.response.data;
+				errorMessage = errorData.details || errorData.error || errorData.message || errorMessage;
+				console.error('❌ Backend error details:', {
+					error: errorData.error,
+					details: errorData.details,
+					message: errorData.message,
+					code: errorData.code
+				});
+			} else if (error?.message) {
+				errorMessage = error.message;
+			}
+			
+			// Check if error message contains adminUser (session error)
+			if (errorMessage.includes('adminUser') || errorMessage.includes('Cannot read properties')) {
+				console.error('❌ SESSION ERROR DETECTED IN FRONTEND:', {
+					errorMessage,
+					responseData: error?.response?.data,
+					hasToken: !!localStorage.getItem('authToken')
+				});
+			}
+			
+			alert(`Failed to place order: ${errorMessage}`);
 		}
 	};
 
@@ -389,9 +457,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 			setError(null);
 			
 			// Fetch menu items that are visible in POS
-			const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-			const response = await fetch(`${API_URL}/api/menu/pos`);
-			const data = await response.json();
+			const response = await axiosInstance.get('/api/menu/pos');
+			const data = response.data;
 			
 			if (data.success && data.menu_items) {
 				// Ensure proper type conversion for numeric fields
@@ -674,7 +741,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 											</div>
 											
 											{/* Items Grid */}
-											<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-2 sm:gap-3">
+											{/* Fewer items per row so cards are wider and wrap to new rows sooner */}
+											<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-3">
 												{groupedItems[category].map((item) => (
 													<Card
 														key={item.id}
@@ -715,7 +783,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 
 															{/* Actions */}
 															<div className="flex flex-col gap-1">
-																{item.allow_customization && (
+																{item.allow_customization && !['Sandwiches', 'Rice Meals', 'Foods', 'Food', 'Meals'].some(cat => item.category?.toLowerCase() === cat.toLowerCase()) && (
 																	<Button
 																	size="sm"
 																	variant="outline"
@@ -724,8 +792,7 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 																	className="text-xs border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 h-7"
 																	title="Customize Item"
 																>
-																	<Settings className="w-3 h-3 mr-1" />
-																	<span className="hidden sm:inline">Customize</span>
+																	Customize
 																</Button>
 																)}
 																<Button
@@ -820,10 +887,9 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 																		
 																		{/* Actions */}
 																		<div className="ml-3 flex items-center gap-2">
-																			{item.allow_customization && (
+																			{item.allow_customization && !['Sandwiches', 'Rice Meals', 'Foods', 'Food', 'Meals'].some(cat => item.category?.toLowerCase() === cat.toLowerCase()) && (
 																				<Button size="sm" variant="outline" onClick={() => openCustomizeModal(item)} disabled={!item.is_available} className="text-xs border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 h-8" title="Customize Item">
-																					<Settings className="w-3 h-3 mr-1" />
-																					<span className="hidden sm:inline">Customize</span>
+																					Customize
 																				</Button>
 																			)}
 																			<Button size="sm" variant="default" onClick={() => addToCart(item, 1)} disabled={!item.is_available} className="text-xs bg-[#a87437] hover:bg-[#a87437]/90 text-white h-8">
@@ -852,23 +918,25 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 					<div className="w-full lg:w-[30rem] xl:w-[32rem] 2xl:w-[36rem] min-w-0 p-2 sm:p-3 lg:p-4 flex-shrink-0 lg:sticky lg:top-0 lg:overflow-hidden">
 				{/* Customer Information */}
 				<Card className="mb-2 bg-white border shadow-lg">
-					<CardHeader className="pt-0 pb-0 px-3 -mt-3">
-						<CardTitle className="text-sm text-[#3f3532] -mb-4">Customer Information</CardTitle>
+					<CardHeader className="pt-3 pb-1 px-4">
+						<CardTitle className="text-base font-semibold text-[#3f3532]">
+							Customer Information
+						</CardTitle>
 					</CardHeader>
-					<CardContent className="px-3 pb-0 pt-0 -mb-2">
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+					<CardContent className="px-4 pb-2 pt-1">
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							{/* Left: Name + Order Type */}
-							<div className="space-y-0">
+							<div className="space-y-3">
 								<div>
-									<label className="text-xs font-medium text-[#6B5B5B] mb-0 block">Customer Name *</label>
+									<label className="text-xs font-medium text-[#6B5B5B] mb-1 block">Customer Name *</label>
 									<Input
 										placeholder="Enter customer name"
 										value={customerInfo.name}
 										onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-										className="h-6 text-xs bg-white border focus:border-[#a87437]"
+										className="h-8 text-xs bg-white border focus:border-[#a87437]"
 									/>
 								</div>
-								<div className="mt-2">
+								<div>
 									<label className="text-xs font-medium text-gray-700 mb-0 block">Order Type *</label>
 									<div className="flex gap-3 ml-0">
 									<label className="flex items-center space-x-1">
@@ -895,10 +963,10 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
 							</div>
 						</div>
 						{/* Right: Table Number */}
-							<div className="space-y-0">
+							<div className="space-y-3">
 								{customerInfo.orderType === 'dine_in' && (
 									<div>
-										<label className="text-xs font-medium text-gray-700 mb-0 block">Table Number *</label>
+										<label className="text-xs font-medium text-gray-700 mb-1 block">Table Number *</label>
 										<div className="grid grid-cols-3 gap-2">
 											{[1,2,3,4,5,6].map((num) => (
 												<Button
@@ -1071,15 +1139,28 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
                             </div>
 
 						{/* Action Buttons - Always Visible */}
-						<div className="flex gap-2 mt-1 w-full">
-							<Button onClick={clearCart} variant="outline" className="h-8 flex-1 min-w-0 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2" disabled={cart.length === 0}>
-								<Trash2 className="w-3 h-3 mr-1" />
-								Clear Cart
-                                </Button>
-							<Button onClick={processOrder} disabled={cart.length === 0 || !customerInfo.name.trim() || (customerInfo.orderType === 'dine_in' && (!customerInfo.tableNumber || customerInfo.tableNumber < 1 || customerInfo.tableNumber > 6))} className="h-8 flex-1 min-w-0 bg-[#a87437] hover:bg-[#a87437]/90 text-white inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2">
-								Process Order
-                                </Button>
-                            </div>
+						<div className="flex flex-col gap-2 mt-1 w-full">
+							<div className="flex gap-2">
+								<Button onClick={clearCart} variant="outline" className="h-8 flex-1 min-w-0 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2" disabled={cart.length === 0}>
+									<Trash2 className="w-3 h-3 mr-1" />
+									Clear Cart
+	                            </Button>
+								<Button onClick={processOrder} disabled={cart.length === 0 || !customerInfo.name.trim() || (customerInfo.orderType === 'dine_in' && (!customerInfo.tableNumber || customerInfo.tableNumber < 1 || customerInfo.tableNumber > 6))} className="h-8 flex-1 min-w-0 bg-[#a87437] hover:bg-[#a87437]/90 text-white inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2">
+									Process Order
+	                            </Button>
+	                        </div>
+							{/* Payment Processing Button */}
+							{onOpenPaymentModal && (
+								<Button 
+									onClick={onOpenPaymentModal} 
+									variant="outline" 
+									className="h-8 w-full border-blue-500 text-blue-700 hover:bg-blue-50 inline-flex items-center justify-center whitespace-nowrap text-xs font-medium px-2"
+								>
+									<CreditCard className="w-3 h-3 mr-1" />
+									Payment Processing
+								</Button>
+							)}
+                        </div>
 							</div>
 						</div>
 
@@ -1088,8 +1169,8 @@ export default function SimplePOS({ hideSidebar = false, sidebarOnly = false, ch
                   </CardContent>
                 </Card>
 
-				{/* Payment Processor - rendered under cart */}
-				{children && (
+				{/* Payment Processor - rendered under cart (deprecated, use modal instead) */}
+				{children && !onOpenPaymentModal && (
 					<div className="mt-4 flex-1 min-h-0 overflow-y-auto">
 						{children}
 					</div>

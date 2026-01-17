@@ -142,11 +142,40 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             });
         }
 
+        // Generate random 5-character order code (letters and numbers)
+        function generateShortOrderCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < 5; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
         // Create the order
         const orderStatusInitial = 'pending';
         const paymentStatusInitial = 'pending';
         const orderIdStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const orderNumberStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        
+        // Generate unique 5-character order code
+        let orderNumberStr;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        while (!isUnique && attempts < maxAttempts) {
+            orderNumberStr = generateShortOrderCode();
+            const [existing] = await db.query(
+                'SELECT id FROM orders WHERE order_number = ?', [orderNumberStr]
+            );
+            if (existing.length === 0) {
+                isUnique = true;
+            }
+            attempts++;
+        }
+        // Fallback if we couldn't generate a unique code
+        if (!isUnique) {
+            orderNumberStr = generateShortOrderCode() + Date.now().toString().slice(-2);
+        }
 
         // Get next queue position for today
         const [queueResult] = await db.query(`
@@ -188,8 +217,8 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
         const [orderResult] = await db.query(`
             INSERT INTO orders (
                 order_id, order_number, customer_id, customer_name, table_number, items, total_price,
-                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW(), ?)
+                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW(), ?, NOW())
         `, [
             orderIdStr,
             orderNumberStr,
@@ -285,6 +314,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             success: true,
             message: 'Guest order placed successfully',
             orderId: orderId,
+            orderNumber: orderNumberStr,
             status: orderStatus
         });
 
@@ -297,7 +327,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
     }
 });
 
-// Get guest order status by order ID only (GUEST - no auth required)
+// Get guest order status by order ID or order number (GUEST - no auth required)
 router.get('/order-status/:orderId', async(req, res) => {
     try {
         const { orderId } = req.params;
@@ -324,8 +354,8 @@ router.get('/order-status/:orderId', async(req, res) => {
                 c.email as customer_email
             FROM orders o
             LEFT JOIN customers c ON o.customer_id = c.id
-            WHERE o.order_id = ?
-        `, [orderId]);
+            WHERE o.order_id = ? OR o.order_number = ?
+        `, [orderId, orderId]);
 
         if (orders.length === 0) {
             return res.status(404).json({
@@ -360,3 +390,5 @@ router.get('/order-status/:orderId', async(req, res) => {
         });
     }
 });
+
+module.exports = router;

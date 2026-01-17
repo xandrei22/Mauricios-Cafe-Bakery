@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, Users, Plus, Edit, Trash, RefreshCw, Search } from 'lucide-react';
+import { CheckCircle, XCircle, Users, Plus, Edit, Trash, RefreshCw, Search, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { io, Socket } from 'socket.io-client';
 import Swal from 'sweetalert2';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface Staff {
   id: number;
@@ -34,6 +36,7 @@ interface Staff {
 }
 
 const AdminStaff: React.FC = () => {
+  const API_URL = getApiUrl();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
@@ -44,12 +47,17 @@ const AdminStaff: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [, setStaffCount] = useState(0);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false);
 
   const [form, setForm] = useState({
     username: '', email: '', password: '', confirmPassword: '', 
     first_name: '', last_name: '', age: '', role: 'staff',
     phone: '', address: '', position: '', work_schedule: 'flexible' as 'morning' | 'mid' | 'night' | 'flexible',
     date_hired: '', employee_id: '', gender: '' as 'male' | 'female' | 'other' | 'prefer_not_to_say' | '',
+    birthday: '',
   });
 
   // Keep focus on search input to avoid blur on re-renders (mobile tap issue)
@@ -83,7 +91,11 @@ const AdminStaff: React.FC = () => {
 
   useEffect(() => {
     // Initialize Socket.IO connection
-    const newSocket = io();
+    const apiUrl = getApiUrl() || undefined;
+    const newSocket = io(apiUrl, {
+      transports: ['polling', 'websocket'],
+      withCredentials: false
+    });
     setSocket(newSocket);
 
     // Join admin room for real-time updates
@@ -106,25 +118,22 @@ const AdminStaff: React.FC = () => {
 
   const fetchStaff = async () => {
     try {
-      const response = await fetch('/api/admin/staff');
-      if (response.ok) {
-        const data = await response.json();
-        setStaff(data);
-        // Derive active staff count from fetched data to avoid stale/incorrect stats
-        try {
-          const active = Array.isArray(data)
-            ? data.filter((m: any) => (m.status || 'active') === 'active').length
-            : 0;
-          setStaffCount(active);
-        } catch (_) {
-          setStaffCount(0);
-        }
-      } else {
-        setError('Failed to fetch staff');
+      const response = await axiosInstance.get(`${API_URL}/api/admin/staff`);
+      const data = response.data;
+      setStaff(data);
+      // Derive active staff count from fetched data to avoid stale/incorrect stats
+      try {
+        const active = Array.isArray(data)
+          ? data.filter((m: any) => (m.status || 'active') === 'active').length
+          : 0;
+        setStaffCount(active);
+      } catch (_) {
+        setStaffCount(0);
       }
     } catch (err: any) {
       console.error('Error fetching staff:', err);
-      setError('Error fetching staff');
+      const message = err?.response?.data?.message || err?.message || 'Error fetching staff';
+      setError(message);
     } finally {
       setIsLoadingStaff(false);
     }
@@ -132,11 +141,9 @@ const AdminStaff: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/admin/staff/stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStaffCount(data.totalStaff || 0);
-      }
+      const response = await axiosInstance.get(`${API_URL}/api/admin/staff/stats`);
+      const data = response.data;
+      setStaffCount(data.totalStaff || 0);
     } catch (err: any) {
       console.error('Error fetching stats:', err);
     }
@@ -152,6 +159,20 @@ const AdminStaff: React.FC = () => {
     if (editForm) {
       setEditForm(prev => ({ ...prev!, [name]: value }));
     }
+  };
+
+  const normalizeDateValue = (value?: string | null) => {
+    if (!value) return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.includes('T')) {
+      return trimmed.split('T')[0];
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return trimmed;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -171,34 +192,30 @@ const AdminStaff: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch('/api/admin/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
+      const payload = {
+        ...form,
+        date_hired: normalizeDateValue(form.date_hired),
+        birthday: normalizeDateValue(form.birthday)
+      };
+      await axiosInstance.post(`${API_URL}/api/admin/staff`, payload);
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Staff member created successfully!',
+        confirmButtonColor: '#a87437'
       });
-
-      if (response.ok) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Success!',
-          text: 'Staff member created successfully!',
-          confirmButtonColor: '#a87437'
-        });
-        setForm({ 
-          username: '', email: '', password: '', confirmPassword: '', 
-          first_name: '', last_name: '', age: '', role: 'staff',
-          phone: '', address: '', position: '', work_schedule: 'flexible',
-          date_hired: '', employee_id: '', gender: ''
-        });
-        setShowModal(false);
-        fetchStaff();
-        fetchStats();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to create staff member');
-      }
+      setForm({ 
+        username: '', email: '', password: '', confirmPassword: '', 
+        first_name: '', last_name: '', age: '', role: 'staff',
+        phone: '', address: '', position: '', work_schedule: 'flexible',
+        date_hired: '', employee_id: '', gender: '', birthday: ''
+      });
+      setShowModal(false);
+      fetchStaff();
+      fetchStats();
     } catch (error: any) {
-      setError('Error creating staff member');
+      const message = error?.response?.data?.message || error?.message || 'Error creating staff member';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -207,43 +224,92 @@ const AdminStaff: React.FC = () => {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (editForm?.password && !editPasswordsMatch) {
-      setError('Passwords do not match');
+    if (!editForm || !editForm.id) {
+      setError('Invalid staff member data');
       return;
     }
 
-    if (editForm?.password && !editAllValid) {
-      setError('Please meet all password requirements');
-      return;
+    // Only validate password if it's provided and not empty
+    if (editForm?.password && editForm.password.trim() !== '') {
+      if (!editPasswordsMatch) {
+        setError('Passwords do not match');
+        return;
+      }
+
+      if (!editAllValid) {
+        setError('Please meet all password requirements');
+        return;
+      }
     }
 
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/staff/${editForm?.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+      // Prepare update data - only include fields that should be sent to backend
+      const updateData: any = {
+        username: editForm.username?.trim() || '',
+        email: editForm.email?.trim() || '',
+        first_name: editForm.first_name?.trim() || '',
+        last_name: editForm.last_name?.trim() || '',
+        age: editForm.age || '',
+        role: editForm.role || 'staff',
+        phone: editForm.phone?.trim() || '',
+        address: editForm.address?.trim() || '',
+        position: editForm.position?.trim() || '',
+        work_schedule: editForm.work_schedule || '',
+        date_hired: normalizeDateValue(editForm.date_hired),
+        employee_id: editForm.employee_id?.trim() || '',
+        status: editForm.status || 'active',
+        gender: editForm.gender || '',
+        birthday: normalizeDateValue(editForm.birthday),
+        emergency_contact: editForm.emergency_contact?.trim() || '',
+        emergency_phone: editForm.emergency_phone?.trim() || '',
+      };
+
+      // Only include password if it's provided and not empty
+      if (editForm.password && editForm.password.trim() !== '') {
+        updateData.password = editForm.password;
+      }
+
+      // Remove undefined values and convert empty strings to null for optional fields
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        } else if (updateData[key] === '' && ['phone', 'address', 'position', 'work_schedule', 'date_hired', 'employee_id', 'gender', 'birthday', 'emergency_contact', 'emergency_phone'].includes(key)) {
+          // Convert empty strings to null for optional fields
+          updateData[key] = null;
+        }
       });
 
-      if (response.ok) {
-        Swal.fire({
-          icon: 'success',
-          title: 'Success!',
-          text: 'Staff member updated successfully!',
-          confirmButtonColor: '#a87437'
-        });
-        setEditModal(false);
-        setEditForm(null);
-        fetchStaff();
-        fetchStats();
-      } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to update staff member');
-      }
+      console.log('Updating staff with data:', updateData);
+      console.log('Staff ID:', editForm.id);
+
+      const response = await axiosInstance.put(`${API_URL}/api/admin/staff/${editForm.id}`, updateData);
+      console.log('Update response:', response.data);
+      Swal.fire({
+        icon: 'success',
+        title: 'Success!',
+        text: 'Staff member updated successfully!',
+        confirmButtonColor: '#a87437'
+      });
+      setEditModal(false);
+      setEditForm(null);
+      fetchStaff();
+      fetchStats();
     } catch (error: any) {
-      setError('Error updating staff member');
+      const errorData = error?.response?.data;
+      const errorMessage = errorData?.message || errorData?.error || error?.message || 'Error updating staff member';
+      const detailedError = errorData?.error || error?.message || 'Unknown error';
+      
+      console.error('Staff update error:', error);
+      console.error('Error response:', error?.response);
+      console.error('Error details:', errorData);
+      console.error('Request data sent:', editForm);
+      console.error('Full error object:', error);
+      
+      // Show more detailed error message
+      setError(`${errorMessage}${detailedError !== errorMessage ? `: ${detailedError}` : ''}`);
     } finally {
       setLoading(false);
     }
@@ -271,32 +337,20 @@ const AdminStaff: React.FC = () => {
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch(`/api/admin/staff/${id}`, {
-          method: 'DELETE'
+        await axiosInstance.delete(`${API_URL}/api/admin/staff/${id}`);
+        Swal.fire({
+          icon: 'success',
+          title: 'Deleted!',
+          text: 'Staff member deleted successfully!',
+          confirmButtonColor: '#a87437'
         });
-
-        if (response.ok) {
-          Swal.fire({
-            icon: 'success',
-            title: 'Deleted!',
-            text: 'Staff member deleted successfully!',
-            confirmButtonColor: '#a87437'
-          });
-          fetchStaff();
-          fetchStats();
-        } else {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Failed to delete staff member',
-            confirmButtonColor: '#a87437'
-          });
-        }
+        fetchStaff();
+        fetchStats();
       } catch (error: any) {
         Swal.fire({
           icon: 'error',
           title: 'Error!',
-          text: 'Error deleting staff member',
+          text: error?.response?.data?.message || error?.message || 'Error deleting staff member',
           confirmButtonColor: '#a87437'
         });
       }
@@ -494,7 +548,7 @@ const AdminStaff: React.FC = () => {
         {/* Modal for Add Staff */}
         {showModal && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
-            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 w-full max-w-4xl border border-white/20">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-6 w-full max-w-3xl border border-white/20 max-h-[85vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-semibold text-gray-900">Create Staff Account</h2>
                 <button
@@ -509,7 +563,9 @@ const AdminStaff: React.FC = () => {
                 {/* Account Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                     <Input
+                      id="username"
                       name="username"
                       value={form.username}
                       onChange={handleChange}
@@ -519,7 +575,9 @@ const AdminStaff: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <Input
+                      id="email"
                       name="email"
                       type="email"
                       value={form.email}
@@ -535,19 +593,24 @@ const AdminStaff: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
-                      id="role"
-                      name="role"
-                      value={form.role}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                      required
-                    >
-                      <option value="staff">Staff</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="role"
+                        name="role"
+                        value={form.role}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                        required
+                      >
+                        <option value="staff">Staff</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
                   </div>
                   <div>
+                    <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">Age</label>
                     <Input
+                      id="age"
                       name="age"
                       type="number"
                       value={form.age}
@@ -567,10 +630,38 @@ const AdminStaff: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Name - 2 columns */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                    <Input
+                      id="first_name"
+                      name="first_name"
+                      value={form.first_name}
+                      onChange={handleChange}
+                      placeholder="First name"
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                    <Input
+                      id="last_name"
+                      name="last_name"
+                      value={form.last_name}
+                      onChange={handleChange}
+                      placeholder="Last name"
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                </div>
+
                 {/* Contact Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                     <Input
+                      id="phone"
                       name="phone"
                       type="tel"
                       value={form.phone}
@@ -583,16 +674,20 @@ const AdminStaff: React.FC = () => {
                       placeholder="Phone Number (e.g., 09123456789)"
                       maxLength={11}
                       className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                      required
                     />
                     <div className="text-xs text-gray-500 mt-1">Format: 11 digits</div>
                   </div>
                   <div>
+                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                     <Input
+                      id="address"
                       name="address"
                       value={form.address}
                       onChange={handleChange}
                       placeholder="Address"
                       className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                      required
                     />
                   </div>
                 </div>
@@ -600,35 +695,47 @@ const AdminStaff: React.FC = () => {
                 {/* Work Information - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Input
+                    <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-1">Position/Job Title</label>
+                    <select
+                      id="position"
                       name="position"
                       value={form.position}
                       onChange={handleChange}
-                      placeholder="Position/Job Title"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                      className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                    >
+                      <option value="">Select Position</option>
+                      <option value="Cashier">Cashier</option>
+                      <option value="Barista">Barista</option>
+                      <option value="Manager">Manager</option>
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">Required for access control</div>
                   </div>
                   <div>
                     <label htmlFor="work_schedule" className="block text-sm font-medium text-gray-700 mb-1">Work Schedule</label>
-                    <select
-                      id="work_schedule"
-                      name="work_schedule"
-                      value={form.work_schedule}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                    >
-                      <option value="flexible">Flexible</option>
-                      <option value="morning">Morning</option>
-                      <option value="mid">Mid</option>
-                      <option value="night">Night</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="work_schedule"
+                        name="work_schedule"
+                        value={form.work_schedule}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                      >
+                        <option value="flexible">Flexible</option>
+                        <option value="morning">Morning</option>
+                        <option value="mid">Mid</option>
+                        <option value="night">Night</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Date Hired and Employee ID - 2 columns */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="date_hired" className="block text-sm font-medium text-gray-700 mb-1">Date Hired</label>
                     <Input
+                      id="date_hired"
                       name="date_hired"
                       type="date"
                       value={form.date_hired}
@@ -638,7 +745,9 @@ const AdminStaff: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <label htmlFor="employee_id" className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
                     <Input
+                      id="employee_id"
                       name="employee_id"
                       value={form.employee_id}
                       onChange={handleChange}
@@ -650,35 +759,68 @@ const AdminStaff: React.FC = () => {
                 </div>
 
                 {/* Personal Information */}
-                <div>
-                  <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                  <select
-                    id="gender"
-                    name="gender"
-                    value={form.gender}
-                    onChange={handleChange}
-                    className="w-full p-2 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70"
-                  >
-                    <option value="">Prefer not to say</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="birthday" className="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
+                    <Input
+                      id="birthday"
+                      name="birthday"
+                      type="date"
+                      value={form.birthday}
+                      onChange={handleChange}
+                      required
+                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                    <div className="relative">
+                      <select
+                        id="gender"
+                        name="gender"
+                        value={form.gender}
+                        onChange={handleChange}
+                        className="w-full p-2 pr-10 border border-white/20 rounded-lg bg-white/50 backdrop-blur-sm focus:bg-white/70 appearance-none"
+                        required
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">▾</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Password Section - At the end for security */}
                 <div className="border-t pt-4 mt-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Account Security</h3>
                   <div>
-                    <Input
-                      name="password"
-                      type="password"
-                      value={form.password}
-                      onChange={handleChange}
-                      placeholder="Password"
-                      required
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        value={form.password}
+                        onChange={handleChange}
+                        placeholder="Password"
+                        required
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password checklist */}
                     {form.password.length > 0 && (
                       <div className="mt-2 space-y-1 text-sm">
@@ -692,15 +834,30 @@ const AdminStaff: React.FC = () => {
                     )}
                   </div>
                   <div className="mt-3">
-                    <Input
-                      name="confirmPassword"
-                      type="password"
-                      value={form.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Confirm Password"
-                      required
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={form.confirmPassword}
+                        onChange={handleChange}
+                        placeholder="Confirm Password"
+                        required
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password match indicator */}
                     {form.confirmPassword.length > 0 && (
                       <div className={passwordsMatch ? 'text-green-600 flex items-center mt-1' : 'text-red-600 flex items-center mt-1'}>
@@ -766,14 +923,27 @@ const AdminStaff: React.FC = () => {
                 {/* Password Section - 2 columns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Input
-                      name="password"
-                      type="password"
-                      value={editForm.password}
-                      onChange={handleEditChange}
-                      placeholder="New Password (leave blank to keep current)"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        name="password"
+                        type={showEditPassword ? "text" : "password"}
+                        value={editForm.password}
+                        onChange={handleEditChange}
+                        placeholder="New Password (leave blank to keep current)"
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showEditPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password checklist for edit */}
                     {editForm.password && editForm.password.length > 0 && (
                       <div className="mt-2 space-y-1 text-sm">
@@ -787,14 +957,27 @@ const AdminStaff: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <Input
-                      name="confirmPassword"
-                      type="password"
-                      value={editForm.confirmPassword}
-                      onChange={handleEditChange}
-                      placeholder="Confirm Password"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
+                    <div className="relative">
+                      <Input
+                        name="confirmPassword"
+                        type={showEditConfirmPassword ? "text" : "password"}
+                        value={editForm.confirmPassword}
+                        onChange={handleEditChange}
+                        placeholder="Confirm Password"
+                        className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70 pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditConfirmPassword(!showEditConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showEditConfirmPassword ? (
+                          <EyeOff className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
                     {/* Password match indicator for edit */}
                     {editForm.confirmPassword && (
                       <div className={editPasswordsMatch ? 'text-green-600 flex items-center mt-1' : 'text-red-600 flex items-center mt-1'}>
@@ -805,8 +988,8 @@ const AdminStaff: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Role and Status - 2 columns */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Role, Position, and Status - 3 columns */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="edit-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                     <select
@@ -818,7 +1001,24 @@ const AdminStaff: React.FC = () => {
                       required
                     >
                       <option value="staff">Staff</option>
+                      <option value="manager">Manager</option>
                     </select>
+                  </div>
+                  <div>
+                    <label htmlFor="edit-position" className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                    <select
+                      id="edit-position"
+                      name="position"
+                      value={editForm.position || ''}
+                      onChange={handleEditChange}
+                      className="w-full p-2 pr-12 border border-[#a87437] rounded-lg bg-white focus:border-[#8f652f] focus:ring-[#a87437]"
+                    >
+                      <option value="">Select Position</option>
+                      <option value="Cashier">Cashier</option>
+                      <option value="Barista">Barista</option>
+                      <option value="Manager">Manager</option>
+                    </select>
+                    <div className="text-xs text-gray-500 mt-1">Required for access control</div>
                   </div>
                   <div>
                     <label htmlFor="edit-status">Status</label>
@@ -930,15 +1130,6 @@ const AdminStaff: React.FC = () => {
 
                 {/* Work Information - 2 columns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Input
-                      name="position"
-                      value={editForm.position || ''}
-                      onChange={handleEditChange}
-                      placeholder="Position/Job Title"
-                      className="bg-white/50 backdrop-blur-sm border-white/20 focus:bg-white/70"
-                    />
-                  </div>
                   <div>
                     <label htmlFor="edit-work_schedule">Work Schedule</label>
                     <select

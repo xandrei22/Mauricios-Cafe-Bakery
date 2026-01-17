@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const lowStockMonitorService = require('../services/lowStockMonitorService');
-const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
+// Note: ensureAdminAuthenticated and ensureStaffAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
-// Get low stock items
-router.get('/items', ensureAdminAuthenticated, async (req, res) => {
+// Get low stock items - requires authentication
+router.get('/items', authenticateJWT, async(req, res) => {
     try {
         const items = await lowStockMonitorService.getLowStockItems();
-        
+
         res.json({
             success: true,
             items: items,
@@ -23,11 +23,11 @@ router.get('/items', ensureAdminAuthenticated, async (req, res) => {
     }
 });
 
-// Get low stock items for staff
-router.get('/staff/items', ensureStaffAuthenticated, async (req, res) => {
+// Get low stock items for staff - requires authentication
+router.get('/staff/items', authenticateJWT, async(req, res) => {
     try {
         const items = await lowStockMonitorService.getLowStockItems();
-        
+
         res.json({
             success: true,
             items: items,
@@ -42,11 +42,11 @@ router.get('/staff/items', ensureStaffAuthenticated, async (req, res) => {
     }
 });
 
-// Manually trigger low stock check (admin only)
-router.post('/check', ensureAdminAuthenticated, async (req, res) => {
+// Manually trigger low stock check (admin only) - requires authentication
+router.post('/check', authenticateJWT, async(req, res) => {
     try {
         await lowStockMonitorService.triggerCheck();
-        
+
         res.json({
             success: true,
             message: 'Low stock check triggered successfully'
@@ -60,11 +60,11 @@ router.post('/check', ensureAdminAuthenticated, async (req, res) => {
     }
 });
 
-// Force low stock check (bypasses time restriction) (admin only)
-router.post('/force-check', ensureAdminAuthenticated, async (req, res) => {
+// Force low stock check (bypasses time restriction) (admin only) - requires authentication
+router.post('/force-check', authenticateJWT, async(req, res) => {
     try {
         await lowStockMonitorService.forceCheck();
-        
+
         res.json({
             success: true,
             message: 'Force low stock check completed successfully'
@@ -78,8 +78,8 @@ router.post('/force-check', ensureAdminAuthenticated, async (req, res) => {
     }
 });
 
-// Get monitor status (admin only)
-router.get('/status', ensureAdminAuthenticated, async (req, res) => {
+// Get monitor status (admin only) - requires authentication
+router.get('/status', authenticateJWT, async(req, res) => {
     try {
         res.json({
             success: true,
@@ -95,8 +95,8 @@ router.get('/status', ensureAdminAuthenticated, async (req, res) => {
     }
 });
 
-// Check for low stock alerts (for popup after login)
-router.get('/alert-status', ensureAdminAuthenticated, async (req, res) => {
+// Check for low stock alerts (for popup after login) - requires authentication
+router.get('/alert-status', authenticateJWT, async(req, res) => {
     try {
         const db = require('../config/db');
         const [lowStockItems] = await db.query(`

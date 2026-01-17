@@ -3,30 +3,19 @@ const router = express.Router();
 const db = require('../config/db');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const orderProcessingService = require('../services/orderProcessingService');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
+// Note: ensureStaffAuthenticated removed - all routes now use authenticateJWT (JWT-only)
 const ActivityLogger = require('../utils/activityLogger');
 
-// Apply staff authentication to all staff routes
-// Temporarily bypass authentication for testing
-// router.use(ensureStaffAuthenticated);
+// Note: All staff routes now use authenticateJWT middleware (JWT-only, no sessions)
+// router.use(ensureStaffAuthenticated); // Removed - use authenticateJWT on individual routes
 
-// Lightweight session check for staff (placed after middleware to ensure session is present)
-router.get('/check-session', (req, res) => {
-    if (req.session && req.session.staffUser) {
-        return res.json({
-            authenticated: true,
-            user: {
-                id: req.session.staffUser.id,
-                username: req.session.staffUser.username,
-                role: req.session.staffUser.role || 'staff'
-            }
-        });
-    }
-    return res.status(401).json({ authenticated: false });
-});
+// Staff session check - uses JWT middleware
+const { authenticateJWT } = require('../middleware/jwtAuth');
+const { checkStaffSession } = require('../controllers/adminController');
+router.get('/check-session', authenticateJWT, checkStaffSession);
 
-// Staff dashboard data endpoint
-router.get('/dashboard', async(req, res) => {
+// Staff dashboard data endpoint - requires authentication
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
         console.log('Fetching staff dashboard data...');
 
@@ -316,17 +305,19 @@ router.get('/dashboard/sales', async(req, res) => {
 // Staff dashboard: most used ingredients
 router.get('/dashboard/ingredients', async(req, res) => {
     try {
-        // First try to get real ingredient usage from orders
+        // Get ALL paid orders to calculate accurate ingredient usage
+        // Removed LIMIT to ensure we get all data, not just last 200 orders
         const [orders] = await db.query(`
             SELECT items
             FROM orders
             WHERE payment_status = 'paid'
-                AND order_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
             ORDER BY order_time DESC
-            LIMIT 200
         `);
 
         const ingredientCounts = new Map();
+        
+        // Cache menu item ingredients to avoid repeated queries
+        const menuItemIngredientsCache = new Map();
 
         for (const row of orders) {
             let parsed = [];
@@ -341,15 +332,23 @@ router.get('/dashboard/ingredients', async(req, res) => {
                 const quantity = Number(item && item.quantity ? item.quantity : 1);
 
                 if (menuItemId) {
-                    // Get ingredients for this menu item
-                    const [ingredients] = await db.query(`
-            SELECT 
-                            i.name,
-                            mii.required_actual_amount
-                        FROM menu_item_ingredients mii
-                        JOIN ingredients i ON mii.ingredient_id = i.id
-                        WHERE mii.menu_item_id = ?
-                    `, [menuItemId]);
+                    // Check cache first
+                    let ingredients = menuItemIngredientsCache.get(menuItemId);
+                    
+                    if (!ingredients) {
+                        // Get ingredients for this menu item
+                        const [ingredientRows] = await db.query(`
+                            SELECT 
+                                i.name,
+                                mii.required_actual_amount
+                            FROM menu_item_ingredients mii
+                            JOIN ingredients i ON mii.ingredient_id = i.id
+                            WHERE mii.menu_item_id = ?
+                        `, [menuItemId]);
+                        
+                        ingredients = ingredientRows;
+                        menuItemIngredientsCache.set(menuItemId, ingredients);
+                    }
 
                     for (const ingredient of ingredients) {
                         const totalAmount = parseFloat(ingredient.required_actual_amount || 0) * quantity;
@@ -371,14 +370,21 @@ router.get('/dashboard/ingredients', async(req, res) => {
 
             labels = sorted.map(([name]) => name);
             data = sorted.map(([, amount]) => amount);
+            
+            // Enhanced logging for verification
+            console.log(`[Staff Dashboard] Processed ${orders.length} paid orders`);
+            console.log(`[Staff Dashboard] Found ${ingredientCounts.size} unique ingredients`);
+            console.log('[Staff Dashboard] Top 6 most used ingredients:', 
+                sorted.map(([name, amount]) => `${name}: ${amount.toFixed(2)}`).join(', '));
         } else {
+            console.warn('[Staff Dashboard] No ingredient usage data found, using fallback');
             // Fallback to available ingredients with random usage
             const [ingredients] = await db.query(`
                 SELECT name FROM ingredients 
                 WHERE is_available = TRUE 
                 ORDER BY name 
-            LIMIT 6
-        `);
+                LIMIT 6
+            `);
 
             if (ingredients.length > 0) {
                 labels = ingredients.map(ing => ing.name);
@@ -390,7 +396,7 @@ router.get('/dashboard/ingredients', async(req, res) => {
             }
         }
 
-        console.log('Staff ingredients chart data:', { labels, data });
+        console.log('[Staff Dashboard] Ingredients chart data:', { labels, data });
 
         res.json({
             success: true,
@@ -549,8 +555,8 @@ router.post('/dashboard/create-sample-data', async(req, res) => {
     }
 });
 
-// Staff dashboard: staff performance data
-router.get('/dashboard/staff-performance', async(req, res) => {
+// Staff dashboard: staff performance data - requires authentication
+router.get('/dashboard/staff-performance', authenticateJWT, async(req, res) => {
     try {
         const { period = 'month' } = req.query; // 'day' or 'month'
 
@@ -566,7 +572,20 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             interval = 'INTERVAL 6 MONTH';
         }
 
-        // Get staff performance data
+        // Get current staff member's performance data only
+        // Use JWT user from authenticateJWT middleware instead of session
+        const currentStaffId = req.user ? req.user.id : null;
+
+        if (!currentStaffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Staff authentication required'
+            });
+        }
+
+        console.log('🔍 Staff performance query for staff ID:', currentStaffId);
+        console.log('🔍 Query period:', period, 'interval:', interval);
+
         const [staffData] = await db.query(`
             SELECT 
                 CASE 
@@ -583,22 +602,40 @@ router.get('/dashboard/staff-performance', async(req, res) => {
             JOIN users u ON o.staff_id = u.id
             WHERE o.payment_status = 'paid'
                 AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                AND u.id = ?
             GROUP BY u.id, u.first_name, u.last_name, ${groupBy}
             ORDER BY period DESC, total_sales DESC
-        `);
+        `, [currentStaffId]);
 
-        // Get daily sales trend for the last 7 days or monthly trend for last 6 months
+        console.log('🔍 Staff data query result:', staffData.length, 'records found');
+        if (staffData.length > 0) {
+            console.log('🔍 Sample staff data:', staffData[0]);
+        } else {
+            // Debug: Check if there are any orders for this staff member at all
+            const [debugQuery] = await db.query(`
+                SELECT COUNT(*) as total_orders, 
+                       COUNT(CASE WHEN payment_status = 'paid' THEN 1 END) as paid_orders,
+                       COUNT(CASE WHEN staff_id = ? THEN 1 END) as staff_orders
+                FROM orders 
+                WHERE order_time >= DATE_SUB(NOW(), ${interval})
+            `, [currentStaffId]);
+            console.log('🔍 Debug - Orders for staff:', debugQuery[0]);
+        }
+
+        // Get daily sales trend for the last 7 days or monthly trend for last 6 months (current staff only)
         const [trendData] = await db.query(`
             SELECT 
                 ${groupBy} as period,
                 SUM(o.total_price) as total_sales,
                 COUNT(o.id) as order_count
             FROM orders o
+            JOIN users u ON o.staff_id = u.id
             WHERE o.payment_status = 'paid'
                 AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                AND u.id = ?
             GROUP BY ${groupBy}
             ORDER BY period ASC
-        `);
+        `, [currentStaffId]);
 
         // Process staff data
         const staffPerformance = {};
@@ -632,9 +669,77 @@ router.get('/dashboard/staff-performance', async(req, res) => {
         });
 
         // Sort staff by total sales
-        const sortedStaff = Object.values(staffPerformance)
+        let sortedStaff = Object.values(staffPerformance)
             .sort((a, b) => b.total_sales - a.total_sales)
             .slice(0, 10); // Top 10 staff
+
+        // If no data found for current staff, create a placeholder
+        if (sortedStaff.length === 0) {
+            console.log('⚠️ No performance data found for staff, creating placeholder');
+
+            // Try to get any orders processed by this staff member (even without proper staff_id)
+            const [fallbackData] = await db.query(`
+                SELECT 
+                    'My Performance' as staff_name,
+                    ? as staff_id,
+                    ${groupBy} as period,
+                    SUM(o.total_price) as total_sales,
+                    COUNT(o.id) as order_count,
+                    AVG(o.total_price) as avg_order_value
+                FROM orders o
+                WHERE o.payment_status = 'paid'
+                    AND o.order_time >= DATE_SUB(NOW(), ${interval})
+                    AND (o.staff_id = ? OR o.staff_id IS NULL)
+                GROUP BY ${groupBy}
+                ORDER BY period DESC, total_sales DESC
+            `, [currentStaffId, currentStaffId]);
+
+            if (fallbackData.length > 0) {
+                console.log('✅ Found fallback data:', fallbackData.length, 'records');
+                // Process fallback data
+                const fallbackPerformance = {};
+                fallbackData.forEach(item => {
+                    const key = item.staff_id;
+                    if (!fallbackPerformance[key]) {
+                        fallbackPerformance[key] = {
+                            staff_name: item.staff_name,
+                            staff_id: item.staff_id,
+                            periods: [],
+                            total_sales: 0,
+                            total_orders: 0,
+                            avg_order_value: 0
+                        };
+                    }
+
+                    fallbackPerformance[key].periods.push({
+                        period: item.period,
+                        sales: parseFloat(item.total_sales) || 0,
+                        orders: parseInt(item.order_count) || 0,
+                        avg_order_value: parseFloat(item.avg_order_value) || 0
+                    });
+
+                    fallbackPerformance[key].total_sales += parseFloat(item.total_sales) || 0;
+                    fallbackPerformance[key].total_orders += parseInt(item.order_count) || 0;
+                });
+
+                // Calculate average order value
+                Object.values(fallbackPerformance).forEach(staff => {
+                    staff.avg_order_value = staff.total_orders > 0 ? staff.total_sales / staff.total_orders : 0;
+                });
+
+                sortedStaff = Object.values(fallbackPerformance)
+                    .sort((a, b) => b.total_sales - a.total_sales);
+            } else {
+                sortedStaff = [{
+                    staff_name: 'No Sales Data',
+                    staff_id: currentStaffId,
+                    periods: [],
+                    total_sales: 0,
+                    total_orders: 0,
+                    avg_order_value: 0
+                }];
+            }
+        }
 
         // Process trend data
         const trend = {
@@ -658,8 +763,8 @@ router.get('/dashboard/staff-performance', async(req, res) => {
     }
 });
 
-// Get all orders for staff management
-router.get('/orders', async(req, res) => {
+// Get all orders for staff management - requires authentication
+router.get('/orders', authenticateJWT, async(req, res) => {
     try {
         const [ordersResult] = await db.query(`
             SELECT 
@@ -673,12 +778,21 @@ router.get('/orders', async(req, res) => {
                 notes,
                 order_time as order_time,
                 estimated_ready_time,
-                payment_status,
+                queue_position,
+                COALESCE(payment_status, 'pending') as payment_status,
                 payment_method,
-                receipt_path
+                receipt_path,
+                staff_id,
+                cancelled_by,
+                cancellation_reason,
+                cancelled_at
             FROM orders 
-            WHERE status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
-            ORDER BY queue_position ASC, order_time ASC
+            WHERE (
+                status IN ('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled')
+                OR COALESCE(payment_status, 'pending') IN ('pending', 'pending_verification')
+            )
+            AND NOT (status = 'completed' AND COALESCE(payment_status, 'pending') = 'paid')
+            ORDER BY COALESCE(queue_position, 999999) ASC, order_time ASC
         `);
 
         // Process orders and enrich items with menu item names
@@ -724,22 +838,40 @@ router.get('/orders', async(req, res) => {
                 }
             }));
 
+            // Ensure paymentStatus is always set - default to 'pending' if null/undefined
+            const paymentStatus = order.payment_status || 'pending';
+            
             return {
                 orderId: order.id, // Map id to orderId for frontend compatibility
                 order_id: order.id, // Also include order_id for compatibility
                 id: order.id,
+                customerName: order.customer_name,
                 customer_name: order.customer_name,
                 items: enrichedItems,
+                totalPrice: parseFloat(order.total_price),
                 total_price: parseFloat(order.total_price),
-                status: order.status,
+                status: order.status || 'pending',
+                orderType: order.order_type,
                 order_type: order.order_type,
+                tableNumber: order.table_number,
                 table_number: order.table_number,
+                orderTime: order.order_time,
                 order_time: order.order_time,
+                estimatedReadyTime: order.estimated_ready_time,
                 estimated_ready_time: order.estimated_ready_time,
+                queuePosition: order.queue_position || 0,
+                queue_position: order.queue_position || 0,
                 notes: order.notes,
-                paymentStatus: order.payment_status,
-                paymentMethod: order.payment_method,
-                receiptPath: order.receipt_path
+                paymentStatus: paymentStatus,
+                payment_status: paymentStatus,
+                paymentMethod: order.payment_method || '',
+                payment_method: order.payment_method || '',
+                receiptPath: order.receipt_path,
+                receipt_path: order.receipt_path,
+                placedBy: order.staff_id ? 'staff' : 'customer',
+                cancelledBy: order.cancelled_by,
+                cancellationReason: order.cancellation_reason,
+                cancelledAt: order.cancelled_at
             };
         }));
 
@@ -757,8 +889,8 @@ router.get('/orders', async(req, res) => {
     }
 });
 
-// Update order status
-router.put('/orders/:orderId/status', async(req, res) => {
+// Update order status - requires authentication
+router.put('/orders/:orderId/status', authenticateJWT, async(req, res) => {
     try {
         const { orderId } = req.params;
         const { status, cancelledBy, cancellationReason, cancelledAt } = req.body;
@@ -782,6 +914,14 @@ router.put('/orders/:orderId/status', async(req, res) => {
             });
         }
 
+        // Validate: Cannot move to 'preparing' unless payment is confirmed
+        if (status === 'preparing' && order.payment_status !== 'paid') {
+            return res.status(400).json({
+                success: false,
+                error: 'Cannot move order to preparing status. Payment must be confirmed first.'
+            });
+        }
+
         // If cancelling, record additional cancellation details
         if (status === 'cancelled') {
             await db.query(`
@@ -795,15 +935,23 @@ router.put('/orders/:orderId/status', async(req, res) => {
                 WHERE order_id = ?
             `, [
                 status,
-                cancelledBy || (req.session.staffUser && req.session.staffUser.id) || 'staff',
+                cancelledBy || (req.user && req.user.id) || 'staff',
                 cancellationReason || 'Cancelled by staff',
                 cancelledAt || new Date(),
                 orderId
             ]);
         } else {
-            // Regular status update
+            // Regular status update - also update staff_id to track who processed this order
+            // Get staff ID from JWT user (authenticateJWT middleware)
+            const currentStaffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
             let updateQuery = 'UPDATE orders SET status = ?, updated_at = NOW()';
             let updateParams = [status];
+
+            // Update staff_id if staff member is processing this order
+            if (currentStaffId) {
+                updateQuery += ', staff_id = ?';
+                updateParams.push(currentStaffId);
+            }
 
             // Automatically set payment status to 'paid' when order is completed
             if (status === 'completed') {
@@ -837,6 +985,22 @@ router.put('/orders/:orderId/status', async(req, res) => {
                                 (customer_id, order_id, points_earned, transaction_type, description) 
                                 VALUES (?, ?, ?, 'earn', ?)
                             `, [order.customer_id, order.id, pointsEarned, `Earned ${pointsEarned} points from order #${order.order_id} (₱${order.total_price})`]);
+
+                            // Emit loyalty update event
+                            const io = req.app.get('io');
+                            if (io) {
+                                // Get customer email for room targeting
+                                const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                                if (customer.length > 0) {
+                                    io.to(`customer-${customer[0].email}`).emit('loyalty-updated', {
+                                        customerId: order.customer_id,
+                                        pointsEarned,
+                                        newBalance: pointsEarned, // This will be updated by frontend fetch
+                                        orderId: order.order_id,
+                                        timestamp: new Date()
+                                    });
+                                }
+                            }
                         }
                     }
                 } catch (pointsErr) {
@@ -880,11 +1044,39 @@ router.put('/orders/:orderId/status', async(req, res) => {
         try {
             const io = req.app.get('io');
             if (io) {
+                // Get updated order to include payment status
+                const [updatedOrder] = await db.query('SELECT * FROM orders WHERE order_id = ?', [orderId]);
+                const currentOrder = updatedOrder[0] || order;
+                
                 const emitId = (order && (order.order_id || order.id)) || orderId;
-                const payload = { orderId: emitId, status };
+                const payload = { 
+                    orderId: emitId, 
+                    status,
+                    paymentStatus: currentOrder.payment_status || order.payment_status,
+                    paymentMethod: currentOrder.payment_method || order.payment_method,
+                    timestamp: new Date()
+                };
+                
+                // Emit to specific order room for guest tracking
                 io.to(`order-${emitId}`).emit('order-updated', payload);
+                console.log(`📤 Staff: Emitted order-updated to order room: order-${emitId}`);
+                
+                // Emit to staff and admin rooms
                 io.to('staff-room').emit('order-updated', payload);
                 io.to('admin-room').emit('order-updated', payload);
+                
+                // Emit to customer room if customer_id exists
+                if (order && order.customer_id) {
+                    try {
+                        const [customer] = await db.query('SELECT email FROM customers WHERE id = ?', [order.customer_id]);
+                        if (customer.length > 0 && customer[0].email) {
+                            io.to(`customer-${customer[0].email}`).emit('order-updated', payload);
+                            console.log(`📤 Staff: Emitted order-updated to customer room: customer-${customer[0].email}`);
+                        }
+                    } catch (customerError) {
+                        console.warn('Failed to get customer email for room emission:', customerError.message);
+                    }
+                }
             }
         } catch (e) { console.warn('Emit order-updated failed:', e.message); }
 
@@ -1110,14 +1302,19 @@ router.get('/events/upcoming', async(req, res) => {
 });
 
 // Payment verification routes for staff (same as admin)
-// Verify payment and process order (Staff)
-router.post('/orders/:orderId/verify-payment', async(req, res) => {
+// Verify payment and process order (Staff) - requires authentication
+router.post('/orders/:orderId/verify-payment', authenticateJWT, async(req, res) => {
     try {
         const { orderId } = req.params;
         const { paymentMethod, verifiedBy, reference, transactionId } = req.body;
 
-        // Get order details (accept DB id or UUID)
-        const [orderResult] = await db.query('SELECT * FROM orders WHERE id = ? OR order_id = ?', [orderId, orderId]);
+        // Get order details with customer email (accept DB id or UUID)
+        const [orderResult] = await db.query(`
+            SELECT o.*, c.email as customer_email 
+            FROM orders o 
+            LEFT JOIN customers c ON o.customer_id = c.id 
+            WHERE o.id = ? OR o.order_id = ?
+        `, [orderId, orderId]);
         if (orderResult.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -1135,15 +1332,15 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
             });
         }
 
-        // Update payment status and move to preparing status
-        await db.query('UPDATE orders SET payment_status = ?, payment_method = ?, status = ? WHERE id = ?', ['paid', paymentMethod || 'cash', 'preparing', order.id]);
+        // Update payment status and move to payment_confirmed status (not preparing yet)
+        await db.query('UPDATE orders SET payment_status = ?, payment_method = ?, status = ? WHERE id = ?', ['paid', paymentMethod || 'cash', 'payment_confirmed', order.id]);
 
         // Emit real-time update (canonical: confirmed + paid)
         const io = req.app.get('io');
         if (io) {
             const payload = {
                 orderId: order.order_id,
-                status: 'preparing',
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 paymentMethod: paymentMethod || 'cash',
                 timestamp: new Date()
@@ -1151,9 +1348,13 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
             io.to(`order-${order.order_id}`).emit('order-updated', payload);
             io.to('staff-room').emit('order-updated', payload);
             io.to('admin-room').emit('order-updated', payload);
-            // Notify customer room
+            // Notify customer room (normalized to lowercase for consistency)
             if (order.customer_email) {
-                io.to(`customer-${order.customer_email}`).emit('order-updated', payload);
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                io.to(customerRoom).emit('order-updated', payload);
+                io.to(customerRoom).emit('payment-updated', payload);
+                console.log(`📤 Staff: Emitted order-updated to customer room: ${customerRoom}`);
             }
         }
 
@@ -1200,29 +1401,50 @@ router.post('/orders/:orderId/verify-payment', async(req, res) => {
 
         // Emit real-time update (explicit to rooms)
         if (io) {
+            console.log('📡 Staff: Emitting payment verification updates...');
+            console.log('  - Order ID:', orderId);
+            console.log('  - Order order_id:', order.order_id);
+            console.log('  - Customer email:', order.customer_email);
+            console.log('  - Customer ID:', order.customer_id);
+            
             const finalPayload = {
                 orderId: order.order_id || orderId,
-                status: 'preparing',
+                internalOrderId: order.order_id || order.id,
+                status: 'payment_confirmed',
                 paymentStatus: 'paid',
                 paymentMethod: paymentMethod || 'cash',
                 verifiedBy: verifiedBy || 'staff',
                 timestamp: new Date()
             };
             io.to(`order-${finalPayload.orderId}`).emit('order-updated', finalPayload);
+            io.to(`order-${orderId}`).emit('order-updated', finalPayload);
             io.to('staff-room').emit('order-updated', finalPayload);
             io.to('admin-room').emit('order-updated', finalPayload);
+            
+            // Emit to customer room using customer_email (normalized to lowercase)
             if (order.customer_email) {
-                io.to(`customer-${order.customer_email}`).emit('order-updated', finalPayload);
+                const customerEmail = String(order.customer_email).toLowerCase().trim();
+                const customerRoom = `customer-${customerEmail}`;
+                io.to(customerRoom).emit('order-updated', finalPayload);
+                io.to(customerRoom).emit('payment-updated', finalPayload);
+                console.log(`📤 Staff: Emitted order-updated to customer room: ${customerRoom}`);
+            } else {
+                console.warn('⚠️ Staff: No customer_email found for order, cannot emit to customer room');
+                console.warn('  - Order customer_id:', order.customer_id);
             }
+            
             io.to('staff-room').emit('payment-updated', finalPayload);
             io.to('admin-room').emit('payment-updated', finalPayload);
+            
+            // Broadcast to all as final fallback
+            io.emit('order-updated', finalPayload);
         }
 
         res.json({
             success: true,
             message: 'Payment verified successfully',
             orderId,
-            status: 'preparing'
+            status: 'payment_confirmed'
         });
 
     } catch (error) {
@@ -1280,11 +1502,18 @@ router.get('/orders/pending-verification', async(req, res) => {
 });
 
 // Get staff's own activity logs
-router.get('/activity-logs', async(req, res) => {
+router.get('/activity-logs', authenticateJWT, async(req, res) => {
     try {
         const { page = 1, limit = 50, action_type = 'all', start_date, end_date } = req.query;
         const offset = (page - 1) * limit;
-        const staffId = req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
+
+        if (!staffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized'
+            });
+        }
 
         let query = `
             SELECT 
@@ -1368,10 +1597,17 @@ router.get('/activity-logs', async(req, res) => {
 });
 
 // Get staff activity log statistics
-router.get('/activity-logs/stats', async(req, res) => {
+router.get('/activity-logs/stats', authenticateJWT, async(req, res) => {
     try {
         const { start_date, end_date } = req.query;
-        const staffId = req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
+
+        if (!staffId) {
+            return res.status(401).json({
+                success: false,
+                error: 'Unauthorized'
+            });
+        }
 
         // Build date filter
         let dateFilter = 'WHERE sal.staff_id = ?';
@@ -1427,9 +1663,9 @@ router.get('/activity-logs/stats', async(req, res) => {
 });
 
 // Staff: Get own activity logs only
-router.get('/activity-logs', async(req, res) => {
+router.get('/activity-logs', authenticateJWT, async(req, res) => {
     try {
-        const staffId = req.session.staffUser && req.session.staffUser.id;
+        const staffId = (req.user && req.user.id) || (req.session && req.session.staffUser && req.session.staffUser.id);
         if (!staffId) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
@@ -2250,8 +2486,20 @@ router.get('/sales/download', async(req, res) => {
 
         const { format = 'excel', period = 'month', startDate, endDate, status, payment_method, customer } = req.query;
 
-        // Simple test first - just get basic data
-        const [salesData] = await db.query(`
+        // Check if XLSX is available
+        let XLSX;
+        try {
+            XLSX = require('xlsx');
+        } catch (xlsxError) {
+            console.error('XLSX library not found:', xlsxError);
+            return res.status(500).json({
+                success: false,
+                error: 'Excel library not installed. Please install xlsx package: npm install xlsx'
+            });
+        }
+
+        // Build query with filters
+        let query = `
             SELECT 
                 order_id,
                 customer_name,
@@ -2262,68 +2510,189 @@ router.get('/sales/download', async(req, res) => {
                 items
             FROM orders 
             WHERE payment_status = 'paid'
-            ORDER BY order_time DESC
-            LIMIT 100
-        `);
+        `;
+        const queryParams = [];
 
-        console.log(`Found ${salesData.length} orders for export`);
+        // Add date filters if provided
+        if (startDate) {
+            query += ' AND DATE(order_time) >= ?';
+            queryParams.push(startDate);
+        }
+        if (endDate) {
+            query += ' AND DATE(order_time) <= ?';
+            queryParams.push(endDate);
+        }
+        if (status && status !== 'all') {
+            query += ' AND status = ?';
+            queryParams.push(status);
+        }
+        if (payment_method && payment_method !== 'all') {
+            query += ' AND payment_method = ?';
+            queryParams.push(payment_method);
+        }
+        if (customer && customer.trim() !== '') {
+            query += ' AND customer_name LIKE ?';
+            queryParams.push(`%${customer.trim()}%`);
+        }
 
-        // Generate Excel file
-        const XLSX = require('xlsx');
+        query += ' ORDER BY order_time DESC LIMIT 1000';
+
+        let salesData;
+        try {
+            const result = await db.query(query, queryParams);
+            salesData = result[0] || [];
+        } catch (queryError) {
+            console.error('Database query error:', queryError);
+            throw new Error('Failed to fetch sales data: ' + queryError.message);
+        }
+
+        console.log(`Found ${salesData.length} orders for staff export`);
+
+        if (!salesData || salesData.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'No sales data found for the selected period'
+            });
+        }
 
         // Create workbook
-        const workbook = XLSX.utils.book_new();
+        let workbook;
+        try {
+            workbook = XLSX.utils.book_new();
+        } catch (bookError) {
+            console.error('Error creating workbook:', bookError);
+            throw new Error('Failed to create Excel workbook: ' + bookError.message);
+        }
 
         // Summary sheet
+        const totalRevenue = salesData.reduce((sum, order) => {
+            const price = parseFloat(order.total_price) || 0;
+            return sum + price;
+        }, 0);
+
         const summaryData = {
-            'Report Period': period,
+            'Report Period': period || 'All Time',
             'Start Date': startDate || 'N/A',
             'End Date': endDate || 'N/A',
             'Total Orders': salesData.length,
-            'Total Revenue': `₱${salesData.reduce((sum, order) => sum + parseFloat(order.total_price), 0).toFixed(2)}`,
+            'Total Revenue': `₱${totalRevenue.toFixed(2)}`,
             'Generated On': new Date().toLocaleString()
         };
 
-        const summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        let summarySheet;
+        try {
+            summarySheet = XLSX.utils.json_to_sheet([summaryData]);
+        } catch (sheetError) {
+            console.error('Error creating summary sheet:', sheetError);
+            throw new Error('Failed to create summary sheet: ' + sheetError.message);
+        }
 
-        // Transactions sheet
-        const transactionsData = salesData.map(transaction => ({
-            'Order ID': transaction.order_id,
-            'Customer Name': transaction.customer_name,
-            'Amount': `₱${parseFloat(transaction.total_price).toFixed(2)}`,
-            'Status': transaction.status,
-            'Payment Method': transaction.payment_method,
-            'Order Date': new Date(transaction.order_time).toLocaleDateString(),
-            'Order Time': new Date(transaction.order_time).toLocaleTimeString(),
-            'Items Count': JSON.parse(transaction.items || '[]').length
-        }));
+        // Transactions sheet - handle potential null/undefined values
+        const transactionsData = salesData.map(transaction => {
+            let itemsCount = 0;
+            try {
+                const items = JSON.parse(transaction.items || '[]');
+                itemsCount = Array.isArray(items) ? items.length : 0;
+            } catch (e) {
+                console.warn('Error parsing items for order:', transaction.order_id, e);
+            }
 
-        const transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+            let orderDate = 'N/A';
+            let orderTime = 'N/A';
+            try {
+                if (transaction.order_time) {
+                    const date = new Date(transaction.order_time);
+                    if (!isNaN(date.getTime())) {
+                        orderDate = date.toLocaleDateString();
+                        orderTime = date.toLocaleTimeString();
+                    }
+                }
+            } catch (e) {
+                console.warn('Error parsing date for order:', transaction.order_id, e);
+            }
+
+            return {
+                'Order ID': transaction.order_id || 'N/A',
+                'Customer Name': transaction.customer_name || 'N/A',
+                'Amount': `₱${(parseFloat(transaction.total_price) || 0).toFixed(2)}`,
+                'Status': transaction.status || 'N/A',
+                'Payment Method': transaction.payment_method || 'N/A',
+                'Order Date': orderDate,
+                'Order Time': orderTime,
+                'Items Count': itemsCount
+            };
+        });
+
+        let transactionsSheet;
+        try {
+            transactionsSheet = XLSX.utils.json_to_sheet(transactionsData);
+        } catch (sheetError) {
+            console.error('Error creating transactions sheet:', sheetError);
+            throw new Error('Failed to create transactions sheet: ' + sheetError.message);
+        }
 
         // Add sheets to workbook
-        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
-        XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        try {
+            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+            XLSX.utils.book_append_sheet(workbook, transactionsSheet, 'Transactions');
+        } catch (appendError) {
+            console.error('Error appending sheets:', appendError);
+            throw new Error('Failed to append sheets to workbook: ' + appendError.message);
+        }
 
-        // Generate buffer
-        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        // Generate buffer with error handling
+        let buffer;
+        try {
+            buffer = XLSX.write(workbook, { 
+                type: 'buffer', 
+                bookType: 'xlsx',
+                compression: true
+            });
+        } catch (writeError) {
+            console.error('XLSX.write error:', writeError);
+            throw new Error('Failed to generate Excel buffer: ' + writeError.message);
+        }
 
-        console.log(`Generated Excel file with ${buffer.length} bytes`);
+        if (!buffer || buffer.length === 0) {
+            throw new Error('Generated Excel buffer is empty');
+        }
 
-        // Set response headers
-        const filename = `staff-sales-report-${period}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        console.log(`Generated staff Excel file with ${buffer.length} bytes`);
+
+        // Set response headers before sending
+        const dateSuffix = startDate && endDate 
+            ? `${startDate}-to-${endDate}` 
+            : period;
+        const filename = `staff-sales-report-${dateSuffix}-${new Date().toISOString().split('T')[0]}.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
         res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'no-cache');
 
         // Send file
-        res.send(buffer);
+        try {
+            res.send(buffer);
+        } catch (sendError) {
+            console.error('Error sending buffer:', sendError);
+            throw new Error('Failed to send Excel file: ' + sendError.message);
+        }
 
     } catch (error) {
         console.error('Error generating staff sales download:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
+        
+        // Check if response has already been sent
+        if (res.headersSent) {
+            console.error('Response already sent, cannot send error response');
+            return;
+        }
+        
         res.status(500).json({
             success: false,
-            error: 'Failed to generate sales report: ' + error.message
+            error: 'Failed to generate sales report: ' + (error.message || 'Unknown error'),
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
@@ -2449,9 +2818,52 @@ router.get('/transactions/sales', async(req, res) => {
 });
 
 // Staff reward redemption endpoints (for Reward Processing UI)
-router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
+// Support both JWT and session authentication
+// Use authenticateJWT as optional middleware - it will set req.user if JWT is present
+// Then check for session as fallback
+
+// Optional JWT middleware - doesn't fail if no token, but sets req.user if token is valid
+const optionalJWT = (req, res, next) => {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        // No JWT token, continue to check session
+        return next();
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+        return next();
+    }
+    
+    // Try to verify JWT token
+    const jwt = require('jsonwebtoken');
+    const secret = process.env.JWT_SECRET || 'change-me-in-prod';
     try {
-        // Permissive for development: allow even without session
+        const decoded = jwt.verify(token, secret);
+        req.user = {
+            id: decoded.id,
+            username: decoded.username,
+            email: decoded.email,
+            name: decoded.name || decoded.fullName || decoded.username,
+            fullName: decoded.fullName || decoded.name || decoded.username,
+            role: decoded.role
+        };
+        console.log('✅ JWT authentication successful for staff reward processing');
+    } catch (err) {
+        // JWT verification failed, but continue to check session
+        console.log('⚠️ JWT verification failed, will check session:', err.message);
+    }
+    next();
+};
+
+router.get('/reward-redemptions/search/:claimCode', optionalJWT, async(req, res) => {
+    try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { claimCode } = req.params;
         const [rows] = await db.query(`
             SELECT 
@@ -2470,7 +2882,7 @@ router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
             FROM loyalty_reward_redemptions lrr
             JOIN customers c ON lrr.customer_id = c.id
             JOIN loyalty_rewards lr ON lrr.reward_id = lr.id
-            WHERE lrr.claim_code = ?
+            WHERE UPPER(lrr.claim_code) = UPPER(?)
         `, [claimCode]);
         if (!rows || rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Redemption not found' });
@@ -2482,8 +2894,20 @@ router.get('/reward-redemptions/search/:claimCode', async(req, res) => {
     }
 });
 
-router.get('/reward-redemptions/pending', async(req, res) => {
+router.get('/reward-redemptions/pending', optionalJWT, async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
+        // First, check total pending count for debugging
+        const [countResult] = await db.query(`
+            SELECT COUNT(*) as total FROM loyalty_reward_redemptions WHERE status = 'pending'
+        `);
+        console.log(`📊 Total pending redemptions in database: ${countResult[0].total}`);
+        
         const [rows] = await db.query(`
             SELECT 
                 lrr.id,
@@ -2494,6 +2918,7 @@ router.get('/reward-redemptions/pending', async(req, res) => {
                 lrr.redemption_date,
                 lrr.status,
                 lrr.expires_at,
+                lrr.order_id,
                 c.full_name as customer_name,
                 c.email as customer_email,
                 lr.name as reward_name,
@@ -2504,17 +2929,41 @@ router.get('/reward-redemptions/pending', async(req, res) => {
             WHERE lrr.status = 'pending'
             ORDER BY lrr.redemption_date DESC
         `);
+        console.log(`📋 Staff pending redemptions query: Found ${rows.length} pending redemptions`);
+        if (rows.length > 0) {
+            console.log('   Sample redemption:', {
+                id: rows[0].id,
+                claim_code: rows[0].claim_code,
+                customer_name: rows[0].customer_name,
+                reward_name: rows[0].reward_name,
+                order_id: rows[0].order_id
+            });
+        }
         return res.json({ success: true, redemptions: rows });
     } catch (err) {
-        console.error('Staff pending redemptions error:', err && err.message ? err.message : err);
+        console.error('❌ Staff pending redemptions error:', err && err.message ? err.message : err);
         return res.status(500).json({ success: false, error: 'Failed to fetch pending redemptions' });
     }
 });
 
-router.post('/reward-redemptions/:redemptionId/:action', async(req, res) => {
+router.post('/reward-redemptions/:redemptionId/:action', optionalJWT, async(req, res) => {
     try {
+        // Check for JWT authentication first, then fall back to session
+        const isAuthenticated = req.user || (req.session && (req.session.staffUser || req.session.adminUser || req.session.admin));
+        if (!isAuthenticated) {
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
+        
         const { redemptionId, action } = req.params;
-        const staffId = (req.session && req.session.staffUser && req.session.staffUser.id) || (req.session && req.session.adminUser && req.session.adminUser.id) || null;
+        // Get staff/admin ID from JWT user or session
+        const staffId = req.user?.id || (req.session && req.session.staffUser && req.session.staffUser.id) || (req.session && req.session.adminUser && req.session.adminUser.id) || null;
+        
+        // Validate staffId is present
+        if (!staffId) {
+            console.error('Staff process redemption: No staff ID found. User:', req.user, 'Session:', req.session);
+            return res.status(401).json({ success: false, error: 'Staff ID not found. Please ensure you are properly authenticated.' });
+        }
+        
         if (!['complete', 'cancel'].includes(action)) {
             return res.status(400).json({ success: false, error: 'Invalid action' });
         }
@@ -2533,8 +2982,20 @@ router.post('/reward-redemptions/:redemptionId/:action', async(req, res) => {
                 WHERE id = ?
             `, [action === 'complete' ? 'completed' : 'cancelled', staffId, redemptionId]);
         } catch (err) {
-            console.error('Update redemption status failed:', err && err.message ? err.message : err);
-            return res.status(500).json({ success: false, error: 'Failed to update redemption status' });
+            console.error('Update redemption status failed:', {
+                error: err && err.message ? err.message : err,
+                code: err?.code,
+                sqlState: err?.sqlState,
+                sqlMessage: err?.sqlMessage,
+                redemptionId,
+                staffId,
+                action
+            });
+            const errorMessage = err?.sqlMessage || err?.message || 'Database error occurred';
+            return res.status(500).json({ 
+                success: false, 
+                error: `Failed to update redemption status: ${errorMessage}` 
+            });
         }
         if (action === 'cancel') {
             try {
@@ -2683,3 +3144,107 @@ router.get('/orders', async(req, res) => {
         res.status(500).json({ success: false, error: 'Failed to fetch orders' });
     }
 });
+
+// Get staff orders (same as admin orders but for staff) - requires authentication
+// NOTE: This is a duplicate route - the main /orders route is at line 750
+// Keeping this for backward compatibility but it should use the same logic
+router.get('/orders', authenticateJWT, async(req, res) => {
+    try {
+        const { status, customerId, tableNumber, page = 1, limit = 100 } = req.query; // Increased default limit for POS dashboard
+
+        let sql = 'SELECT * FROM orders WHERE 1=1';
+        const params = [];
+
+        // For POS dashboard, only show relevant orders by default
+        // Include orders with pending payment status even if order status is different
+        // Also include cancelled orders for the cancelled orders tab
+        if (!status) {
+            sql += ' AND (status IN (?, ?, ?, ?, ?, ?, ?) OR payment_status IN (?, ?))';
+            params.push('pending', 'preparing', 'ready', 'pending_verification', 'confirmed', 'processing', 'cancelled', 'pending', 'pending_verification');
+        } else if (status) {
+            sql += ' AND status = ?';
+            params.push(status);
+        }
+
+        if (customerId) {
+            sql += ' AND customer_id = ?';
+            params.push(customerId);
+        }
+
+        if (tableNumber) {
+            sql += ' AND table_number = ?';
+            params.push(tableNumber);
+        }
+
+        sql += ' ORDER BY queue_position ASC, order_time ASC';
+
+        // Add pagination (only if limit is specified and reasonable)
+        const limitNum = parseInt(limit);
+        if (limitNum > 0 && limitNum <= 1000) {
+            const offset = (parseInt(page) - 1) * limitNum;
+            sql += ' LIMIT ? OFFSET ?';
+            params.push(limitNum, offset);
+        }
+
+        const [orders] = await db.query(sql, params);
+
+        // Process orders and enrich items with menu item names
+        const mappedOrders = await Promise.all(orders.map(async(order) => {
+            const items = JSON.parse(order.items || '[]');
+
+            // Enrich items with menu item names and prices
+            const enrichedItems = await Promise.all(items.map(async(item) => {
+                try {
+                    const [menuItem] = await db.query(
+                        'SELECT name, base_price FROM menu_items WHERE id = ?', [item.menuItemId || item.menu_item_id || item.id]
+                    );
+                    return {
+                        ...item,
+                        name: (menuItem[0] && menuItem[0].name) || item.name || 'Unknown Item',
+                        price: (menuItem[0] && menuItem[0].base_price) || item.price || 0
+                    };
+                } catch (error) {
+                    console.warn('Failed to enrich menu item:', error);
+                    return item;
+                }
+            }));
+
+            return {
+                orderId: order.order_id,
+                id: order.order_id,
+                customerName: order.customer_name,
+                tableNumber: order.table_number,
+                items: enrichedItems,
+                totalPrice: parseFloat(order.total_price),
+                status: order.status,
+                paymentStatus: order.payment_status,
+                paymentMethod: order.payment_method,
+                orderTime: order.order_time,
+                notes: order.notes,
+                placedBy: order.staff_id ? 'staff' : 'customer',
+                receiptPath: order.receipt_path,
+                orderType: order.order_type,
+                cancelledBy: order.cancelled_by,
+                cancellationReason: order.cancellation_reason,
+                cancelledAt: order.cancelled_at
+            };
+        }));
+
+        res.json({
+            success: true,
+            orders: mappedOrders,
+            total: mappedOrders.length,
+            page: parseInt(page),
+            limit: parseInt(limit)
+        });
+
+    } catch (error) {
+        console.error('Error fetching staff orders:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch orders'
+        });
+    }
+});
+
+module.exports = router;

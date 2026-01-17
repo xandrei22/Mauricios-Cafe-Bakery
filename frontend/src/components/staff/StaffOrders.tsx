@@ -17,9 +17,12 @@ import {
   X,
   User
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { encodeId } from '../../utils/idObfuscation';
 
 interface Order {
   orderId: string;
+  displayOrderId?: string;
   customerName: string;
   tableNumber?: number;
   items: any[];
@@ -31,7 +34,48 @@ interface Order {
   estimatedReadyTime: string;
   orderTime: string;
   paymentMethod: string;
+  receiptPath?: string;
 }
+
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  
+  // Always return the full order ID to avoid conflicts
+  return raw;
+};
+
+const transformOrdersResponse = (ordersData: any[] = []): Order[] => {
+  return ordersData.map((order: any) => {
+    // Always prioritize order_id from the database, ensure it's stable
+    const rawOrderId = String(order.order_id || order.orderId || order.id || '').trim();
+    // Ensure we always have a consistent order_id - never let it be empty or change
+    if (!rawOrderId) {
+      console.warn('⚠️ Order missing order_id:', order);
+    }
+    return {
+      orderId: rawOrderId, // This should always be the same for the same order
+      displayOrderId: rawOrderId, // Use full order ID consistently
+      customerName: (order.customer_name || order.customerName || '').toString().trim(),
+      tableNumber: order.table_number ?? order.tableNumber,
+      items: Array.isArray(order.items)
+        ? order.items
+        : (typeof order.items === 'string' ? JSON.parse(order.items || '[]') : []),
+      totalPrice: Number(order.total_price ?? order.totalPrice ?? 0),
+      status: String(order.status || '').toLowerCase().trim() as Order['status'],
+      paymentStatus: String(order.payment_status || order.paymentStatus || '').toLowerCase().trim() as Order['paymentStatus'],
+      orderType: String(order.order_type || order.orderType || 'dine_in').toLowerCase().trim() as Order['orderType'],
+      queuePosition: order.queue_position ?? order.queuePosition ?? 0,
+      estimatedReadyTime: order.estimated_ready_time || order.estimatedReadyTime,
+      orderTime: order.order_time || order.orderTime,
+      paymentMethod: String(order.payment_method || order.paymentMethod || ''),
+      receiptPath: order.receipt_path || order.receiptPath || undefined,
+      // Store original order_id for reference
+      _originalOrderId: order.order_id || rawOrderId
+    };
+  });
+};
 
 const StaffOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -62,7 +106,7 @@ const StaffOrders: React.FC = () => {
     fetchOrders();
     // live updates like admin
     const socket = io(API_URL, {
-      withCredentials: true,
+      withCredentials: false,
       transports: ['websocket', 'polling']
     });
     socket.emit('join-staff-room');
@@ -85,33 +129,39 @@ const StaffOrders: React.FC = () => {
   const fetchOrders = async (silent?: boolean) => {
     try {
       if (!silent) setLoading(true);
-      const response = await fetch(`${API_URL}/api/staff/orders`, {
-        credentials: 'include'
-      });
+      const response = await axiosInstance.get('/api/staff/orders');
+      const data = response.data;
+      let newOrders: Order[] = [];
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          const transformedOrders: Order[] = data.orders.map((order: any) => ({
-            orderId: String(order.order_id || order.id).trim(),
-            customerName: (order.customer_name || '').toString().trim(),
-            tableNumber: order.table_number,
-            items: order.items || [],
-            totalPrice: Number(order.total_price),
-            status: String(order.status || '').toLowerCase().trim(),
-            paymentStatus: String(order.payment_status || order.paymentStatus || '').toLowerCase().trim(),
-            orderType: String(order.order_type || '').toLowerCase().trim(),
-            queuePosition: 0,
-            estimatedReadyTime: order.estimated_ready_time,
-            orderTime: order.order_time,
-            paymentMethod: String(order.payment_method || '')
-          }));
-          
-          setOrders(transformedOrders);
-        }
+      if (data && data.success && Array.isArray(data.orders)) {
+        newOrders = transformOrdersResponse(data.orders);
+      } else if (data && Array.isArray(data.orders)) {
+        newOrders = transformOrdersResponse(data.orders);
       }
+      
+      // Ensure order_id consistency - preserve existing order_id if present
+      setOrders(prevOrders => {
+        // Create a map of existing orders by order_id for reference
+        const existingOrdersMap = new Map(prevOrders.map(o => [o.orderId, o]));
+        
+        // Update orders while preserving order_id consistency
+        return newOrders.map(newOrder => {
+          const existingOrder = existingOrdersMap.get(newOrder.orderId);
+          // If order exists and has a stable order_id, preserve it
+          if (existingOrder && existingOrder.orderId === newOrder.orderId) {
+            // Merge updates but keep the same order_id
+            return {
+              ...newOrder,
+              orderId: existingOrder.orderId, // Ensure order_id never changes
+              displayOrderId: existingOrder.displayOrderId || newOrder.displayOrderId
+            };
+          }
+          return newOrder;
+        });
+      });
     } catch (error) {
       console.error('Error fetching orders:', error);
+      if (!silent) setOrders([]);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -119,18 +169,8 @@ const StaffOrders: React.FC = () => {
 
   const updateOrderStatus = async (orderId: string, status: string) => {
     try {
-      const response = await fetch(`${API_URL}/api/staff/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        fetchOrders();
-      }
+      await axiosInstance.put(`/api/staff/orders/${orderId}/status`, { status });
+      fetchOrders(true);
     } catch (error) {
       console.error('Error updating order status:', error);
     }
@@ -138,8 +178,10 @@ const StaffOrders: React.FC = () => {
 
   // Filter orders based on search and filters
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.orderId.toLowerCase().includes(searchTerm.toLowerCase());
+    const loweredSearch = searchTerm.toLowerCase();
+    const normalizedOrderId = (order.displayOrderId || order.orderId || '').toLowerCase();
+    const matchesSearch = order.customerName.toLowerCase().includes(loweredSearch) ||
+                         normalizedOrderId.includes(loweredSearch);
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchesType = orderTypeFilter === 'all' || order.orderType === orderTypeFilter;
     
@@ -373,7 +415,7 @@ const StaffOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-blue-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-blue-800">Order #{order.orderId}</span>
+                              <span className="text-blue-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-blue-100 text-blue-800 border-blue-200">
                                 Preparing
                               </Badge>
@@ -401,6 +443,26 @@ const StaffOrders: React.FC = () => {
                                 </div>
                               ))}
                             </div>
+                            {/* Receipt Viewing for Digital Payments */}
+                            {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-medium text-blue-900">Receipt Available</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                                      window.open(receiptUrl, '_blank');
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-2"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => updateOrderStatus(order.orderId, 'ready')}
@@ -439,7 +501,7 @@ const StaffOrders: React.FC = () => {
                         <Card key={order.orderId} className="border-2 border-green-200 shadow-md hover:shadow-lg transition-shadow">
                           <CardHeader>
                             <CardTitle className="flex items-center justify-between text-sm">
-                              <span className="text-green-800">Order #{order.orderId}</span>
+                              <span className="text-green-800">Order #{order.displayOrderId || order.orderId}</span>
                               <Badge className="bg-green-100 text-green-800 border-green-200">
               Ready
                               </Badge>
@@ -467,6 +529,26 @@ const StaffOrders: React.FC = () => {
                                 </div>
                               ))}
                             </div>
+                            {/* Receipt Viewing for Digital Payments */}
+                            {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-xs font-medium text-blue-900">Receipt Available</p>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                                      window.open(receiptUrl, '_blank');
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-2"
+                                  >
+                                    View
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex gap-2">
                               <Button
                                 onClick={() => updateOrderStatus(order.orderId, 'completed')}
@@ -529,7 +611,7 @@ const StaffOrders: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                         <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                          <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                          <span className="font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                           <span>•</span>
                           <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                           <span>•</span>
@@ -562,6 +644,28 @@ const StaffOrders: React.FC = () => {
                     <div className="flex justify-between items-center mb-4 pt-3 border-t border-[#a87437]/20">
                       <span className="font-semibold text-xl text-gray-900">₱{Number(order.totalPrice || 0).toFixed(2)}</span>
                     </div>
+                    
+                    {/* Receipt Viewing for Digital Payments */}
+                    {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
+                            <p className="text-xs text-blue-700">Customer has uploaded a receipt for verification</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                              window.open(receiptUrl, '_blank');
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            View Receipt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     
                     <div className="flex gap-3">
                       <Button
@@ -606,7 +710,7 @@ const StaffOrders: React.FC = () => {
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900 text-lg">{order.customerName}</h3>
                         <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
-                          <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.orderId}</span>
+                          <span className="font-medium bg-green-100 text-green-800 px-2 py-1 rounded-full">#{order.displayOrderId || order.orderId}</span>
                           <span>•</span>
                           <span>{order.orderType === 'dine_in' && order.tableNumber ? `Table ${order.tableNumber}` : 'Take Out'}</span>
                           <span>•</span>
@@ -639,6 +743,28 @@ const StaffOrders: React.FC = () => {
                     <div className="flex justify-between items-center mb-4 pt-3 border-t border-[#a87437]/20">
                       <span className="font-semibold text-xl text-gray-900">₱{order.totalPrice}</span>
                     </div>
+                    
+                    {/* Receipt Viewing for Digital Payments */}
+                    {(order.paymentMethod === 'gcash' || order.paymentMethod === 'paymaya') && order.paymentStatus === 'pending_verification' && order.receiptPath && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-blue-900">Payment Receipt Available</p>
+                            <p className="text-xs text-blue-700">Customer or guest has uploaded a receipt for verification</p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              const receiptUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/receipts/receipt/${order.orderId}`;
+                              window.open(receiptUrl, '_blank');
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            View Receipt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                     
                     <Button
                       size="sm"

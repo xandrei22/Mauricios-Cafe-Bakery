@@ -27,6 +27,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { encodeId } from '../../utils/idObfuscation';
 
 ChartJS.register(
   CategoryScale,
@@ -86,7 +87,9 @@ interface SalesData {
 
 interface Transaction {
   id: string;
-  order_id: string;
+  order_id?: string;
+  orderId?: string;
+  orderID?: string;
   customer_name: string;
   total_amount: number;
   status: string;
@@ -96,6 +99,25 @@ interface Transaction {
   reference?: string;
   receipt_path?: string;
 }
+
+const formatOrderId = (value: unknown): string => {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  
+  // Use the same 5-character format as PaymentProcessor (3 letters + 2 digits)
+  try {
+    const encoded = encodeId(raw);
+    const letters = encoded.replace(/[^A-Za-z]/g, '').slice(0, 3);
+    const digits = encoded.replace(/\D/g, '').slice(-2);
+    const partA = (letters || encoded.slice(0, 3)).padEnd(3, 'X');
+    const partB = (digits || '00').padStart(2, '0');
+    return partA + partB;
+  } catch {
+    // Fallback: last 5 non-separator characters
+    return raw.replace(/[^A-Za-z0-9]/g, '').slice(-5) || raw;
+  }
+};
 
 const StaffSales: React.FC = () => {
   const [salesData, setSalesData] = useState<SalesData | null>(null);
@@ -135,7 +157,7 @@ const StaffSales: React.FC = () => {
       }
 
       const response = await fetch(`/api/admin/sales?${params.toString()}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -171,15 +193,29 @@ const StaffSales: React.FC = () => {
       }
 
       const response = await fetch(`/api/admin/transactions/sales?${params}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-        setTransactions(data.transactions || []);
-        setTotalPages(data.totalPages || 1);
-        setTotalTransactions(data.total || 0);
+          const normalized = (data.transactions || []).map((tx: any) => {
+            const fallbackOrderId =
+              tx.order_id ||
+              tx.orderId ||
+              tx.orderID ||
+              (tx.order && (tx.order.order_id || tx.order.orderId)) ||
+              tx.id;
+            const rawOrderId = fallbackOrderId ? String(fallbackOrderId) : '';
+            return {
+              ...tx,
+              order_id: rawOrderId,
+              display_order_id: formatOrderId(rawOrderId),
+            };
+          });
+          setTransactions(normalized);
+          setTotalPages(data.totalPages || 1);
+          setTotalTransactions(data.total || 0);
           setCurrentPage(page);
         }
       }
@@ -209,11 +245,14 @@ const StaffSales: React.FC = () => {
         ...(dateFilter.end && { endDate: dateFilter.end })
       });
 
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const endpoint = `${API_URL}/api/staff/sales/download`;
+      
       console.log('Downloading report with params:', params.toString());
-      console.log('Full URL:', `/api/admin/sales/download?${params}`);
+      console.log('Full URL:', `${endpoint}?${params}`);
 
-      const response = await fetch(`/api/admin/sales/download?${params}`, {
-        credentials: 'include',
+      const response = await fetch(`${endpoint}?${params}`, {
+        credentials: 'omit',
         method: 'GET'
       });
 
@@ -221,18 +260,50 @@ const StaffSales: React.FC = () => {
       console.log('Download response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Download error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        // Try to get error message from JSON response
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const clonedResponse = response.clone();
+          const errorData = await clonedResponse.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          const errorText = await response.text();
+          errorMessage = errorText || response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
-        const blob = await response.blob();
+      // Check content type from headers
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Check if response is actually an Excel file
+      if (!contentType.includes('spreadsheetml') && !contentType.includes('excel') && !contentType.includes('application/vnd')) {
+        // Not an Excel file - try to read as JSON for error message
+        try {
+          const clonedResponse = response.clone();
+          const errorData = await clonedResponse.json();
+          throw new Error(errorData.error || errorData.message || 'Invalid response format from server');
+        } catch (e) {
+          if (e instanceof Error) {
+            throw e;
+          }
+          throw new Error('Server returned invalid content type. Expected Excel file.');
+        }
+      }
+
+      const blob = await response.blob();
       console.log('Download blob type:', blob.type, 'size:', blob.size);
       
       if (blob.type === 'application/json') {
         const text = await blob.text();
         const errorData = JSON.parse(text);
-        throw new Error(errorData.error || 'Download failed');
+        throw new Error(errorData.error || errorData.message || 'Download failed');
+      }
+      
+      // Verify blob is not empty
+      if (blob.size === 0) {
+        throw new Error('Received empty Excel file');
       }
       
         const url = window.URL.createObjectURL(blob);
@@ -531,7 +602,7 @@ const StaffSales: React.FC = () => {
                       <tbody>
                         {transactions.map((transaction) => (
                           <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-4 font-medium">#{transaction.order_id}</td>
+                            <td className="py-3 px-4 font-medium">#{transaction.display_order_id || formatOrderId(transaction.order_id || transaction.orderId || transaction.orderID || transaction.id)}</td>
                             <td className="py-3 px-4">
                               <div className="text-sm">{formatDate(transaction.created_at)}</div>
                               <div className="text-xs text-gray-500">{formatTime(transaction.created_at)}</div>

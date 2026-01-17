@@ -40,7 +40,7 @@ const StaffLoyalty: React.FC = () => {
       setLoading(true);
       
       // Fetch rewards
-      const rewardsRes = await fetch('/api/loyalty/rewards', { credentials: 'include' });
+      const rewardsRes = await fetch('/api/loyalty/rewards', { credentials: 'omit' });
       if (rewardsRes.ok) {
         const rewardsData = await rewardsRes.json();
         if (rewardsData.success) {

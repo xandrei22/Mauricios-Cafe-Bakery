@@ -83,7 +83,7 @@ const CustomerPasswordVerification: React.FC = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify({
                     token,
                     currentPassword,

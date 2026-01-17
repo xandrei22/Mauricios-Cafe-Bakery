@@ -2,6 +2,8 @@
 
 A comprehensive Point of Sale (POS) system designed for coffee shops with advanced features including AI-powered recommendations, QR code integration, loyalty system, and real-time order management.
 
+> End users: See the User Manual here: [docs/UserManual.md](docs/UserManual.md)
+
 ## 🌟 Features
 
 ### Customer-Facing Features

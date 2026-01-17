@@ -22,6 +22,7 @@ interface Order {
 
 const WorkingPOS: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     // Initialize Socket.IO connection
@@ -56,16 +57,40 @@ const WorkingPOS: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await fetch(`/api/staff/orders`, { credentials: 'include' });
+      const response = await fetch(`/api/staff/orders`, { credentials: 'omit' });
       const data = await response.json();
       if (data.success) {
-        const normalized = (data.orders || []).map((o: any) => ({
-          ...o,
-          orderId: o.orderId || o.id || o.order_id,
-          paymentStatus: o.paymentStatus || o.payment_status,
-          totalPrice: Number(o.totalPrice ?? o.total_price ?? 0),
-        }));
+        const normalized = (data.orders || []).map((o: any) => {
+          // Ensure paymentStatus is always set - default to 'pending' if not set
+          const paymentStatus = o.paymentStatus || o.payment_status || 'pending';
+          
+          return {
+            ...o,
+            orderId: o.orderId || o.id || o.order_id,
+            paymentStatus: paymentStatus.toLowerCase(), // Normalize to lowercase
+            totalPrice: Number(o.totalPrice ?? o.total_price ?? 0),
+            placedBy: o.placedBy || (o.staff_id ? 'staff' : 'customer'),
+            cancelledBy: o.cancelledBy || o.cancelled_by,
+            cancellationReason: o.cancellationReason || o.cancellation_reason,
+            cancelledAt: o.cancelledAt || o.cancelled_at,
+            paymentMethod: o.paymentMethod || o.payment_method || '',
+            status: o.status || 'pending',
+          };
+        });
+        
+        console.log('📋 WorkingPOS - Fetched orders:', normalized.length);
+        console.log('📋 WorkingPOS - Orders with pending payment:', normalized.filter(o => 
+          o.paymentStatus === 'pending' || o.paymentStatus === 'pending_verification'
+        ));
+        console.log('📋 WorkingPOS - All payment statuses:', normalized.map(o => ({
+          orderId: o.orderId,
+          paymentStatus: o.paymentStatus,
+          status: o.status
+        })));
+        
         setOrders(normalized);
+      } else {
+        console.error('Failed to fetch orders:', data);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -88,13 +113,7 @@ const WorkingPOS: React.FC = () => {
           {/* Left: Take Order (menu filters + grid) under Completed */}
           <div className="space-y-4 order-1">
             <SimplePOS 
-              children={
-                <PaymentProcessor 
-                  orders={orders.filter(o => o.paymentStatus === 'pending' || o.paymentStatus === 'pending_verification')}
-                  onPaymentProcessed={fetchOrders}
-                  staffId="admin"
-                />
-              }
+              onOpenPaymentModal={() => setShowPaymentModal(true)}
             />
           </div>
 
@@ -103,6 +122,17 @@ const WorkingPOS: React.FC = () => {
             {/* Payment processing is now under the cart in SimplePOS */}
           </div>
         </div>
+
+        {/* Payment Processing Modal */}
+        {showPaymentModal && (
+          <PaymentProcessor 
+            orders={orders}
+            onPaymentProcessed={fetchOrders}
+            staffId="admin"
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+          />
+        )}
       </div>
     </div>
   );

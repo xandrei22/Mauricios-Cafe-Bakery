@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSessionValidation } from '../../hooks/useSessionValidation';
+import axiosInstance from '../../utils/axiosInstance';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -73,7 +74,15 @@ const AdminDashboard: React.FC = () => {
 
   const [staffPerformanceData, setStaffPerformanceData] = useState<any>(null);
   const [performancePeriod, setPerformancePeriod] = useState('month');
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const navigate = useNavigate();
+
+  // Track window width for responsive chart options
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const chartOptions = {
     responsive: true,
@@ -81,6 +90,31 @@ const AdminDashboard: React.FC = () => {
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          boxWidth: windowWidth < 640 ? 10 : 12,
+          padding: windowWidth < 640 ? 6 : 8,
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+          maxRotation: windowWidth < 640 ? 45 : 0,
+          minRotation: windowWidth < 640 ? 45 : 0,
+        },
+      },
+      y: {
+        ticks: {
+          font: {
+            size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+          },
+        },
       },
     },
   };
@@ -91,21 +125,31 @@ const AdminDashboard: React.FC = () => {
   // Fetch staff performance data
   const fetchStaffPerformanceData = async (period = 'month') => {
     try {
-      const response = await fetch(`/api/admin/dashboard/staff-performance?period=${period}`, {
-        credentials: 'include'
-      });
+      console.log(`🔍 Fetching staff performance data for period: ${period}`);
+      // Use axiosInstance which automatically adds Authorization header
+      const response = await axiosInstance.get(`/api/admin/dashboard/staff-performance?period=${period}`);
       
-      if (response.ok) {
-        const data = await response.json();
+      if (response.status === 200) {
+        const data = response.data;
+        console.log('✅ Admin staff performance data received:', data);
+        console.log('📊 staff_performance array:', data.staff_performance);
+        console.log('📊 staff_performance length:', data.staff_performance?.length);
         setStaffPerformanceData(data);
         
         // Process data for chart
-        if (data.staff_performance && data.staff_performance.length > 0) {
+        if (data.staff_performance && Array.isArray(data.staff_performance) && data.staff_performance.length > 0) {
           const labels = data.staff_performance.map((staff: any) => staff.staff_name || 'Unknown Staff');
-          const salesData = data.staff_performance.map((staff: any) => Number(staff.total_sales) || 0);
+          const salesData = data.staff_performance.map((staff: any) => {
+            const sales = Number(staff.total_sales) || 0;
+            console.log(`💰 Staff: ${staff.staff_name}, Total Sales: ${staff.total_sales} (parsed: ${sales})`);
+            return sales;
+          });
+          
+          console.log('📈 Admin staff performance chart data:', { labels, salesData });
+          console.log('🔢 Sales data check - has positive values:', salesData.some((val: number) => val > 0));
           
           // Ensure we have valid data before setting chart data
-          if (labels.length > 0 && salesData.length > 0) {
+          if (labels.length > 0 && salesData.length > 0 && salesData.some((val: number) => val > 0)) {
             setChartData(prev => ({
               ...prev,
               staffSales: {
@@ -123,53 +167,61 @@ const AdminDashboard: React.FC = () => {
               }
             }));
           } else {
-            // Set empty chart data to prevent undefined errors
+            console.warn('⚠️ No valid sales data - labels:', labels.length, 'salesData:', salesData.length, 'hasPositive:', salesData.some((val: number) => val > 0));
+            // Set empty chart data
             setChartData(prev => ({
               ...prev,
               staffSales: {
-                labels: ['No Data'],
-                datasets: [{
-                  label: 'Sales (₱)',
-                  data: [0],
-                  backgroundColor: ['#a87437'],
-                  borderColor: '#8f652f',
-                  borderWidth: 1,
-                }]
+                labels: [],
+                datasets: []
               }
             }));
           }
         } else {
-          // Set empty chart data to prevent undefined errors
+          console.warn('⚠️ No staff performance data found or invalid format - staff_performance:', data.staff_performance);
+          // Set empty chart data
           setChartData(prev => ({
             ...prev,
             staffSales: {
-              labels: ['No Data'],
-              datasets: [{
-                label: 'Sales (₱)',
-                data: [0],
-                backgroundColor: ['#a87437'],
-                borderColor: '#8f652f',
-                borderWidth: 1,
-              }]
+              labels: [],
+              datasets: []
             }
           }));
         }
+      } else {
+        console.error('Admin staff performance API error:', response.status, response.statusText);
+        // Set empty chart data on error
+        setChartData(prev => ({
+          ...prev,
+          staffSales: {
+            labels: [],
+            datasets: []
+          }
+        }));
       }
-    } catch (error) {
-      console.error('Error fetching staff performance data:', error);
+    } catch (error: any) {
+      console.error('❌ Error fetching staff performance data:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
+      // Set empty chart data on error
+      setChartData(prev => ({
+        ...prev,
+        staffSales: {
+          labels: [],
+          datasets: []
+        }
+      }));
     }
   };
 
   // Fetch chart data
   const fetchChartData = async () => {
     try {
-      // Fetch sales data
-      const salesResponse = await fetch('/api/admin/dashboard/sales', {
-        credentials: 'include'
-      });
+      // Fetch sales data - use axiosInstance which automatically adds Authorization header
       let salesData = null;
-      if (salesResponse.ok) {
-        const salesRaw = await salesResponse.json();
+      try {
+        const salesResponse = await axiosInstance.get('/api/admin/dashboard/sales');
+        if (salesResponse.status === 200) {
+          const salesRaw = salesResponse.data;
         console.log('Raw sales API response:', salesRaw);
         if (salesRaw && Array.isArray(salesRaw.labels) && Array.isArray(salesRaw.data) && salesRaw.labels.length > 0) {
           salesData = salesRaw;
@@ -177,8 +229,9 @@ const AdminDashboard: React.FC = () => {
         } else {
           console.log('Sales API returned empty or invalid data');
         }
-      } else {
-        console.log('Sales API request failed:', salesResponse.status, salesResponse.statusText);
+        }
+      } catch (salesErr: any) {
+        console.log('Sales API request failed:', salesErr.response?.status || salesErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -198,13 +251,12 @@ const AdminDashboard: React.FC = () => {
         console.log('Sales data loaded from API:', salesData);
       }
 
-      // Fetch ingredients usage data
-      const ingredientsResponse = await fetch('/api/admin/dashboard/ingredients', {
-        credentials: 'include'
-      });
+      // Fetch ingredients usage data - use axiosInstance which automatically adds Authorization header
       let ingredientsData = null;
-      if (ingredientsResponse.ok) {
-        const ingredientsRaw = await ingredientsResponse.json();
+      try {
+        const ingredientsResponse = await axiosInstance.get('/api/admin/dashboard/ingredients');
+        if (ingredientsResponse.status === 200) {
+          const ingredientsRaw = ingredientsResponse.data;
         console.log('Raw ingredients API response:', ingredientsRaw);
         if (ingredientsRaw && Array.isArray(ingredientsRaw.labels) && Array.isArray(ingredientsRaw.data) && ingredientsRaw.labels.length > 0) {
           ingredientsData = ingredientsRaw;
@@ -212,8 +264,9 @@ const AdminDashboard: React.FC = () => {
         } else {
           console.log('Ingredients API returned empty or invalid data');
         }
-      } else {
-        console.log('Ingredients API request failed:', ingredientsResponse.status, ingredientsResponse.statusText);
+        }
+      } catch (ingredientsErr: any) {
+        console.log('Ingredients API request failed:', ingredientsErr.response?.status || ingredientsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -227,16 +280,18 @@ const AdminDashboard: React.FC = () => {
         console.log('Ingredients data loaded from API:', ingredientsData);
       }
 
-      // Fetch menu items data
-      const menuItemsResponse = await fetch('/api/admin/dashboard/menu-items', {
-        credentials: 'include'
-      });
+      // Fetch menu items data - use axiosInstance which automatically adds Authorization header
       let menuItemsData = null;
-      if (menuItemsResponse.ok) {
-        const menuItemsRaw = await menuItemsResponse.json();
+      try {
+        const menuItemsResponse = await axiosInstance.get('/api/admin/dashboard/menu-items');
+        if (menuItemsResponse.status === 200) {
+          const menuItemsRaw = menuItemsResponse.data;
         if (menuItemsRaw && Array.isArray(menuItemsRaw.labels) && Array.isArray(menuItemsRaw.data) && menuItemsRaw.labels.length > 0) {
           menuItemsData = menuItemsRaw;
         }
+        }
+      } catch (menuItemsErr: any) {
+        console.log('Menu items API request failed:', menuItemsErr.response?.status || menuItemsErr.message);
       }
       
       // Only use fallback if API completely fails, not if it returns empty data
@@ -250,14 +305,9 @@ const AdminDashboard: React.FC = () => {
         console.log('Menu items data loaded from API:', menuItemsData);
       }
 
-      // Fetch staff sales data
-      const staffSalesResponse = await fetch('/api/admin/dashboard/staff-sales', {
-        credentials: 'include'
-      });
-      const staffSalesData = staffSalesResponse.ok ? await staffSalesResponse.json() : null;
-
-      // Process and set chart data with fallbacks
-      setChartData({
+      // Note: staffSales is fetched separately by fetchStaffPerformanceData()
+      // Process and set chart data with fallbacks, preserving existing staffSales
+      setChartData(prev => ({
         sales: {
           labels: salesData.labels || [],
           datasets: [{
@@ -293,28 +343,12 @@ const AdminDashboard: React.FC = () => {
           }]
         },
         
-        staffSales: staffSalesData ? {
-          labels: staffSalesData.labels || [],
-          datasets: [{
-            label: 'Sales (₱)',
-            data: staffSalesData.data || [],
-            backgroundColor: [
-              '#a87437', '#8B4513', '#D2691E', '#CD853F', '#DEB887', '#F5DEB3'
-            ],
-            borderColor: '#8f652f',
-            borderWidth: 1,
-          }]
-        } : {
-          labels: ['No Data'],
-          datasets: [{
-            label: 'Sales (₱)',
-            data: [0],
-            backgroundColor: ['#a87437'],
-            borderColor: '#8f652f',
-            borderWidth: 1,
-          }]
+        // Preserve staffSales from fetchStaffPerformanceData() or set empty
+        staffSales: (prev?.staffSales?.labels && prev.staffSales.labels.length > 0) ? prev.staffSales : {
+          labels: [],
+          datasets: []
         }
-      });
+      }));
     } catch (err) {
       console.error('Error fetching chart data:', err);
     }
@@ -326,45 +360,50 @@ const AdminDashboard: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch unified metrics for 30 days (month view)
-      const metricsResponse = await fetch('/api/admin/metrics/summary?range=30d', {
-        credentials: 'include'
-      });
-      
-      if (metricsResponse.status === 401) {
-        // Session expired - redirect to login
-        navigate('/admin/login');
-        return;
-      }
-      
-      let monthMetrics: any = null;
-      if (metricsResponse.ok) {
-        monthMetrics = await metricsResponse.json();
-      } else {
-        // Fallback to legacy dashboard endpoint to avoid blank screen
-        const legacyResponse = await fetch('/api/admin/dashboard', { credentials: 'include' });
-        if (!legacyResponse.ok) {
-          throw new Error('Failed to fetch metrics data');
+      // Fetch unified metrics for 365 days (year view) for total revenue
+      // Use axiosInstance which automatically adds Authorization header
+      let yearMetrics: any = null;
+      try {
+        const metricsResponse = await axiosInstance.get('/api/admin/metrics/summary?range=365d');
+        if (metricsResponse.status === 200) {
+          yearMetrics = metricsResponse.data;
         }
-        const legacy = await legacyResponse.json();
+      } catch (metricsErr: any) {
+        if (metricsErr.response?.status === 401) {
+          // Session expired - redirect to login
+          navigate('/admin/login');
+          return;
+        }
+        // Fallback to legacy dashboard endpoint to avoid blank screen
+        try {
+          const legacyResponse = await axiosInstance.get('/api/admin/dashboard');
+          if (legacyResponse.status === 200) {
+            const legacy = legacyResponse.data;
         // Map legacy data to the new structure expected below
-        monthMetrics = {
-          revenue: legacy?.data?.revenue?.month ?? 0,
+        yearMetrics = {
+          revenue: legacy?.data?.revenue?.year ?? 0, // Use year revenue for total
           growthPercent: legacy?.data?.revenue?.growth ?? 0,
           orders: legacy?.data?.orders ?? { total: 0, pending: 0, processing: 0, completed: 0, cancelled: 0 },
           inventory: legacy?.data?.inventory ?? { in_stock: 0, low_stock: 0, out_of_stock: 0 }
         };
+          }
+        } catch (legacyErr) {
+          throw new Error('Failed to fetch metrics data');
+        }
       }
 
       // Fetch today's metrics for daily revenue card
-      const todayResponse = await fetch('/api/admin/metrics/summary?range=today', { credentials: 'include' });
       let todayMetrics: any = null;
-      if (todayResponse.ok) {
-        todayMetrics = await todayResponse.json();
-      } else {
+      try {
+        const todayResponse = await axiosInstance.get('/api/admin/metrics/summary?range=today');
+        if (todayResponse.status === 200) {
+          todayMetrics = todayResponse.data;
+        }
+      } catch (todayErr: any) {
         // Fallback using legacy: use today's number from legacy if available, otherwise 0
         todayMetrics = { revenue: 0 };
       }
+
       
       // Transform metrics data to match expected dashboard format
       const n = (v: any) => {
@@ -375,31 +414,31 @@ const AdminDashboard: React.FC = () => {
         data: {
           revenue: {
             today: n(todayMetrics.revenue),
-            week: n(monthMetrics.revenue),
-            month: n(monthMetrics.revenue),
-            growth: n(monthMetrics.growthPercent || 0)
+            week: n(yearMetrics.revenue),
+            month: n(yearMetrics.revenue), // Use year revenue for total revenue display
+            growth: n(yearMetrics.growthPercent || 0)
           },
           orders: {
-            pending: n(monthMetrics.orders.pending),
-            processing: n(monthMetrics.orders.processing),
-            completed: n(monthMetrics.orders.completed),
-            total: n(monthMetrics.orders.total)
+            pending: n(yearMetrics.orders.pending),
+            processing: n(yearMetrics.orders.processing),
+            completed: n(yearMetrics.orders.completed),
+            total: n(yearMetrics.orders.total)
           },
           inventory: {
-            total: n(monthMetrics.inventory.in_stock) + n(monthMetrics.inventory.low_stock) + n(monthMetrics.inventory.out_of_stock),
-            low_stock: n(monthMetrics.inventory.low_stock),
-            out_of_stock: n(monthMetrics.inventory.out_of_stock)
+            total: n(yearMetrics.inventory.in_stock) + n(yearMetrics.inventory.low_stock) + n(yearMetrics.inventory.out_of_stock),
+            low_stock: n(yearMetrics.inventory.low_stock),
+            out_of_stock: n(yearMetrics.inventory.out_of_stock)
           }
         }
       };
       
       setDashboardData(transformedData);
       
-      // Also fetch chart data
-      await fetchChartData();
-      
-      // Fetch staff performance data
+      // Fetch staff performance data first (sets chartData.staffSales)
       await fetchStaffPerformanceData(performancePeriod);
+      
+      // Then fetch other chart data (preserves staffSales)
+      await fetchChartData();
     } catch (err) {
       if (err instanceof Error && err.message.includes('Network error')) {
         // Network error might be session related
@@ -422,7 +461,7 @@ const AdminDashboard: React.FC = () => {
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true
@@ -438,7 +477,11 @@ const AdminDashboard: React.FC = () => {
     // Listen for real-time updates
     const refreshAll = () => {
       fetchDashboardData();
-      fetchChartData();
+      // Fetch staff performance first to set chart data
+      fetchStaffPerformanceData(performancePeriod).then(() => {
+        // Then fetch other charts (preserves staffSales)
+        fetchChartData();
+      });
     };
 
     newSocket.on('order-updated', (data) => {
@@ -533,7 +576,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-4">
+    <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 p-2 sm:p-4 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
         <div className="min-w-0 flex-1">
@@ -543,7 +586,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 dashboard-cards-tablet">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -606,8 +649,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Sales Trend</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.sales && chartData.sales.labels && chartData.sales.labels.length > 0 ? (
                   <Line data={chartData.sales} options={chartOptions} />
                 ) : (
@@ -627,8 +670,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Most Used Ingredients</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.ingredients && chartData.ingredients.labels && chartData.ingredients.labels.length > 0 ? (
                   <Pie data={chartData.ingredients} options={chartOptions} />
                 ) : (
@@ -651,8 +694,8 @@ const AdminDashboard: React.FC = () => {
             <CardHeader>
               <CardTitle>Most Bought Menu Items</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
                 {chartData.menuItems && chartData.menuItems.labels && chartData.menuItems.labels.length > 0 ? (
                   <Bar data={chartData.menuItems} options={chartOptions} />
                 ) : (
@@ -696,10 +739,15 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="h-64 sm:h-80 dashboard-chart-tablet">
-                {staffPerformanceData && staffPerformanceData.staff_performance && staffPerformanceData.staff_performance.length > 0 && 
-                 chartData.staffSales && chartData.staffSales.labels && chartData.staffSales.labels.length > 0 ? (
+            <CardContent className="p-2 sm:p-6">
+              <div className="h-48 sm:h-64 md:h-80 dashboard-chart-tablet w-full">
+                {chartData.staffSales && 
+                 chartData.staffSales.labels && 
+                 chartData.staffSales.labels.length > 0 && 
+                 chartData.staffSales.datasets && 
+                 chartData.staffSales.datasets.length > 0 &&
+                 chartData.staffSales.datasets[0].data && 
+                 chartData.staffSales.datasets[0].data.length > 0 ? (
                   <Bar 
                     data={chartData.staffSales} 
                     options={{
@@ -712,14 +760,25 @@ const AdminDashboard: React.FC = () => {
                             color: 'rgba(0, 0, 0, 0.1)',
                           },
                           ticks: {
+                            font: {
+                              size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+                            },
                             callback: function(value) {
                               return '₱' + value.toLocaleString();
-                            }
+                            },
+                            maxTicksLimit: windowWidth < 640 ? 5 : 10,
                           }
                         },
                         y: {
                           grid: {
                             display: false,
+                          },
+                          ticks: {
+                            font: {
+                              size: windowWidth < 640 ? 10 : windowWidth < 1024 ? 11 : 12,
+                            },
+                            maxRotation: windowWidth < 640 ? 0 : 0,
+                            minRotation: 0,
                           },
                         },
                       },
@@ -728,12 +787,17 @@ const AdminDashboard: React.FC = () => {
                         tooltip: {
                           callbacks: {
                             label: function(context) {
-                              const staff = staffPerformanceData.staff_performance[context.dataIndex];
-                              return [
-                                `Sales: ₱${staff.total_sales.toLocaleString()}`,
-                                `Orders: ${staff.total_orders}`,
-                                `Avg Order: ₱${staff.avg_order_value.toFixed(2)}`
-                              ];
+                              if (staffPerformanceData && 
+                                  staffPerformanceData.staff_performance && 
+                                  staffPerformanceData.staff_performance[context.dataIndex]) {
+                                const staff = staffPerformanceData.staff_performance[context.dataIndex];
+                                return [
+                                  `Sales: ₱${(staff.total_sales || 0).toLocaleString()}`,
+                                  `Orders: ${staff.total_orders || 0}`,
+                                  `Avg Order: ₱${(staff.avg_order_value || 0).toFixed(2)}`
+                                ];
+                              }
+                              return `Sales: ₱${context.parsed.x.toLocaleString()}`;
                             }
                           }
                         }

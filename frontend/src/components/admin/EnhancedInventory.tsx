@@ -30,6 +30,8 @@ import {
   List as ListIcon,
   MoreVertical
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface InventoryItem {
   id: number;
@@ -147,18 +149,15 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
   });
 
   // Fetch inventory data via AJAX
+  const API_URL = getApiUrl();
+
   const fetchInventoryData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/admin/inventory', { credentials: 'include' });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch inventory data');
-      }
-      
-      const data = await response.json();
+      const response = await axiosInstance.get('/api/admin/inventory');
+      const data = response.data;
       
       if (data.success) {
         setInventoryItems(data.inventory || []);
@@ -197,20 +196,28 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
 
   const fetchTransactions = async (page: number = txPage) => {
     try {
-      const res = await fetch(`/api/inventory/transactions?group=1&page=${page}&limit=${txLimit}`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
+      const res = await axiosInstance.get(`/api/inventory/transactions`, {
+        params: { group: 1, page, limit: txLimit }
+      });
+      const data = res.data;
       if (data.success) {
         setTransactionRows(data.transactions || []);
         setTransactionsCount(data.pagination?.total || (data.transactions || []).length);
+      } else {
+        setTransactionRows([]);
+        setTransactionsCount(0);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('Failed to fetch inventory transactions:', err);
+      setTransactionRows([]);
+      setTransactionsCount(0);
+    }
   };
 
   // Fetch categories separately - REMOVED: Using predefined categories only
   // const fetchCategories = async () => {
   //   try {
-  //     const response = await fetch('/api/admin/inventory/categories', { credentials: 'include' });
+  //     const response = await fetch('/api/admin/inventory/categories', { credentials: 'omit' });
   //     if (response.ok) {
   //       const data = await response.json();
   //       if (data.success) {
@@ -239,7 +246,6 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
     setCategories(predefinedCategories);
     
     // Initialize Socket.IO connection
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
     const newSocket = io(API_URL);
 
     // Join admin room for real-time updates
@@ -308,26 +314,21 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
     e.preventDefault();
     setIsAdding(true);
     try {
-      const response = await fetch('/api/admin/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: addForm.name,
-          category: addForm.category,
-          sku: addForm.sku,
-          description: addForm.description,
-          actual_unit: addForm.actual_unit,
-          initial_quantity: parseFloat(addForm.initial_quantity),
-          reorder_level: parseFloat(addForm.reorder_level),
-          days_of_stock: parseFloat(addForm.days_of_stock),
-          cost_per_unit: parseFloat(addForm.cost_per_unit), // This will be mapped to cost_per_actual_unit in backend
-          storage_location: addForm.storage_location,
-          extra_price_per_unit: addForm.extra_price_per_unit ? parseFloat(addForm.extra_price_per_unit) : undefined
-        })
+      const response = await axiosInstance.post('/api/admin/inventory', {
+        name: addForm.name,
+        category: addForm.category,
+        sku: addForm.sku,
+        description: addForm.description,
+        actual_unit: addForm.actual_unit,
+        initial_quantity: parseFloat(addForm.initial_quantity),
+        reorder_level: parseFloat(addForm.reorder_level),
+        days_of_stock: parseFloat(addForm.days_of_stock),
+        cost_per_unit: parseFloat(addForm.cost_per_unit),
+        storage_location: addForm.storage_location,
+        extra_price_per_unit: addForm.extra_price_per_unit ? parseFloat(addForm.extra_price_per_unit) : undefined
       });
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         setShowAddModal(false);
         setAddForm({ 
           name: '', 
@@ -344,8 +345,8 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
         });
         fetchInventoryData();
       } else {
-        const error = await response.json();
-        alert('Failed to add item: ' + (error.message || 'Unknown error'));
+        const error = response.data;
+        alert('Failed to add item: ' + (error?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding item:', error);
@@ -360,16 +361,13 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
     if (!confirm('Are you sure you want to delete this item?')) return;
     
     try {
-      const response = await fetch(`/api/admin/inventory/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await axiosInstance.delete(`/api/admin/inventory/${id}`);
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         fetchInventoryData();
       } else {
-        const error = await response.json();
-        alert('Failed to delete item: ' + (error.message || 'Unknown error'));
+        const error = response.data;
+        alert('Failed to delete item: ' + (error?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -382,22 +380,17 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
     e.preventDefault();
     
     try {
-      const response = await fetch(`/api/admin/inventory/${editForm.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: editForm.name,
-          category: editForm.category,
-          actual_quantity: editForm.actual_quantity,
-          actual_unit: editForm.actual_unit,
-          reorder_level: editForm.reorder_level,
-          cost_per_unit: editForm.cost_per_unit, // This will be mapped to cost_per_actual_unit in backend
-          extra_price_per_unit: editForm.extra_price_per_unit ? parseFloat(editForm.extra_price_per_unit) : undefined
-        })
+      const response = await axiosInstance.put(`/api/admin/inventory/${editForm.id}`, {
+        name: editForm.name,
+        category: editForm.category,
+        actual_quantity: editForm.actual_quantity,
+        actual_unit: editForm.actual_unit,
+        reorder_level: editForm.reorder_level,
+        cost_per_unit: editForm.cost_per_unit,
+        extra_price_per_unit: editForm.extra_price_per_unit ? parseFloat(editForm.extra_price_per_unit) : undefined
       });
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         setShowEditModal(false);
         setEditForm({
           id: 0,
@@ -415,8 +408,8 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
         });
         fetchInventoryData();
       } else {
-        const error = await response.json();
-        alert('Failed to update item: ' + (error.message || 'Unknown error'));
+        const error = response.data;
+        alert('Failed to update item: ' + (error?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error updating item:', error);
@@ -446,18 +439,11 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
   // Toggle customization visibility
   const toggleCustomizationVisibility = async (itemId: number, currentVisibility: boolean) => {
     try {
-      const response = await fetch(`/api/admin/inventory/${itemId}/customization-visibility`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          visible_in_customization: !currentVisibility
-        })
+      const response = await axiosInstance.put(`/api/admin/inventory/${itemId}/customization-visibility`, {
+        visible_in_customization: !currentVisibility
       });
 
-      if (response.ok) {
+      if (response.status >= 200 && response.status < 300) {
         // Update the local state
         setInventoryItems(prev => prev.map(item => 
           item.id === itemId 
@@ -465,7 +451,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
             : item
         ));
       } else {
-        console.error('Failed to update customization visibility');
+        console.error('Failed to update customization visibility', response.data);
       }
     } catch (error) {
       console.error('Error updating customization visibility:', error);
@@ -489,7 +475,7 @@ const EnhancedInventory: React.FC<EnhancedInventoryProps> = () => {
 
       const response = await fetch('/api/admin/inventory/bulk', {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'omit',
         body: formDataToSend
       });
 

@@ -1,10 +1,52 @@
 const pool = require('../config/db');
+// Profanity filtering using naughty-words (en + es) and a small custom list
+let BAD_WORDS = [];
+try {
+    const naughty = require('naughty-words');
+    const en = (naughty && (naughty.en || naughty.english)) || [];
+    const es = (naughty && (naughty.es || naughty.spanish)) || [];
+    // Fallback to direct JSONs if needed
+    const fallbackEn = (() => { try { return require('naughty-words/en.json'); } catch { return []; } })();
+    const fallbackEs = (() => { try { return require('naughty-words/es.json'); } catch { return []; } })();
+    // Custom local words to cover Tagalog/common colloquialisms
+    const custom = ['puta', 'putangina', 'gago', 'ulol', 'punyeta'];
+    BAD_WORDS = [...new Set([...(en || []), ...(es || []), ...fallbackEn, ...fallbackEs, ...custom])]
+        .filter(Boolean)
+        .map((w) => String(w).trim())
+        .filter((w) => w.length > 0);
+} catch (e) {
+    // As a last resort, at least include our custom list
+    BAD_WORDS = ['puta', 'putangina', 'gago', 'ulol', 'punyeta'];
+}
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const PROFANITY_REGEXES = BAD_WORDS
+    .filter(Boolean)
+    .map((word) => new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i'));
+
+const containsProfanity = (text) => {
+    if (!text || typeof text !== 'string' || PROFANITY_REGEXES.length === 0) return false;
+    return PROFANITY_REGEXES.some((regex) => regex.test(text));
+};
 
 // Submit new feedback
 const submitFeedback = async(req, res) => {
     const { customer_name, rating, comment, category, customer_email, order_id } = req.body;
     if (!customer_name || !rating) {
         return res.status(400).json({ message: 'Customer name and rating are required.' });
+    }
+
+    const trimmedName = typeof customer_name === 'string' ? customer_name.trim() : customer_name;
+    const trimmedComment = typeof comment === 'string' ? comment.trim() : comment;
+    const trimmedCategory = typeof category === 'string' ? category.trim() : category;
+
+    const finalCategory = trimmedCategory || 'General';
+    const finalComment = trimmedComment || null;
+
+    if (containsProfanity(trimmedName) || containsProfanity(finalComment) || containsProfanity(finalCategory)) {
+        return res.status(400).json({
+            message: 'Feedback contains inappropriate language. Please remove it and try again.'
+        });
     }
 
     // Check if customer has placed any orders
@@ -47,7 +89,7 @@ const submitFeedback = async(req, res) => {
 
     try {
         const [result] = await pool.query(
-            'INSERT INTO feedback (customer_name, rating, comment, category, customer_email, order_id) VALUES (?, ?, ?, ?, ?, ?)', [customer_name, rating, comment, category, customer_email, order_id]
+            'INSERT INTO feedback (customer_name, rating, comment, category, customer_email, order_id) VALUES (?, ?, ?, ?, ?, ?)', [trimmedName, rating, finalComment, finalCategory, customer_email, order_id]
         );
 
         // Emit real-time update for feedback submission
@@ -56,17 +98,17 @@ const submitFeedback = async(req, res) => {
             io.to('admin-room').emit('feedback-updated', {
                 type: 'feedback_submitted',
                 feedbackId: result.insertId,
-                customer_name,
+                customer_name: trimmedName,
                 rating,
-                category,
+                category: finalCategory,
                 timestamp: new Date()
             });
             io.emit('feedback-updated', {
                 type: 'feedback_submitted',
                 feedbackId: result.insertId,
-                customer_name,
+                customer_name: trimmedName,
                 rating,
-                category,
+                category: finalCategory,
                 timestamp: new Date()
             });
         }

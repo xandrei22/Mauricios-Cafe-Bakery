@@ -28,23 +28,60 @@ module.exports = (passport, db) => {
     });
 
     // Only configure Google OAuth if credentials are provided
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    const rawClientId = process.env.GOOGLE_CLIENT_ID || '';
+    const rawClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+    const rawCallbackUrl = process.env.GOOGLE_CALLBACK_URL || '';
+
+    const clientID = rawClientId.trim();
+    const clientSecret = rawClientSecret.trim();
+    const callbackURL = rawCallbackUrl.trim();
+
+    if (clientID && clientSecret) {
+        if (!callbackURL) {
+            console.error('❌ GOOGLE_CALLBACK_URL is not set! Google OAuth will not work properly.');
+            console.error('Please set GOOGLE_CALLBACK_URL in your environment variables.');
+        } else {
+            console.log('✅ Google OAuth configured:', {
+                clientID: clientID ? `${clientID.substring(0, 20)}...` : 'Missing',
+                clientIDLength: clientID.length,
+                clientSecretLength: clientSecret.length,
+                callbackURL: callbackURL
+            });
+        }
+
         passport.use(new GoogleStrategy({
-                clientID: process.env.GOOGLE_CLIENT_ID,
-                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-                callbackURL: process.env.GOOGLE_CALLBACK_URL
+                clientID,
+                clientSecret,
+                callbackURL
             },
             async(accessToken, refreshToken, profile, done) => {
                 try {
+                    console.log('🔍 Google OAuth profile received:', {
+                        id: profile.id,
+                        email: profile.emails && profile.emails.length > 0 ? profile.emails[0].value : undefined,
+                        displayName: profile.displayName,
+                        hasEmails: !!profile.emails && profile.emails.length > 0
+                    });
+
+                    if (!profile.emails || profile.emails.length === 0) {
+                        const error = new Error('No email found in Google profile');
+                        console.error('❌ Google OAuth error:', error.message);
+                        return done(error, false);
+                    }
+
                     // Check if a customer exists with this Google ID
                     const [rows] = await db.query('SELECT * FROM customers WHERE google_id = ?', [profile.id]);
                     if (rows.length > 0) {
                         const customer = rows[0];
                         customer.isNewGoogleUser = false;
 
-                        // Check if email verification is required for existing Google users
-                        if (!customer.email_verified) {
-                            customer.requiresVerification = true;
+                        // Google OAuth users are already verified by Google
+                        // If somehow they're not marked as verified, mark them now
+                        if (!customer.email_verified && customer.password === 'GOOGLE_AUTH') {
+                            // Auto-verify Google users
+                            await db.query('UPDATE customers SET email_verified = TRUE WHERE id = ?', [customer.id]);
+                            customer.email_verified = true;
+                            console.log('✅ Auto-verified existing Google OAuth user:', customer.email);
                         }
 
                         return done(null, customer);
@@ -74,23 +111,25 @@ module.exports = (passport, db) => {
                     const verificationToken = crypto.randomBytes(32).toString('hex');
                     const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
+                    // Google OAuth users are already verified by Google, so mark as verified immediately
                     const [result] = await db.query(
-                        'INSERT INTO customers (google_id, email, full_name, username, password, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, ?, FALSE, ?, ?, NOW())', [google_id, email, full_name, username, password, verificationToken, verificationExpires]
+                        'INSERT INTO customers (google_id, email, full_name, username, password, email_verified, verification_token, verification_expires, created_at) VALUES (?, ?, ?, ?, ?, TRUE, ?, ?, NOW())', [google_id, email, full_name, username, password, verificationToken, verificationExpires]
                     );
                     console.log('Insert result:', result);
 
-                    // Send verification email instead of welcome email
+                    // Send welcome email since they're already verified
                     try {
-                        const { sendVerificationEmail } = require('../utils/emailService');
-                        const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/customer/verify-email?token=${verificationToken}`;
-                        await sendVerificationEmail(email, full_name, verificationUrl);
+                        const { sendWelcomeEmail } = require('../utils/emailService');
+                        await sendWelcomeEmail(email, full_name);
+                        console.log('✅ Welcome email sent to Google OAuth user:', email);
                     } catch (emailError) {
-                        console.error('Error sending verification email (Google signup):', emailError);
+                        console.error('❌ Error sending welcome email (Google signup):', emailError);
+                        // Don't fail the signup if email fails, but log it
                     }
 
                     const [customer] = await db.query('SELECT * FROM customers WHERE id = ?', [result.insertId]);
                     customer[0].isNewGoogleUser = true;
-                    customer[0].requiresVerification = true;
+                    customer[0].email_verified = true; // Already verified by Google
                     return done(null, customer[0]);
                 } catch (err) {
                     return done(err);

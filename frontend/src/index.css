@@ -140,11 +140,36 @@
     }
 }
 
-html,
-body,
+html {
+    min-height: 100%;
+    margin: 0;
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: inherit;
+}
+
+body {
+    min-height: 100%;
+    margin: 0;
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
 #root {
     min-height: 100%;
     margin: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 
@@ -340,8 +365,9 @@ body,
         left: 0 !important;
         right: 0 !important;
         bottom: 0 !important;
-        width: 100vw !important;
+        width: 100% !important;
         height: 100vh !important;
+        max-width: 100% !important;
     }
 }
 
@@ -442,7 +468,8 @@ body,
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: 100vw !important;
+    width: 100% !important;
+    max-width: 100% !important;
     height: 100vh !important;
     pointer-events: auto !important;
 }

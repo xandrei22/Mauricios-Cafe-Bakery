@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   Package, 
   Calculator, 
   Settings,
@@ -15,6 +15,8 @@ import {
   X as CloseIcon,
   Image as ImageIcon
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface ProductDetailsFormProps {
   product?: any;
@@ -72,47 +74,218 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [loadingIngredients, setLoadingIngredients] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
+
+  // Load ingredients function that can be called multiple times
+  const loadIngredients = async () => {
+    try {
+      setLoadingIngredients(true);
+      console.log('🔄 ProductDetailsForm - Loading ingredients...');
+      console.log('🔄 API URL:', API_URL);
+      
+      let res;
+      let data;
+      
+      // Try /api/inventory first (public endpoint)
+      try {
+        console.log('🔄 Attempting /api/inventory...');
+        console.log('🔄 Axios baseURL:', axiosInstance.defaults.baseURL);
+        res = await axiosInstance.get('/api/inventory');
+        data = res.data;
+        console.log('✅ Successfully fetched from /api/inventory');
+      } catch (firstError: any) {
+        console.warn('⚠️ /api/inventory failed:', {
+          status: firstError?.response?.status,
+          statusText: firstError?.response?.statusText,
+          url: firstError?.config?.url,
+          baseURL: firstError?.config?.baseURL,
+          fullURL: `${firstError?.config?.baseURL || ''}${firstError?.config?.url || ''}`,
+          message: firstError?.message
+        });
+        
+        // Fallback: Try using fetch directly if axios fails
+        try {
+          console.log('🔄 Attempting with fetch API...');
+          const fetchUrl = API_URL ? `${API_URL}/api/inventory` : '/api/inventory';
+          console.log('🔄 Fetch URL:', fetchUrl);
+          
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          
+          // Add JWT token if available
+          const token = localStorage.getItem('authToken');
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+          }
+          
+          const fetchRes = await fetch(fetchUrl, {
+            method: 'GET',
+            headers: headers,
+            credentials: 'omit'
+          });
+          
+          if (!fetchRes.ok) {
+            throw new Error(`HTTP ${fetchRes.status}: ${fetchRes.statusText}`);
+          }
+          
+          data = await fetchRes.json();
+          console.log('✅ Successfully fetched with fetch API');
+        } catch (fetchError: any) {
+          console.warn('⚠️ Fetch also failed, trying /api/admin/inventory...', fetchError);
+          
+          // Final fallback to admin inventory endpoint (requires auth)
+          try {
+            console.log('🔄 Attempting /api/admin/inventory...');
+            res = await axiosInstance.get('/api/admin/inventory');
+            data = res.data;
+            console.log('✅ Successfully fetched from /api/admin/inventory');
+          } catch (secondError: any) {
+            console.error('❌ All endpoints failed');
+            console.error('❌ Final error:', {
+              status: secondError?.response?.status,
+              statusText: secondError?.response?.statusText,
+              url: secondError?.config?.url,
+              baseURL: secondError?.config?.baseURL,
+              message: secondError?.message
+            });
+            throw secondError || fetchError || firstError;
+          }
+        }
+      }
+      console.log('🔍 ProductDetailsForm - Full API response:', JSON.stringify(data, null, 2));
+      console.log('🔍 ProductDetailsForm - Response status:', res?.status || 'N/A (fetch used)');
+      console.log('🔍 ProductDetailsForm - Response data type:', typeof data);
+      console.log('🔍 ProductDetailsForm - data.ingredients exists:', !!data?.ingredients);
+      console.log('🔍 ProductDetailsForm - data.inventory exists:', !!data?.inventory);
+      console.log('🔍 ProductDetailsForm - data is array:', Array.isArray(data));
+      
+      // Check multiple possible response structures
+      let ingredients = [];
+      if (data && data.ingredients && Array.isArray(data.ingredients)) {
+        ingredients = data.ingredients;
+        console.log('✅ Using data.ingredients, count:', ingredients.length);
+      } else if (data && data.inventory && Array.isArray(data.inventory)) {
+        ingredients = data.inventory;
+        console.log('✅ Using data.inventory, count:', ingredients.length);
+      } else if (Array.isArray(data)) {
+        ingredients = data;
+        console.log('✅ Using data as array, count:', ingredients.length);
+      } else if (data && data.success && data.ingredients) {
+        ingredients = Array.isArray(data.ingredients) ? data.ingredients : [];
+        console.log('✅ Using data.success.ingredients, count:', ingredients.length);
+      }
+      
+      console.log('🔍 ProductDetailsForm - Parsed ingredients:', ingredients);
+      console.log('🔍 ProductDetailsForm - Ingredients count:', ingredients.length);
+      
+      if (ingredients.length > 0) {
+        const mapped = ingredients
+          .filter((i: any) => i && i.id && i.name) // Filter out invalid entries
+          .map((i: any) => ({ 
+            id: Number(i.id), 
+            name: String(i.name || '').trim(), 
+            actual_unit: String(i.actual_unit || i.actualUnit || '').trim()
+          }))
+          .filter((i: { id: number; name: string; actual_unit: string }) => i.name.length > 0); // Remove entries with empty names
+        
+        console.log('✅ ProductDetailsForm - Mapped ingredients:', mapped);
+        console.log('✅ ProductDetailsForm - Valid ingredient count:', mapped.length);
+        
+        if (mapped.length > 0) {
+          setIngredientOptions(mapped);
+          console.log('✅ ProductDetailsForm - Successfully set ingredient options:', mapped.length);
+        } else {
+          console.warn('⚠️ ProductDetailsForm - All ingredients filtered out (no valid entries)');
+        setIngredientOptions([]);
+        }
+      } else {
+        console.warn('⚠️ ProductDetailsForm - No ingredients found in response');
+        console.warn('⚠️ ProductDetailsForm - Full response structure:', Object.keys(data || {}));
+        setIngredientOptions([]);
+      }
+    } catch (e: any) {
+      console.error('❌ ProductDetailsForm - Load ingredients failed');
+      console.error('❌ Error details:', e);
+      console.error('❌ Error message:', e?.message);
+      console.error('❌ Error response:', e?.response?.data);
+      console.error('❌ Error status:', e?.response?.status);
+      setIngredientOptions([]);
+    } finally {
+      setLoadingIngredients(false);
+    }
+  };
 
   useEffect(() => {
-    // load ingredients for recipe builder
-    const load = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/inventory`);
-        const data = await res.json();
-        if (data?.ingredients) {
-          setIngredientOptions(
-            data.ingredients.map((i: any) => ({ id: i.id, name: i.name, actual_unit: i.actual_unit }))
-          );
-        }
-      } catch (e) {
-        console.error('Load ingredients failed', e);
-      }
-    };
-    load();
+    // Load ingredients on mount
+    loadIngredients();
 
     // Load existing recipe data if editing
-    if (product && product.ingredients && product.ingredients.length > 0) {
-      console.log('Loading existing recipe:', product.ingredients);
-      setRecipe(product.ingredients.map((ing: any) => ({
-        id: crypto.randomUUID(),
-        ingredient_id: ing.ingredient_id || ing.id || 0,
-        amount: ing.base_quantity || ing.amount || 0,
-        unit: ing.base_unit || ing.unit || '',
-        is_optional: ing.is_optional || false,
-        extra_price_per_unit: ing.extra_price_per_unit || ing.extra_step_price || 0
-      })));
+    if (product) {
+      console.log('🔍 ProductDetailsForm - Product changed:', {
+        id: product.id,
+        name: product.name,
+        hasIngredients: !!product.ingredients,
+        ingredientsCount: product.ingredients?.length || 0,
+        ingredients: product.ingredients
+      });
+      
+      if (product.ingredients && Array.isArray(product.ingredients) && product.ingredients.length > 0) {
+        console.log('✅ Loading existing recipe:', product.ingredients);
+        const mappedRecipe = product.ingredients.map((ing: any) => ({
+          id: crypto.randomUUID(),
+          ingredient_id: ing.ingredient_id || ing.id || 0,
+          amount: ing.base_quantity || ing.amount || ing.required_display_amount || 0,
+          unit: ing.base_unit || ing.unit || ing.recipe_unit || '',
+          is_optional: ing.is_optional || false,
+          extra_price_per_unit: ing.extra_price_per_unit || ing.extra_step_price || 0
+        }));
+        console.log('✅ Mapped recipe rows:', mappedRecipe);
+        setRecipe(mappedRecipe);
+      } else if (product.id) {
+        // If product has ID but no ingredients, try to fetch them
+        console.log('⚠️ Product has no ingredients, attempting to fetch...');
+        const fetchProductIngredients = async () => {
+          try {
+            const res = await axiosInstance.get(`/api/menu/items/${product.id}`);
+            const data = res.data;
+            if (data.success && data.item && data.item.ingredients) {
+              console.log('✅ Fetched ingredients from API:', data.item.ingredients);
+              const mappedRecipe = data.item.ingredients.map((ing: any) => ({
+                id: crypto.randomUUID(),
+                ingredient_id: ing.ingredient_id || ing.id || 0,
+                amount: ing.base_quantity || ing.amount || 0,
+                unit: ing.base_unit || ing.unit || '',
+                is_optional: ing.is_optional || false,
+                extra_price_per_unit: ing.extra_price_per_unit || 0
+              }));
+              setRecipe(mappedRecipe);
+            }
+          } catch (err) {
+            console.warn('Could not fetch ingredients for product:', err);
+          }
+        };
+        fetchProductIngredients();
+      } else {
+        // New product, clear recipe
+        console.log('🆕 New product, clearing recipe');
+        setRecipe([]);
+      }
+    } else {
+      // No product, clear recipe
+      setRecipe([]);
     }
-  }, [product]);
+  }, [product?.id]); // Only re-run when product ID changes
 
   useEffect(() => {
     // Load categories from backend so they are shared globally
     const loadCategories = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/menu/categories`);
-        const data = await res.json();
-        if (data.success) setCategories(data.categories || []);
+        const res = await axiosInstance.get('/api/menu/categories');
+        const data = res.data;
+        if (data && data.success) setCategories(data.categories || []);
       } catch (_) {}
     };
     loadCategories();
@@ -122,13 +295,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
     const name = newCategoryName.trim();
     if (!name) return;
     try {
-      const res = await fetch(`${API_URL}/api/menu/categories`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await axiosInstance.post('/api/menu/categories', { name });
+      const data = res.data;
+      if (data && data.success) {
         setCategories(prev => (prev.includes(name) ? prev : [...prev, name]));
         setFormData(prev => ({ ...prev, category: name }));
       }
@@ -139,11 +308,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
 
   const deleteCategory = async (name: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/menu/categories/${encodeURIComponent(name)}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await axiosInstance.delete(`/api/menu/categories/${encodeURIComponent(name)}`);
+      const data = res.data;
+      if (data && data.success) {
         setCategories(prev => prev.filter(c => c !== name));
         if (formData.category === name) {
           setFormData(prev => ({ ...prev, category: '' }));
@@ -167,7 +334,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       const response = await fetch(`${API_URL}/api/upload/menu-image`, {
         method: 'POST',
         body: uploadFormData,
-        credentials: 'include',
+        credentials: 'omit',
       });
 
       if (response.ok) {
@@ -188,12 +355,25 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate recipe before submission
-    const invalidIngredients = recipe.filter(row => !row.ingredient_id || row.ingredient_id <= 0 || row.amount <= 0);
-    if (invalidIngredients.length > 0) {
-      alert('Please complete all ingredient information before saving.');
-      return;
-    }
+    // Filter out invalid recipe rows (empty or incomplete) instead of blocking submission
+    const validRecipeRows = recipe.filter(row => 
+      row.ingredient_id && 
+      row.ingredient_id > 0 && 
+      row.amount > 0 && 
+      row.unit && 
+      row.unit.trim().length > 0
+    );
+    
+    console.log('🔧 ProductDetailsForm - Recipe validation:', {
+      totalRows: recipe.length,
+      validRows: validRecipeRows.length,
+      invalidRows: recipe.length - validRecipeRows.length,
+      validIngredients: validRecipeRows.map(r => ({ 
+        id: r.ingredient_id, 
+        amount: r.amount, 
+        unit: r.unit 
+      }))
+    });
 
     // Prepare data for backend with proper recipe structure
     const submitData = {
@@ -211,12 +391,12 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       notes: formData.notes,
       image_url: typeof formData.image_url === 'object' ? formData.image_url.medium : formData.image_url,
       variants: formData.variants,
-      // Enhanced recipe data for unit conversion system
-      ingredients: recipe.map(row => ({
+      // Enhanced recipe data for unit conversion system - only send valid rows
+      ingredients: validRecipeRows.map(row => ({
         ingredient_id: row.ingredient_id,
         base_quantity: row.amount,
         base_unit: row.unit,
-        is_optional: row.is_optional,
+        is_optional: row.is_optional || false,
         extra_price_per_unit: Number(row.extra_price_per_unit) || 0
       }))
     };
@@ -226,7 +406,9 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
       name: submitData.name,
       visibleInPos: submitData.visibleInPos,
       visibleInCustomerMenu: submitData.visibleInCustomerMenu,
-      allow_customization: submitData.allow_customization
+      allow_customization: submitData.allow_customization,
+      ingredientsCount: submitData.ingredients.length,
+      ingredients: submitData.ingredients
     });
 
     onSave(submitData);
@@ -260,7 +442,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
   const removeVariant = (id: string) => {
     setFormData(prev => ({
       ...prev,
-      variants: prev.variants.filter(v => v.id !== id)
+      variants: prev.variants.filter((v: { id: string }) => v.id !== id)
     }));
   };
 
@@ -556,7 +738,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                   
                   {formData.variants.length > 0 && (
                     <div className="space-y-2">
-                    {formData.variants.map((variant: Variant, index: number) => (
+                    {formData.variants.map((variant: Variant) => (
                         <div key={variant.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
                           <span className="flex-1 text-sm">{variant.name}</span>
                           <span className="text-sm font-medium">₱{variant.price}</span>
@@ -588,18 +770,60 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                 </CardHeader>
                 <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                   <Button 
                     type="button" 
                     onClick={addRecipeRow} 
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={ingredientOptions.length === 0}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Ingredient
                   </Button>
+                    <Button 
+                      type="button" 
+                      onClick={loadIngredients}
+                      variant="outline"
+                      className="px-3 py-2"
+                      disabled={loadingIngredients}
+                      title="Refresh ingredients list"
+                    >
+                      {loadingIngredients ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                      ) : (
+                        '↻'
+                      )}
+                    </Button>
+                  </div>
                   <span className="text-sm text-gray-500">
                     {recipe.length} ingredient{recipe.length !== 1 ? 's' : ''} added
+                    {ingredientOptions.length > 0 && (
+                      <span className="ml-2 text-green-600">
+                        ({ingredientOptions.length} available)
+                      </span>
+                    )}
                   </span>
                 </div>
+
+                {ingredientOptions.length === 0 && !loadingIngredients && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm px-4 py-3">
+                    No ingredients found. Add inventory items under <strong>Manage Inventory</strong> first so they can be selected in the recipe.
+                    <Button
+                      type="button"
+                      onClick={loadIngredients}
+                      variant="link"
+                      className="ml-2 h-auto p-0 text-amber-700 underline"
+                    >
+                      Click here to refresh
+                    </Button>
+                  </div>
+                )}
+                
+                {loadingIngredients && (
+                  <div className="text-center py-2 text-sm text-gray-500">
+                    Loading ingredients...
+                  </div>
+                )}
                   
                   {recipe.length > 0 && (
                   <div className="space-y-0">
@@ -629,7 +853,7 @@ const ProductDetailsForm: React.FC<ProductDetailsFormProps> = ({ product, onSave
                                 }
                               }}
                             >
-                              <SelectTrigger className="h-10 w-full">
+                              <SelectTrigger className="h-10 w-full" disabled={ingredientOptions.length === 0}>
                                 <SelectValue placeholder="Select ingredient" />
                             </SelectTrigger>
                             <SelectContent>

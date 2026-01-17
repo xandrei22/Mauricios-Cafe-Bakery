@@ -10,7 +10,7 @@ import { Label } from "../ui/label"
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAlert } from "../../contexts/AlertContext";
-import { getApiUrl } from "../../utils/apiConfig";
+import { staffLogin } from "../../utils/authUtils";
 
 export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div">) {
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
@@ -21,51 +21,111 @@ export function StaffAuthForm({ className, ...props }: React.ComponentProps<"div
   const navigate = useNavigate();
   const { checkLowStockAlert } = useAlert();
 
-  // Get the API URL from environment variable
-  const API_URL = getApiUrl();
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    
     try {
       console.log('Attempting staff login with:', { username: usernameOrEmail });
       
-      const res = await fetch(`${API_URL}/api/staff/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameOrEmail, password }),
-        credentials: "include",
+      await staffLogin(usernameOrEmail, password);
+      
+      console.log('Staff login successful, checking for alerts');
+      
+      // ⭐ CRITICAL: Verify token is saved before redirect (with retry)
+      console.log('🔍 Verifying staff token was saved...');
+      
+      let savedToken = localStorage.getItem('authToken');
+      let savedUser = localStorage.getItem('staffUser');
+      
+      // Wait up to 1 second for token to be saved (for slow devices)
+      for (let i = 0; i < 10; i++) {
+        if (savedToken && savedUser) {
+          console.log(`✅ Staff token verified after ${i * 100}ms`);
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+        savedToken = localStorage.getItem('authToken');
+        savedUser = localStorage.getItem('staffUser');
+      }
+      
+      // Final check
+      if (!savedToken || !savedUser) {
+        console.error('❌ CRITICAL: Staff token not found after login!', {
+          token: !!savedToken,
+          user: !!savedUser,
+          allKeys: Object.keys(localStorage)
+        });
+        setError("Authentication failed. Please try again.");
+        return;
+      }
+      
+      console.log('✅ STAFF LOGIN SUCCESSFUL - Redirecting...');
+      console.log('Token exists:', !!savedToken);
+      console.log('User exists:', !!savedUser);
+
+      // ⭐ CRITICAL: Ensure loginTimestamp is set for ProtectedRoute to recognize recent login
+      // (authUtils already sets it, but ensure it's set right before redirect)
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+
+      // Check for alerts immediately after successful login
+      checkLowStockAlert().catch(err => {
+        console.error('Failed to check low stock alert:', err);
       });
       
-      console.log('Staff login response status:', res.status);
+      // ⭐ CRITICAL: Wait longer to ensure token is fully saved and ProtectedRoute can read it
+      const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+      const delay = isMobile ? 800 : 600; // Increased delay to ensure token is saved
       
-      const data = await res.json();
-      console.log('Staff login response data:', data);
-      
-      if (!res.ok || !data.success) {
-        setError(data.message || "Login failed");
-      } else {
-        console.log('Staff login successful, checking for alerts');
-        try {
-          if (data?.user) {
-            localStorage.setItem('staffUser', JSON.stringify(data.user));
-          } else if (data?.email) {
-            localStorage.setItem('staffUser', JSON.stringify({ email: data.email }));
+      setTimeout(() => {
+        const tokenCheck = localStorage.getItem('authToken');
+        const userCheck = localStorage.getItem('staffUser');
+        console.log(`Staff login redirect - Token saved: ${!!tokenCheck}, User saved: ${!!userCheck}`);
+        
+        if (!tokenCheck || !userCheck) {
+          console.warn('⚠️ Token or user not found, waiting a bit more...');
+          setTimeout(() => {
+            // ⭐ FORCE REDIRECT using window.location to bypass any routing issues
+            console.log('🔄 FORCING REDIRECT to /staff/dashboard');
+            window.location.href = "/staff/dashboard";
+          }, 300);
+        } else {
+          // Try React Router first, but fallback to window.location if needed
+          try {
+            navigate("/staff/dashboard", { replace: true });
+            // Backup: if still on login page after 1 second, force redirect
+            setTimeout(() => {
+              if (window.location.pathname.includes('/login')) {
+                console.log('🔄 React Router redirect failed, forcing with window.location');
+                window.location.href = "/staff/dashboard";
+              }
+            }, 1000);
+          } catch (navError) {
+            console.error('Navigate error, using window.location:', navError);
+            window.location.href = "/staff/dashboard";
           }
-        } catch {}
-        // Check for alerts immediately after successful login
-        // Don't await - let it fail silently if there's an error
-        checkLowStockAlert().catch(err => {
-          console.error('Failed to check low stock alert:', err);
-          // Continue with navigation even if alert check fails
-        });
-        // Navigate immediately, don't wait for alert check
-        navigate("/staff/dashboard");
-      }
-    } catch (err) {
+        }
+      }, delay);
+      
+    } catch (err: any) {
       console.error('Staff login error:', err);
-      setError("Network error. Please try again.");
+      
+      // Handle network/CORS errors
+      if (err.isNetworkError || err.message?.includes('Network') || err.message?.includes('CORS') || err.message?.includes('Failed to fetch')) {
+        console.error('🚨 Network/CORS error detected:', err);
+        setError("Cannot connect to server. Please check your connection and try again.");
+        return;
+      }
+      
+      // Handle different error types
+      if (err.response?.data?.errorType === 'unauthorized_access') {
+        setError('You are not authorized to access the staff portal. Please contact your administrator.');
+      } else if (err.response?.data?.errorType === 'inactive_account') {
+        setError('Your account is not active. Please contact your administrator.');
+      } else {
+        setError(err.response?.data?.message || err.message || "Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

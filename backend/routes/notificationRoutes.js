@@ -1,16 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const notificationService = require('../services/notificationService');
-const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAdminAuthenticated, ensureStaffAuthenticated, and ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
-// Get notifications for admin
-router.get('/admin', ensureAdminAuthenticated, async(req, res) => {
+// Get notifications for admin - requires authentication
+router.get('/admin', authenticateJWT, async(req, res) => {
     try {
         const { limit = 50, offset = 0 } = req.query;
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
         const notifications = await notificationService.getNotifications(
-            req.session.adminUser.id,
+            adminId,
             'admin',
             parseInt(limit),
             parseInt(offset)
@@ -29,12 +33,17 @@ router.get('/admin', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Get notifications for staff
-router.get('/staff', ensureStaffAuthenticated, async(req, res) => {
+// Get notifications for staff - requires authentication
+router.get('/staff', authenticateJWT, async(req, res) => {
     try {
         const { limit = 50, offset = 0 } = req.query;
+        // Get staff ID from JWT user (authenticateJWT middleware)
+        const staffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
+        if (!staffId) {
+            return res.status(403).json({ success: false, message: 'Staff access required' });
+        }
         const notifications = await notificationService.getNotifications(
-            req.session.staffUser.id,
+            staffId,
             'staff',
             parseInt(limit),
             parseInt(offset)
@@ -53,12 +62,17 @@ router.get('/staff', ensureStaffAuthenticated, async(req, res) => {
     }
 });
 
-// Get notifications for customer
-router.get('/customer', ensureAuthenticated, async(req, res) => {
+// Get notifications for customer - requires authentication
+router.get('/customer', authenticateJWT, async(req, res) => {
     try {
         const { limit = 50, offset = 0 } = req.query;
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, message: 'Customer access required' });
+        }
         const notifications = await notificationService.getNotifications(
-            req.session.customerUser.id,
+            customerId,
             'customer',
             parseInt(limit),
             parseInt(offset)
@@ -77,11 +91,16 @@ router.get('/customer', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Get unread count for admin
-router.get('/admin/unread-count', ensureAdminAuthenticated, async(req, res) => {
+// Get unread count for admin - requires authentication
+router.get('/admin/unread-count', authenticateJWT, async(req, res) => {
     try {
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
         const count = await notificationService.getUnreadCount(
-            req.session.adminUser.id,
+            adminId,
             'admin'
         );
 
@@ -98,11 +117,16 @@ router.get('/admin/unread-count', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Get unread count for staff
-router.get('/staff/unread-count', ensureStaffAuthenticated, async(req, res) => {
+// Get unread count for staff - requires authentication
+router.get('/staff/unread-count', authenticateJWT, async(req, res) => {
     try {
+        // Get staff ID from JWT user (authenticateJWT middleware)
+        const staffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
+        if (!staffId) {
+            return res.status(403).json({ success: false, message: 'Staff access required' });
+        }
         const count = await notificationService.getUnreadCount(
-            req.session.staffUser.id,
+            staffId,
             'staff'
         );
 
@@ -119,11 +143,16 @@ router.get('/staff/unread-count', ensureStaffAuthenticated, async(req, res) => {
     }
 });
 
-// Get unread count for customer
-router.get('/customer/unread-count', ensureAuthenticated, async(req, res) => {
+// Get unread count for customer - requires authentication
+router.get('/customer/unread-count', authenticateJWT, async(req, res) => {
     try {
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, message: 'Customer access required' });
+        }
         const count = await notificationService.getUnreadCount(
-            req.session.customerUser.id,
+            customerId,
             'customer'
         );
 
@@ -140,12 +169,17 @@ router.get('/customer/unread-count', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Mark notification as read
-router.patch('/:id/read', ensureAuthenticated, async(req, res) => {
+// Mark notification as read - requires authentication
+router.patch('/:id/read', authenticateJWT, async(req, res) => {
     try {
         const { id } = req.params;
-        const userId = (req.session.adminUser && req.session.adminUser.id) || (req.session.staffUser && req.session.staffUser.id) || (req.session.customerUser && req.session.customerUser.id);
-        const userType = (req.session.adminUser && 'admin') || (req.session.staffUser && 'staff') || (req.session.customerUser && 'customer');
+        // Get user ID and type from JWT user (authenticateJWT middleware)
+        const userId = req.user && req.user.id;
+        const userType = req.user && req.user.role;
+
+        if (!userId || !userType) {
+            return res.status(403).json({ success: false, message: 'Authentication required' });
+        }
 
         const result = await notificationService.markAsRead(id, userId, userType);
 
@@ -162,11 +196,16 @@ router.patch('/:id/read', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Mark all notifications as read for admin
-router.patch('/admin/mark-all-read', ensureAdminAuthenticated, async(req, res) => {
+// Mark all notifications as read for admin - requires authentication
+router.patch('/admin/mark-all-read', authenticateJWT, async(req, res) => {
     try {
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
         const result = await notificationService.markAllAsRead(
-            req.session.adminUser.id,
+            adminId,
             'admin'
         );
 
@@ -183,11 +222,16 @@ router.patch('/admin/mark-all-read', ensureAdminAuthenticated, async(req, res) =
     }
 });
 
-// Mark all notifications as read for staff
-router.patch('/staff/mark-all-read', ensureStaffAuthenticated, async(req, res) => {
+// Mark all notifications as read for staff - requires authentication
+router.patch('/staff/mark-all-read', authenticateJWT, async(req, res) => {
     try {
+        // Get staff ID from JWT user (authenticateJWT middleware)
+        const staffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
+        if (!staffId) {
+            return res.status(403).json({ success: false, message: 'Staff access required' });
+        }
         const result = await notificationService.markAllAsRead(
-            req.session.staffUser.id,
+            staffId,
             'staff'
         );
 
@@ -204,11 +248,16 @@ router.patch('/staff/mark-all-read', ensureStaffAuthenticated, async(req, res) =
     }
 });
 
-// Mark all notifications as read for customer
-router.patch('/customer/mark-all-read', ensureAuthenticated, async(req, res) => {
+// Mark all notifications as read for customer - requires authentication
+router.patch('/customer/mark-all-read', authenticateJWT, async(req, res) => {
     try {
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, message: 'Customer access required' });
+        }
         const result = await notificationService.markAllAsRead(
-            req.session.customerUser.id,
+            customerId,
             'customer'
         );
 
@@ -225,15 +274,20 @@ router.patch('/customer/mark-all-read', ensureAuthenticated, async(req, res) => 
     }
 });
 
-// Get notification preferences for admin
-router.get('/admin/preferences', ensureAdminAuthenticated, async(req, res) => {
+// Get notification preferences for admin - requires authentication
+router.get('/admin/preferences', authenticateJWT, async(req, res) => {
     try {
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
         const db = require('../config/db');
         const [preferences] = await db.query(`
             SELECT notification_type, email_enabled, in_app_enabled 
             FROM notification_preferences 
             WHERE user_id = ? AND user_type = 'admin'
-        `, [req.session.adminUser.id]);
+        `, [adminId]);
 
         res.json({
             success: true,
@@ -248,9 +302,14 @@ router.get('/admin/preferences', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Update notification preferences for admin
-router.put('/admin/preferences', ensureAdminAuthenticated, async(req, res) => {
+// Update notification preferences for admin - requires authentication
+router.put('/admin/preferences', authenticateJWT, async(req, res) => {
     try {
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, message: 'Admin access required' });
+        }
         const { preferences } = req.body;
         const db = require('../config/db');
 
@@ -262,7 +321,7 @@ router.put('/admin/preferences', ensureAdminAuthenticated, async(req, res) => {
                 ON DUPLICATE KEY UPDATE
                 email_enabled = VALUES(email_enabled),
                 in_app_enabled = VALUES(in_app_enabled)
-            `, [req.session.adminUser.id, pref.notification_type, pref.email_enabled, pref.in_app_enabled]);
+            `, [adminId, pref.notification_type, pref.email_enabled, pref.in_app_enabled]);
         }
 
         res.json({
@@ -278,8 +337,8 @@ router.put('/admin/preferences', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Clean up expired notifications (admin only)
-router.delete('/cleanup', ensureAdminAuthenticated, async(req, res) => {
+// Clean up expired notifications (admin only) - requires authentication
+router.delete('/cleanup', authenticateJWT, async(req, res) => {
     try {
         const cleanedCount = await notificationService.cleanupExpiredNotifications();
 

@@ -4,15 +4,19 @@ const db = require('../config/db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { sendEmail } = require('../utils/emailService');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
-const { ensureAdminAuthenticated } = require('../middleware/adminAuthMiddleware');
+// Note: ensureAuthenticated and ensureAdminAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
 // ===== CUSTOMER SETTINGS ROUTES =====
 
-// Get customer settings
-router.get('/customer/settings', ensureAuthenticated, async(req, res) => {
+// Get customer settings - requires authentication
+router.get('/customer/settings', authenticateJWT, async(req, res) => {
     try {
-        const customerId = req.session.customerUser && req.session.customerUser.id;
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, error: 'Customer authentication required' });
+        }
 
         const [customer] = await db.query(`
             SELECT id, email, username, created_at, last_username_change
@@ -45,11 +49,15 @@ router.get('/customer/settings', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Update customer username (with 7-day cooldown)
-router.put('/customer/username', ensureAuthenticated, async(req, res) => {
+// Update customer username (with 7-day cooldown) - requires authentication
+router.put('/customer/username', authenticateJWT, async(req, res) => {
     try {
         const { newUsername, currentPassword } = req.body;
-        const customerId = req.session.customerUser && req.session.customerUser.id;
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, error: 'Customer authentication required' });
+        }
 
         if (!newUsername || !currentPassword) {
             return res.status(400).json({ success: false, error: 'New username and current password are required' });
@@ -124,10 +132,14 @@ router.put('/customer/username', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Request customer password change
-router.post('/customer/password/request', ensureAuthenticated, async(req, res) => {
+// Request customer password change - requires authentication
+router.post('/customer/password/request', authenticateJWT, async(req, res) => {
     try {
-        const customerId = req.session.customerUser && req.session.customerUser.id;
+        // Get customer ID from JWT user (authenticateJWT middleware)
+        const customerId = (req.user && req.user.role === 'customer' && req.user.id) || null;
+        if (!customerId) {
+            return res.status(403).json({ success: false, error: 'Customer authentication required' });
+        }
 
         // Get customer data with rate limiting fields
         const [customer] = await db.query(`
@@ -305,10 +317,14 @@ router.post('/customer/password/verify', async(req, res) => {
 
 // ===== STAFF SETTINGS ROUTES =====
 
-// Get staff settings
-router.get('/staff/settings', ensureAuthenticated, async(req, res) => {
+// Get staff settings - requires authentication
+router.get('/staff/settings', authenticateJWT, async(req, res) => {
     try {
-        const staffId = req.session.staffUser && req.session.staffUser.id;
+        // Get staff ID from JWT user (authenticateJWT middleware)
+        const staffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
+        if (!staffId) {
+            return res.status(403).json({ success: false, error: 'Staff authentication required' });
+        }
 
         const [staff] = await db.query(`
             SELECT id, email, username, role, status, created_at
@@ -339,10 +355,14 @@ router.get('/staff/settings', ensureAuthenticated, async(req, res) => {
     }
 });
 
-// Request staff password change
-router.post('/staff/password/request', ensureAuthenticated, async(req, res) => {
+// Request staff password change - requires authentication
+router.post('/staff/password/request', authenticateJWT, async(req, res) => {
     try {
-        const staffId = req.session.staffUser && req.session.staffUser.id;
+        // Get staff ID from JWT user (authenticateJWT middleware)
+        const staffId = (req.user && (req.user.role === 'staff' || req.user.role === 'admin') && req.user.id) || null;
+        if (!staffId) {
+            return res.status(403).json({ success: false, error: 'Staff authentication required' });
+        }
 
         // Get staff data with rate limiting fields
         const [staff] = await db.query(`
@@ -520,10 +540,14 @@ router.post('/staff/password/verify', async(req, res) => {
 
 // ===== ADMIN SETTINGS ROUTES =====
 
-// Get admin settings
-router.get('/admin/settings', ensureAdminAuthenticated, async(req, res) => {
+// Get admin settings - requires authentication
+router.get('/admin/settings', authenticateJWT, async(req, res) => {
     try {
-        const adminId = req.session.adminUser && req.session.adminUser.id;
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, error: 'Admin authentication required' });
+        }
 
         const [admin] = await db.query(`
             SELECT id, email, username, full_name, last_username_change
@@ -558,11 +582,15 @@ router.get('/admin/settings', ensureAdminAuthenticated, async(req, res) => {
     }
 });
 
-// Request admin email change
-router.post('/admin/email/request', ensureAdminAuthenticated, async(req, res) => {
+// Request admin email change - requires authentication
+router.post('/admin/email/request', authenticateJWT, async(req, res) => {
     try {
         const { newEmail, currentPassword } = req.body;
-        const adminId = req.session.adminUser && req.session.adminUser.id;
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, error: 'Admin authentication required' });
+        }
 
         if (!newEmail || !currentPassword) {
             return res.status(400).json({ success: false, error: 'New email and current password are required' });
@@ -679,11 +707,15 @@ router.post('/admin/email/verify', async(req, res) => {
     }
 });
 
-// Request admin username change
-router.post('/admin/username/request', ensureAdminAuthenticated, async(req, res) => {
+// Request admin username change - requires authentication
+router.post('/admin/username/request', authenticateJWT, async(req, res) => {
     try {
         const { newUsername, currentPassword } = req.body;
-        const adminId = req.session.adminUser && req.session.adminUser.id;
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, error: 'Admin authentication required' });
+        }
 
         if (!newUsername || !currentPassword) {
             return res.status(400).json({ success: false, error: 'New username and current password are required' });
@@ -817,10 +849,14 @@ router.post('/admin/username/verify', async(req, res) => {
     }
 });
 
-// Request admin password change
-router.post('/admin/password/request', ensureAdminAuthenticated, async(req, res) => {
+// Request admin password change - requires authentication
+router.post('/admin/password/request', authenticateJWT, async(req, res) => {
     try {
-        const adminId = req.session.adminUser && req.session.adminUser.id;
+        // Get admin ID from JWT user (authenticateJWT middleware)
+        const adminId = (req.user && req.user.role === 'admin' && req.user.id) || null;
+        if (!adminId) {
+            return res.status(403).json({ success: false, error: 'Admin authentication required' });
+        }
 
         // Get admin data with rate limiting fields
         const [admin] = await db.query(`

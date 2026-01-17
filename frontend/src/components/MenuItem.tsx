@@ -40,7 +40,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ item, onAddToCart, hasTableAccess =
   const isAvailable = item.is_available !== false; // Default to true if not specified
 
   return (
-    <Card className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <Card className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 border-l-2 border-r-2 border-[#a87437]/30">
       <CardContent className="p-4">
         <div className="flex gap-4">
           {/* Image - Smaller container */}

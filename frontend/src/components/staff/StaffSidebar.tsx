@@ -14,14 +14,16 @@ import React, { useState } from "react";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
 import { MoreVertical } from "lucide-react";
 
-const menuItems = [
-  { label: "Dashboard", path: "/staff/dashboard", icon: "/images/dashboard.png" },
-  { label: "Manage Inventory", path: "/staff/inventory", icon: "/images/inventory.png" },
-  { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png" },
-  { label: "POS System", path: "/staff/pos", icon: "/images/payment.png" },
-  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png" },
-  { label: "Sales", path: "/staff/sales", icon: "/images/payment.png" },
-  { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png" },
+const allMenuItems = [
+  { label: "Dashboard", path: "/staff/dashboard", icon: "/images/dashboard.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Manage Inventory", path: "/staff/inventory", icon: "/images/inventory.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
+  { label: "Orders", path: "/staff/orders", icon: "/images/Orders.png", allowedPositions: ['Barista', 'Manager', 'Admin'] },
+  { label: "POS System", path: "/staff/pos", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
+  // Loyalty: visible to Cashier, Manager, Admin (not Barista)
+  { label: "Loyalty", path: "/staff/loyalty", icon: "/images/loyalty points.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
+  // Sales: visible to Cashier, Manager, Admin (not Barista)
+  { label: "Sales", path: "/staff/sales", icon: "/images/payment.png", allowedPositions: ['Cashier', 'Manager', 'Admin'] },
+  { label: "Activity Logs", path: "/staff/activity-logs", icon: "/images/activity logs.png", allowedPositions: ['Cashier', 'Barista', 'Manager', 'Admin'] },
 ];
 
 const settingsItems = [
@@ -33,6 +35,73 @@ const StaffSidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+
+  const storedStaff = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('staffUser') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
+  // Get user position and filter menu items accordingly
+  // Normalize position: always treat as trimmed string
+  const userPosition = (storedStaff?.position ?? '').toString().trim();
+  const filteredMenuItems = React.useMemo(() => {
+    // Debug: Log position for troubleshooting
+    console.log('🔍 Staff Sidebar Debug:', {
+      userPosition,
+      role: storedStaff?.role,
+      fullUser: storedStaff
+    });
+    
+    // If user is admin or manager, show all items
+    if (storedStaff?.role === 'admin' || userPosition.toLowerCase() === 'manager') {
+      console.log('✅ Admin/Manager - showing all items');
+      return allMenuItems;
+    }
+    
+    // If no position is set, show all items (fallback for existing users who haven't re-logged)
+    if (!userPosition || userPosition === '') {
+      console.warn('⚠️ No position found for user - showing all items. User needs to log out and log back in.');
+      return allMenuItems;
+    }
+    
+    // Filter items based on position (case-insensitive comparison)
+    const normalizedPosition =
+      userPosition.length > 0
+        ? userPosition.charAt(0).toUpperCase() + userPosition.slice(1).toLowerCase()
+        : '';
+    const normalizedPositionLower = normalizedPosition.toLowerCase();
+    const filtered = allMenuItems.filter(item => {
+      // If no position restrictions, allow the item
+      if (!item.allowedPositions || item.allowedPositions.length === 0) {
+        return true;
+      }
+      // Case-insensitive comparison - check if user's position is in allowed positions
+      const isAllowed = item.allowedPositions.some(pos => 
+        pos.toLowerCase() === normalizedPositionLower
+      );
+      return isAllowed;
+    });
+    
+    console.log(`✅ Filtered menu items for ${normalizedPosition}:`, filtered.map(i => i.label));
+    return filtered;
+  }, [userPosition, storedStaff?.role, storedStaff]);
+
+  const displayName =
+    (typeof storedStaff?.username === 'string' && storedStaff.username.trim().length > 0
+      ? storedStaff.username.trim()
+      : typeof storedStaff?.name === 'string' && storedStaff.name.trim().length > 0
+        ? storedStaff.name.trim()
+        : typeof storedStaff?.email === 'string' && storedStaff.email.length > 0
+          ? storedStaff.email.split('@')[0]
+          : 'Staff');
+
+  const displayEmail =
+    (typeof storedStaff?.email === 'string' && storedStaff.email.length > 0)
+      ? storedStaff.email
+      : 'staff@example.com';
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -47,15 +116,17 @@ const StaffSidebar: React.FC = () => {
         // Call staff logout API
         await fetch('/api/staff/logout', {
           method: 'POST',
-          credentials: 'include'
+          credentials: 'omit'
         });
       } catch (error) {
         console.error('Logout error:', error);
       } finally {
-        // Clear any staff authentication
-        localStorage.removeItem('staffToken');
-        localStorage.removeItem('staffUser');
-        navigate('/staff/login');
+        // Clear all local storage and session storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Force page reload to clear any cached data
+        window.location.href = '/staff/login';
       }
     }
   };
@@ -82,7 +153,7 @@ const StaffSidebar: React.FC = () => {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu className="pl-3 group-data-[collapsible=icon]:pl-3 flex flex-col">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <SidebarMenuItem key={item.label}>
                 <SidebarMenuButton 
                   asChild 
@@ -142,8 +213,8 @@ const StaffSidebar: React.FC = () => {
               </svg>
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-              <span className="font-semibold text-[#6B5B5B]">Staff</span>
-              <span className="text-xs text-[#6B5B5B]/70">{(JSON.parse(localStorage.getItem('staffUser') || '{}')?.email) || 'staff@example.com'}</span>
+              <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
+              <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
             </div>
           </div>
         </div>

@@ -1,20 +1,21 @@
 function ensureStaffAuthenticated(req, res, next) {
-    // Check specifically for staff authentication
-    if (req.session.staffUser && (req.session.staffUser.role === 'staff' || req.session.staffUser.role === 'admin')) {
-        return next();
-    }
-
-    // For API routes, return JSON error instead of redirect
-    // Use originalUrl to reliably detect API prefix when router is mounted (req.path is relative)
-    const isApiRequest = (req.originalUrl && req.originalUrl.startsWith('/api/'));
-    if (isApiRequest) {
-        return res.status(401).json({
-            success: false,
-            error: 'Staff authentication required'
-        });
-    }
-
-    res.redirect('/staff/login');
+    // JWT-based staff/admin authentication
+    try {
+        const authHeader = (req.headers && req.headers.authorization) || '';
+        const parts = authHeader.split(' ');
+        const hasBearer = parts.length === 2 && /^Bearer$/i.test(parts[0]);
+        const token = hasBearer ? parts[1] : null;
+        if (token) {
+            const jwt = require('jsonwebtoken');
+            const secret = process.env.JWT_SECRET || 'change-me-in-prod';
+            const payload = jwt.verify(token, secret);
+            if (payload && (payload.role === 'staff' || payload.role === 'admin')) {
+                req.user = payload;
+                return next();
+            }
+        }
+    } catch (_) {}
+    return res.status(401).json({ success: false, error: 'Staff authentication required' });
 }
 
 module.exports = {

@@ -6,7 +6,8 @@ const orderProcessingService = require('../services/orderProcessingService');
 const ingredientDeductionService = require('../services/ingredientDeductionService');
 const adminInventoryService = require('../services/adminInventoryService');
 const db = require('../config/db');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
+// Note: ensureAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
 // Configure multer for receipt uploads
 const storage = multer.diskStorage({
@@ -116,16 +117,24 @@ router.get('/orders/:customerEmail', async(req, res) => {
     }
 });
 
-// Customer dashboard data endpoint (TEMPORARILY NO AUTH REQUIRED FOR TESTING)
-router.get('/dashboard', async(req, res) => {
+// Customer dashboard data endpoint - requires authentication
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
-        // Get customer ID from query parameter
-        const customerId = req.query.customerId;
+        // Get customer ID from JWT user (authenticateJWT middleware) or query parameter
+        const customerId = req.query.customerId || (req.user && req.user.id);
 
         if (!customerId) {
             return res.status(400).json({
                 success: false,
                 error: 'Customer ID is required'
+            });
+        }
+
+        // Verify customer ID matches authenticated user (security check)
+        if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied: Customer ID mismatch'
             });
         }
 
@@ -258,12 +267,35 @@ router.get('/dashboard', async(req, res) => {
                 })),
                 total: (totalOrdersResult[0] && totalOrdersResult[0].total) || 0
             },
-            favorites: favoritesResult.map(item => ({
-                id: Math.random(),
-                name: JSON.parse(item.names || '[]')[0] || 'Unknown Item',
-                category: 'Popular',
-                imageUrl: null
-            }))
+            favorites: favoritesResult.map(item => {
+                let itemName = 'Unknown Item';
+                try {
+                    // item.names might be a JSON string array or already a string
+                    if (item.names) {
+                        if (typeof item.names === 'string') {
+                            // Try to parse as JSON first
+                            try {
+                                const parsed = JSON.parse(item.names);
+                                itemName = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : (parsed || item.names);
+                            } catch {
+                                // If parsing fails, it's probably already a string
+                                itemName = item.names;
+                            }
+                        } else {
+                            itemName = item.names;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing favorite item name:', e);
+                    itemName = item.names || 'Unknown Item';
+                }
+                return {
+                    id: Math.random(),
+                    name: itemName,
+                    category: 'Popular',
+                    imageUrl: null
+                };
+            })
         };
 
         res.json({
@@ -280,8 +312,10 @@ router.get('/dashboard', async(req, res) => {
     }
 });
 
-// Apply authentication to order-related routes (require login for orders)
-router.use(ensureAuthenticated);
+// ⭐ CRITICAL: Apply JWT authentication to order-related routes (require login for orders)
+// Note: Individual routes below should use authenticateJWT middleware
+// This global middleware is kept for backward compatibility but routes should explicitly use authenticateJWT
+// router.use(authenticateJWT); // Commented out - routes should explicitly use authenticateJWT
 
 // Check if order can be fulfilled
 router.post('/check-fulfillment', async(req, res) => {
@@ -352,9 +386,9 @@ router.post('/place-order', async(req, res) => {
         }
 
         // Process the order
-        // Get staff ID from session if available (for admin/staff processing customer orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Get staff ID from JWT user if available (for admin/staff processing customer orders)
+        // req.user is set by authenticateJWT middleware if route is protected
+        const staffId = (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
         const result = await orderProcessingService.processCustomerOrder(orderData, staffId);
         res.json(result);
@@ -411,12 +445,41 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             });
         }
 
+        // Generate random 5-character order code (letters and numbers)
+        function generateShortOrderCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < 5; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
         // Create the order
         const orderType = 'dine_in';
         const orderStatusInitial = 'pending';
         const paymentStatusInitial = 'pending';
         const orderIdStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const orderNumberStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        
+        // Generate unique 5-character order code
+        let orderNumberStr;
+        let isUnique = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+        while (!isUnique && attempts < maxAttempts) {
+            orderNumberStr = generateShortOrderCode();
+            const [existing] = await db.query(
+                'SELECT id FROM orders WHERE order_number = ?', [orderNumberStr]
+            );
+            if (existing.length === 0) {
+                isUnique = true;
+            }
+            attempts++;
+        }
+        // Fallback if we couldn't generate a unique code
+        if (!isUnique) {
+            orderNumberStr = generateShortOrderCode() + Date.now().toString().slice(-2);
+        }
 
         // Get next queue position for today
         const [queueResult] = await db.query(`
@@ -431,40 +494,57 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             tableNumber :
             (tableNumber ? Math.min(6, Math.max(1, Number(tableNumber))) : null);
 
-        // Get staff ID from session if available (for admin/staff processing customer orders)
-        const staffId = (req.session.adminUser && req.session.adminUser.id) ||
-            (req.session.staffUser && req.session.staffUser.id) ||
+        // Get staff ID from JWT user if available (for admin/staff processing customer orders)
+        // req.user is set by authenticateJWT middleware if route is protected
+        const staffId = (req.user && (req.user.role === 'admin' || req.user.role === 'staff') && req.user.id) ||
             null;
 
-        // Ensure customer record exists
+        // Ensure customer record exists and get the correct customer name
         let finalCustomerId = customerId;
-        if (!finalCustomerId && customerEmail) {
+        let finalCustomerName = customerName; // Default to the provided name
+        
+        if (finalCustomerId) {
+            // If customerId is provided, fetch the customer's full_name from database
+            // This ensures we use the authoritative name from the database, not from JWT token
+            const [customerRecord] = await db.query(
+                'SELECT id, full_name FROM customers WHERE id = ?', [finalCustomerId]
+            );
+            
+            if (customerRecord.length > 0) {
+                // Use the full_name from database if available, otherwise fall back to provided name
+                finalCustomerName = customerRecord[0].full_name || customerName;
+            }
+        } else if (customerEmail) {
             // Check if customer exists by email
             const [existingCustomer] = await db.query(
-                'SELECT id FROM customers WHERE email = ?', [customerEmail]
+                'SELECT id, full_name FROM customers WHERE email = ?', [customerEmail]
             );
 
             if (existingCustomer.length > 0) {
                 finalCustomerId = existingCustomer[0].id;
+                // Use the full_name from database if available
+                finalCustomerName = existingCustomer[0].full_name || customerName;
             } else {
                 // Create a new customer record
                 const [newCustomer] = await db.query(
                     'INSERT INTO customers (email, full_name, username, password, created_at) VALUES (?, ?, ?, ?, NOW())', [customerEmail, customerName, customerEmail.split('@')[0], 'GUEST_ACCOUNT']
                 );
                 finalCustomerId = newCustomer.insertId;
+                // For new customers, use the provided name
+                finalCustomerName = customerName;
             }
         }
 
         const [orderResult] = await db.query(`
             INSERT INTO orders (
                 order_id, order_number, customer_id, customer_name, table_number, items, total_price,
-                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NOW(), ?)
+                status, payment_status, payment_method, notes, order_type, queue_position, estimated_ready_time, order_time, staff_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE), NOW(), ?, NOW())
         `, [
             orderIdStr,
             orderNumberStr,
             finalCustomerId, // Use the found/created customer ID
-            customerName,
+            finalCustomerName, // Use the customer name from database when available
             safeTableNumber,
             JSON.stringify(items),
             totalAmount,
@@ -549,6 +629,7 @@ router.post('/checkout', upload.single('receipt'), async(req, res) => {
             success: true,
             message: 'Order placed successfully',
             orderId: orderId,
+            orderNumber: orderNumberStr,
             status: orderStatus
         });
 
@@ -578,8 +659,8 @@ router.get('/orders', async(req, res) => {
     }
 });
 
-// Get customer dashboard data
-router.get('/orders/:customerEmail/dashboard', async(req, res) => {
+// Get all orders for a specific customer by email (used by customer portal)
+router.get('/orders/:customerEmail', async (req, res) => {
     try {
         const { customerEmail } = req.params;
 
@@ -590,14 +671,14 @@ router.get('/orders/:customerEmail/dashboard', async(req, res) => {
             });
         }
 
-        const result = await orderProcessingService.getCustomerDashboard(customerEmail);
+        const result = await orderProcessingService.getCustomerOrders(customerEmail);
         res.json(result);
 
     } catch (error) {
-        console.error('Get customer dashboard error:', error);
+        console.error('Get customer orders error:', error);
         res.status(500).json({
             success: false,
-            message: error.message || 'Failed to get customer dashboard'
+            message: error.message || 'Failed to get customer orders'
         });
     }
 });
@@ -676,16 +757,24 @@ router.put('/status/:orderId', async(req, res) => {
     }
 });
 
-// Customer dashboard data endpoint
-router.get('/dashboard', async(req, res) => {
+// Customer dashboard data endpoint - requires authentication (duplicate route, keeping for compatibility)
+router.get('/dashboard', authenticateJWT, async(req, res) => {
     try {
-        // Get customer ID from session or query
-        const customerId = req.query.customerId || (req.session && req.session.customerUser && req.session.customerUser.id);
+        // Get customer ID from JWT user (authenticateJWT middleware) or query parameter
+        const customerId = req.query.customerId || (req.user && req.user.id);
 
         if (!customerId) {
             return res.status(400).json({
                 success: false,
                 error: 'Customer ID is required'
+            });
+        }
+
+        // Verify customer ID matches authenticated user (security check)
+        if (req.user && req.user.id && req.user.id.toString() !== customerId.toString()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Access denied: Customer ID mismatch'
             });
         }
 
@@ -740,7 +829,7 @@ router.get('/dashboard', async(req, res) => {
             FROM orders 
             WHERE customer_id = ? AND status IN ('pending', 'processing', 'ready')
             ORDER BY created_at DESC
-        `);
+        `, [customerId]);
 
         // Get recent orders
         const [recentOrdersResult] = await db.query(`
@@ -755,7 +844,7 @@ router.get('/dashboard', async(req, res) => {
             WHERE customer_id = ? AND status = 'completed'
             ORDER BY created_at DESC
             LIMIT 10
-        `);
+        `, [customerId]);
 
         // Get total orders count
         const [totalOrdersResult] = await db.query(`
@@ -774,7 +863,7 @@ router.get('/dashboard', async(req, res) => {
             GROUP BY items
             ORDER BY orderCount DESC
             LIMIT 5
-        `);
+        `, [customerId]);
 
         // Get upcoming events
         const [eventsResult] = await db.query(`
@@ -788,7 +877,7 @@ router.get('/dashboard', async(req, res) => {
             FROM events 
             WHERE customer_id = ? AND event_date >= CURDATE()
             ORDER BY event_date ASC
-        `);
+        `, [customerId]);
 
         // Get recommendations (based on order history)
         const [recommendationsResult] = await db.query(`
@@ -917,3 +1006,4 @@ router.post('/orders/:orderId/rate', async(req, res) => {
         });
     }
 });
+module.exports = router;

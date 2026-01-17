@@ -11,8 +11,11 @@ import {
   Clock,
   User,
   Coins,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface RewardRedemption {
   id: number;
@@ -38,24 +41,47 @@ const StaffRewardProcessing: React.FC = () => {
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>([]);
   const [activeTab, setActiveTab] = useState('search');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     fetchPendingRedemptions();
+    // Auto-refresh every 10 seconds to catch new redemptions
+    const interval = setInterval(() => {
+      fetchPendingRedemptions();
+    }, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchPendingRedemptions = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/pending`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setPendingRedemptions(data.redemptions || []);
+      // Check if user is authenticated before making request
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.warn('⚠️ Staff: No auth token found, skipping fetch pending redemptions');
+        setPendingRedemptions([]);
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching pending redemptions:', error);
+
+      console.log('📋 Staff: Fetching pending redemptions from:', `${API_URL}/api/staff/reward-redemptions/pending`);
+      const response = await axiosInstance.get(`${API_URL}/api/staff/reward-redemptions/pending`);
+      
+      console.log('📋 Staff: Received redemptions:', response.data);
+      if (response.data.success) {
+        const redemptions = response.data.redemptions || [];
+        console.log(`✅ Staff: Found ${redemptions.length} pending redemptions`);
+        setPendingRedemptions(redemptions);
+      } else {
+        console.error('❌ Staff: API returned success:false', response.data.error);
+        setPendingRedemptions([]);
+      }
+    } catch (error: any) {
+      // Only log error if it's not a 401 (which we handle gracefully)
+      if (error.response?.status !== 401) {
+        console.error('❌ Staff: Error fetching pending redemptions:', error);
+      } else {
+        console.warn('⚠️ Staff: Authentication required for pending redemptions');
+      }
+      setPendingRedemptions([]);
     }
   };
 
@@ -65,28 +91,33 @@ const StaffRewardProcessing: React.FC = () => {
       return;
     }
 
+    // Check if user is authenticated
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Authentication required. Please log in again.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setRedemption(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/search/${claimCode}`, {
-        credentials: 'include'
-      });
+      // Convert to uppercase to match database (claim codes are stored in uppercase)
+      const upperCaseCode = claimCode.toUpperCase();
+      const response = await axiosInstance.get(`${API_URL}/api/staff/reward-redemptions/search/${upperCaseCode}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setRedemption(data.redemption);
-        } else {
-          setError(data.error || 'Redemption not found');
-        }
+      if (response.data.success) {
+        setRedemption(response.data.redemption);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to search redemption');
+        setError(response.data.error || 'Redemption not found');
       }
-    } catch (error) {
-      setError('Failed to search redemption');
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        setError('Authentication required. Please log in again.');
+      } else {
+        setError(error.response?.data?.error || 'Failed to search redemption');
+      }
     } finally {
       setLoading(false);
     }
@@ -97,31 +128,19 @@ const StaffRewardProcessing: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_URL}/api/staff/reward-redemptions/${redemptionId}/${action}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      });
+      const response = await axiosInstance.post(`${API_URL}/api/staff/reward-redemptions/${redemptionId}/${action}`);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setSuccess(`Reward ${action === 'complete' ? 'completed' : 'cancelled'} successfully!`);
-          setRedemption(null);
-          setClaimCode('');
-          fetchPendingRedemptions();
-          setTimeout(() => setSuccess(null), 3000);
-        } else {
-          setError(data.error || `Failed to ${action} redemption`);
-        }
+      if (response.data.success) {
+        setSuccess(`Reward ${action === 'complete' ? 'completed' : 'cancelled'} successfully!`);
+        setRedemption(null);
+        setClaimCode('');
+        fetchPendingRedemptions();
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || `Failed to ${action} redemption`);
+        setError(response.data.error || `Failed to ${action} redemption`);
       }
-    } catch (error) {
-      setError(`Failed to ${action} redemption`);
+    } catch (error: any) {
+      setError(error.response?.data?.error || `Failed to ${action} redemption`);
     } finally {
       setLoading(false);
     }
@@ -290,10 +309,23 @@ const StaffRewardProcessing: React.FC = () => {
           {/* Pending Redemptions Tab */}
           {activeTab === 'pending' && (
             <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-700">Pending Redemptions</h3>
+                <Button 
+                  onClick={() => fetchPendingRedemptions()} 
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </Button>
+              </div>
               {pendingRedemptions.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <Gift className="w-16 h-16 mx-auto mb-6 text-gray-300" />
                   <p className="text-lg">No pending redemptions</p>
+                  <p className="text-sm text-gray-400 mt-2">Customer redemption requests will appear here</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

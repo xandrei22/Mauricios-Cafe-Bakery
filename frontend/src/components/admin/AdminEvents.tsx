@@ -63,15 +63,45 @@ const AdminEvents: React.FC = () => {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/events/admin');
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        console.warn('⚠️ No JWT token found - admin events may not load');
+        toast.error('Authentication required', { description: 'Please log in again.' });
+        return;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/events/admin`, {
+        credentials: 'omit',
+        headers: headers
+      });
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          toast.error('Authentication failed', { description: 'Please log in again.' });
+          return;
+        } else if (res.status === 403) {
+          toast.error('Access denied', { description: 'Admin access required.' });
+          return;
+        }
+      }
+      
       const data = await res.json();
       if (res.ok && data.success) {
-        setEvents(data.events);
+        setEvents(data.events || []);
+        console.log(`✅ Loaded ${data.events?.length || 0} event(s)`);
       } else {
-        toast('Failed to load events', { description: data.message || 'Please try again.' });
+        toast.error('Failed to load events', { description: data.message || 'Please try again.' });
       }
-    } catch (err) {
-      toast('Network error', { description: 'Please try again.' });
+    } catch (err: any) {
+      console.error('Error fetching events:', err);
+      toast.error('Network error', { description: err.message || 'Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -84,17 +114,64 @@ const AdminEvents: React.FC = () => {
     setSocket(newSocket);
 
     // Join admin room for real-time updates
-    newSocket.emit('join-admin-room');
+    const joinAdminRoom = () => {
+      console.log('📡 AdminEvents: Joining admin-room');
+      newSocket.emit('join-admin-room');
+    };
+
+    // Join room on connect
+    newSocket.on('connect', () => {
+      console.log('✅ AdminEvents: Socket connected');
+      joinAdminRoom();
+    });
+
+    // Join room immediately if already connected
+    if (newSocket.connected) {
+      joinAdminRoom();
+    }
 
     // Listen for real-time updates
     newSocket.on('event-updated', (data) => {
-      console.log('Event updated in AdminEvents:', data);
-      fetchEvents();
+      console.log('📡 AdminEvents: Event updated received:', data);
+      if (data.type === 'event_created') {
+        console.log('🆕 New event created, refreshing events list');
+        toast.success('New Event Request', {
+          description: `New event request from ${data.customer_name} for ${data.event_date}`,
+          duration: 5000
+        });
+        fetchEvents();
+      } else {
+        fetchEvents();
+      }
+    });
+
+    // Listen for new notifications
+    newSocket.on('new-notification', (notification) => {
+      console.log('📢 AdminEvents: New notification received:', notification);
+      if (notification.notification_type === 'event_request' || notification.type === 'event_request') {
+        console.log('🆕 New event request notification, refreshing events list');
+        toast.success('New Event Request', {
+          description: notification.message || 'A new event request has been submitted',
+          duration: 5000
+        });
+        fetchEvents();
+      }
+    });
+
+    // Handle connection errors
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ AdminEvents: Socket connection error:', error);
+    });
+
+    // Handle disconnection
+    newSocket.on('disconnect', () => {
+      console.log('❌ AdminEvents: Socket disconnected');
     });
 
     fetchEvents();
 
     return () => {
+      console.log('🧹 AdminEvents: Cleaning up socket connection');
       newSocket.close();
     };
   }, []);
@@ -102,7 +179,21 @@ const AdminEvents: React.FC = () => {
   const handleAction = async (id: number, action: 'accept' | 'reject') => {
     setActionLoading(id);
     try {
-      const res = await fetch(`/api/events/${id}/${action}`, { method: 'POST' });
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {};
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/events/${id}/${action}`, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: headers
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         toast(`Event ${action}ed`, { description: data.message });
@@ -135,12 +226,22 @@ const AdminEvents: React.FC = () => {
 
     setPaymentLoading(true);
     try {
-      const res = await fetch('/api/admin/event-sales', {
+      // Get JWT token from localStorage
+      const token = localStorage.getItem('authToken');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add JWT token to headers if available
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const res = await fetch(`${API_URL}/api/admin/event-sales`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+        headers: headers,
+        credentials: 'omit',
         body: JSON.stringify({
           event_id: selectedEvent.id,
           amount: parseFloat(paymentForm.amount),
@@ -211,6 +312,15 @@ const AdminEvents: React.FC = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Event Management</h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Review and manage customer event requests</p>
         </div>
+        <Button
+          onClick={fetchEvents}
+          disabled={loading}
+          variant="outline"
+          className="flex items-center gap-2 border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
         {/* Stats Cards */}

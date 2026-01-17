@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Lock, Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../customer/AuthContext';
+import axiosInstance from '../../utils/axiosInstance';
+import { getApiUrl } from '../../utils/apiConfig';
 
 interface CustomerSettings {
     email: string;
@@ -10,7 +12,7 @@ interface CustomerSettings {
 }
 
 const CustomerSettings: React.FC = () => {
-    const { user } = useAuth();
+    const { user, refreshSession } = useAuth();
     const [settings, setSettings] = useState<CustomerSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ const CustomerSettings: React.FC = () => {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [updatingPassword, setUpdatingPassword] = useState(false);
 
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const API_URL = getApiUrl();
 
   useEffect(() => {
         fetchSettings();
@@ -38,23 +40,17 @@ const CustomerSettings: React.FC = () => {
     const fetchSettings = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${API_URL}/api/settings/customer/settings`, {
-                credentials: 'include'
-            });
+            setError(null);
+            const response = await axiosInstance.get(`${API_URL}/api/settings/customer/settings`);
 
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    setSettings(data.settings);
-                } else {
-                    setError(data.error || 'Failed to fetch settings');
-                }
+            if (response.data.success) {
+                setSettings(response.data.settings);
             } else {
-                setError('Failed to fetch settings');
+                setError(response.data.error || 'Failed to fetch settings');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching settings:', error);
-            setError('Failed to fetch settings');
+            setError(error.response?.data?.error || error.message || 'Failed to fetch settings');
         } finally {
             setLoading(false);
         }
@@ -71,32 +67,40 @@ const CustomerSettings: React.FC = () => {
             setUpdatingUsername(true);
             setError(null);
 
-            const response = await fetch(`${API_URL}/api/settings/customer/username`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    newUsername: newUsername.trim(),
-                    currentPassword: usernamePassword
-                })
+            const response = await axiosInstance.put(`${API_URL}/api/settings/customer/username`, {
+                newUsername: newUsername.trim(),
+                currentPassword: usernamePassword
             });
 
-            const data = await response.json();
-
-            if (response.ok && data.success) {
+            if (response.data.success) {
                 setSuccess('Username updated successfully!');
                 setNewUsername('');
                 setUsernamePassword('');
                 setShowUsernameForm(false);
                 fetchSettings(); // Refresh settings
+                // Update auth context and localStorage so sidebar reflects immediately
+                try {
+                    await refreshSession();
+                } catch (e) {
+                    // Fallback: patch localStorage if refreshSession fails
+                    const storedUser = localStorage.getItem('customerUser');
+                    if (storedUser) {
+                        try {
+                            const parsed = JSON.parse(storedUser);
+                            parsed.name = response.data?.username || newUsername.trim();
+                            parsed.username = response.data?.username || newUsername.trim();
+                            localStorage.setItem('customerUser', JSON.stringify(parsed));
+                            // Inform listeners that user changed
+                            window.dispatchEvent(new Event('storage'));
+                        } catch {}
+                    }
+                }
             } else {
-                setError(data.error || 'Failed to update username');
+                setError(response.data.error || 'Failed to update username');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error updating username:', error);
-            setError('Failed to update username');
+            setError(error.response?.data?.error || error.message || 'Failed to update username');
         } finally {
             setUpdatingUsername(false);
         }
@@ -109,25 +113,17 @@ const CustomerSettings: React.FC = () => {
             setUpdatingPassword(true);
             setError(null);
 
-            const response = await fetch(`${API_URL}/api/settings/customer/password/request`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include'
-            });
+            const response = await axiosInstance.post(`${API_URL}/api/settings/customer/password/request`);
 
-            const data = await response.json();
-
-            if (response.ok && data.success) {
+            if (response.data.success) {
                 setSuccess('Password change verification email sent! Please check your email and click the link to proceed.');
                 setShowPasswordForm(false);
             } else {
-                setError(data.error || 'Failed to send password change request');
+                setError(response.data.error || 'Failed to send password change request');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error requesting password change:', error);
-            setError('Failed to send password change request');
+            setError(error.response?.data?.error || error.message || 'Failed to send password change request');
         } finally {
             setUpdatingPassword(false);
         }

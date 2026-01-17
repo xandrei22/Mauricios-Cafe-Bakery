@@ -12,6 +12,7 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import React from "react";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
+import { adminLogout } from '../../utils/authUtils';
 
 const menuItems = [
   { label: "Dashboard", path: "/admin/dashboard", icon: "/images/dashboard.png" },
@@ -35,6 +36,28 @@ const AdminSidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  const storedAdmin = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('adminUser') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
+  const displayName =
+    (typeof storedAdmin?.username === 'string' && storedAdmin.username.trim().length > 0
+      ? storedAdmin.username.trim()
+      : typeof storedAdmin?.name === 'string' && storedAdmin.name.trim().length > 0
+        ? storedAdmin.name.trim()
+        : typeof storedAdmin?.email === 'string' && storedAdmin.email.length > 0
+          ? storedAdmin.email.split('@')[0]
+          : 'Admin');
+
+  const displayEmail =
+    (typeof storedAdmin?.email === 'string' && storedAdmin.email.length > 0)
+      ? storedAdmin.email
+      : 'admin@example.com';
+
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     const result = await mobileFriendlySwal.confirm(
@@ -44,8 +67,19 @@ const AdminSidebar: React.FC = () => {
       'Cancel'
     );
     if (result.isConfirmed) {
-      await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
-      navigate('/admin');
+      try {
+        // Use axiosInstance via adminLogout (includes Authorization header)
+        await adminLogout();
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        // Clear all local storage and session storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Force page reload to clear any cached data
+        window.location.href = '/admin';
+      }
     }
   };
   return (
@@ -129,8 +163,8 @@ const AdminSidebar: React.FC = () => {
               </svg>
             </div>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-              <span className="font-semibold text-[#6B5B5B]">Admin</span>
-              <span className="text-xs text-[#6B5B5B]/70">{(JSON.parse(localStorage.getItem('adminUser') || '{}')?.email) || 'admin@example.com'}</span>
+              <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
+              <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
             </div>
           </div>
         </div>

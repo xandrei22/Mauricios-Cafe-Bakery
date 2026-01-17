@@ -5,75 +5,321 @@ const notificationService = require('../services/notificationService');
 // Customer: Create event
 async function createEvent(req, res) {
     try {
-        const { customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups } = req.body;
+        console.log('📥 [Controller] ========== EVENT CREATION REQUEST ==========');
+        console.log('📥 [Controller] Event creation request received');
+        console.log('📥 [Controller] Request method:', req.method);
+        console.log('📥 [Controller] Request URL:', req.url);
+        console.log('📥 [Controller] Request body:', JSON.stringify(req.body, null, 2));
+        console.log('📥 [Controller] Request headers:', {
+            authorization: req.headers.authorization ? 'Present' : 'Missing',
+            'content-type': req.headers['content-type']
+        });
+        console.log('📥 [Controller] Authenticated user:', req.user ? {
+            id: req.user.id,
+            email: req.user.email,
+            role: req.user.role
+        } : 'Not authenticated');
+        
+        const { 
+            customer_id, 
+            customer_name, 
+            contact_name,
+            contact_number, 
+            event_date, 
+            event_start_time,
+            event_end_time,
+            address, 
+            event_type, 
+            notes, 
+            cups 
+        } = req.body;
 
         // Add debugging logs
-        console.log('Event submission received:', {
+        console.log('📋 Extracted event data:', {
             customer_id,
             customer_name,
+            contact_name,
             contact_number,
             event_date,
+            event_start_time,
+            event_end_time,
             address,
             event_type,
             notes,
             cups
         });
 
-        if (!customer_name || !contact_number || !event_date || !address || !event_type || !cups) {
-            console.log('Validation failed - missing required fields');
-            return res.status(400).json({ success: false, message: 'All required fields are required.' });
+        // Validate required fields
+        if (!customer_name) {
+            console.log('❌ Validation failed - missing customer_name');
+            return res.status(400).json({ success: false, message: 'Customer name is required.' });
+        }
+        if (!contact_number) {
+            console.log('❌ Validation failed - missing contact_number');
+            return res.status(400).json({ success: false, message: 'Contact number is required.' });
+        }
+        if (!event_date) {
+            console.log('❌ Validation failed - missing event_date');
+            return res.status(400).json({ success: false, message: 'Event date is required.' });
+        }
+        if (!event_start_time) {
+            console.log('❌ Validation failed - missing event_start_time');
+            return res.status(400).json({ success: false, message: 'Event start time is required.' });
+        }
+        if (!event_end_time) {
+            console.log('❌ Validation failed - missing event_end_time');
+            return res.status(400).json({ success: false, message: 'Event end time is required.' });
+        }
+        // Validate that end time is after start time
+        if (event_end_time <= event_start_time) {
+            console.log('❌ Validation failed - end time must be after start time');
+            return res.status(400).json({ success: false, message: 'Event end time must be after start time.' });
+        }
+        if (!address) {
+            console.log('❌ Validation failed - missing address');
+            return res.status(400).json({ success: false, message: 'Address is required.' });
+        }
+        if (!event_type) {
+            console.log('❌ Validation failed - missing event_type');
+            return res.status(400).json({ success: false, message: 'Event type is required.' });
+        }
+        // Validate cups - must be at least 80
+        const cupsNum = Number(cups);
+        if (!cups || isNaN(cupsNum) || cupsNum < 80) {
+            console.log('❌ Validation failed - invalid cups:', cups);
+            return res.status(400).json({ success: false, message: 'Minimum order is 80 cups. Please enter a valid number.' });
+        }
+        
+        // Validate and clean contact number format (Philippine mobile format)
+        const cleanedContactNumber = String(contact_number || '').replace(/[\s\-\(\)\+]/g, '');
+        console.log('🔍 Contact number validation:', {
+            original: contact_number,
+            cleaned: cleanedContactNumber,
+            length: cleanedContactNumber.length
+        });
+        
+        // Must be 11 digits starting with 09 or 0
+        if (cleanedContactNumber.length !== 11) {
+            console.log('❌ Validation failed - contact number length:', cleanedContactNumber.length, 'Expected: 11');
+            return res.status(400).json({ 
+                success: false, 
+                message: `Contact number must be 11 digits. You entered ${cleanedContactNumber.length} digits. Please use format: 09XXXXXXXXX or 0XXXXXXXXXX.` 
+            });
+        }
+        
+        const phMobileRegex = /^(09|0)\d{9}$/; // 11 digits: 09XXXXXXXXX or 0XXXXXXXXXX
+        if (!phMobileRegex.test(cleanedContactNumber)) {
+            console.log('❌ Validation failed - invalid contact number format:', contact_number, 'Cleaned:', cleanedContactNumber);
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Please enter a valid Philippine mobile number starting with 09 or 0 (11 digits total). Example: 09123456789 or 09214733335.' 
+            });
         }
 
-        console.log('Creating event in database...');
-        const eventId = await eventModel.createEvent({ customer_id, customer_name, contact_number, event_date, address, event_type, notes, cups });
-        console.log('Event created successfully with ID:', eventId);
-
-        // Create notification for new event request
+        console.log('✅ Validation passed, creating event in database...');
+        console.log('📝 Using cleaned contact number:', cleanedContactNumber);
+        
+        // Security: Ensure customer_id matches authenticated user (if provided)
+        // If customer_id is provided, it must match the authenticated user's ID
+        // If not provided or doesn't match, use authenticated user's ID
+        let finalCustomerId = customer_id;
+        let finalCustomerName = customer_name;
+        
+        if (req.user) {
+            console.log('🔐 Authenticated user:', {
+                id: req.user.id,
+                email: req.user.email,
+                role: req.user.role
+            });
+            
+            // If user is a customer, use their ID from JWT
+            if (req.user.role === 'customer') {
+                if (customer_id && customer_id !== req.user.id) {
+                    console.warn('⚠️ Security: customer_id mismatch. Using authenticated user ID instead.');
+                }
+                finalCustomerId = req.user.id;
+                // Use authenticated user's name if customer_name doesn't match
+                if (!finalCustomerName || finalCustomerName !== req.user.name) {
+                    finalCustomerName = req.user.name || req.user.email || customer_name;
+                }
+            }
+        }
+        
+        // Ensure all required fields are not undefined
+        const finalEventData = {
+            customer_id: finalCustomerId || null,
+            customer_name: finalCustomerName || 'Unknown Customer',
+            contact_name: contact_name || finalCustomerName || 'Unknown',
+            contact_number: cleanedContactNumber,
+            event_date: event_date,
+            event_start_time: event_start_time,
+            event_end_time: event_end_time,
+            address: address,
+            event_type: event_type,
+            notes: notes || null,
+            cups: cupsNum
+        };
+        
+        console.log('📝 Final event data to insert:', finalEventData);
+        
+        // Validate no critical fields are missing
+        if (!finalEventData.event_date || !finalEventData.event_start_time || !finalEventData.event_end_time) {
+            console.error('❌ Critical fields missing:', {
+                event_date: finalEventData.event_date,
+                event_start_time: finalEventData.event_start_time,
+                event_end_time: finalEventData.event_end_time
+            });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Missing required event date or time fields.' 
+            });
+        }
+        
+        let eventId;
         try {
+            console.log('🔄 [Controller] Calling eventModel.createEvent...');
+            eventId = await eventModel.createEvent(finalEventData);
+            console.log('✅ [Controller] Event created successfully with ID:', eventId);
+        } catch (dbError) {
+            console.error('❌ [Controller] Database error creating event:');
+            console.error('   Error type:', dbError.constructor.name);
+            console.error('   Error code:', dbError.code);
+            console.error('   Error message:', dbError.message);
+            console.error('   Error SQL state:', dbError.sqlState);
+            console.error('   Error stack:', dbError.stack);
+            
+            // Provide more helpful error message
+            let errorMessage = 'Failed to create event. Please try again later.';
+            let errorDetails = {};
+            
+            // Check for schema errors
+            if (dbError.code === 'ER_BAD_FIELD_ERROR') {
+                const missingField = dbError.message.match(/Unknown column '([^']+)'/);
+                if (missingField) {
+                    errorMessage = `Database configuration error: The events table is missing required columns. Please contact the administrator.`;
+                    console.error(`❌ [Controller] Missing column: ${missingField[1]}`);
+                    console.error('💡 [Controller] Run migration: node scripts/fix-events-table.js');
+                    errorDetails = {
+                        code: dbError.code,
+                        missingColumn: missingField[1],
+                        hint: 'Run: node scripts/fix-events-table.js'
+                    };
+                } else {
+                    errorMessage = 'Database configuration error. Please contact the administrator.';
+                    errorDetails = { code: dbError.code, message: dbError.message };
+                }
+            } else {
+                // Include error details in development
+                errorDetails = {
+                    code: dbError.code,
+                    message: dbError.message,
+                    sqlState: dbError.sqlState
+                };
+                if (process.env.NODE_ENV === 'development') {
+                    errorMessage = dbError.message || errorMessage;
+                }
+            }
+            
+            return res.status(500).json({ 
+                success: false, 
+                message: errorMessage,
+                error: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+            });
+        }
+
+        // Create notification for new event request (don't fail if notification fails)
+        try {
+            console.log('📢 Creating notification for event request:', eventId);
             await notificationService.notifyEventRequest({
                 id: eventId,
                 event_date: event_date,
-                cups: cups,
-                customer_name: customer_name,
-                contact_number: contact_number
+                cups: cupsNum,
+                customer_name: finalCustomerName,
+                contact_number: cleanedContactNumber
             });
+            console.log('✅ Notification created successfully');
         } catch (notificationError) {
-            console.error('Failed to create event request notification:', notificationError);
+            console.error('⚠️ Failed to create event request notification (non-critical):', notificationError);
+            console.error('⚠️ Notification error details:', {
+                message: notificationError.message,
+                stack: notificationError.stack
+            });
+            // Don't fail the request if notification fails - event is already created
         }
 
         // Emit real-time update for new event
         const io = req.app.get('io');
         if (io) {
-            io.to('admin-room').emit('event-updated', {
+            console.log('📡 Emitting Socket.IO events for new event:', eventId);
+            
+            const eventData = {
                 type: 'event_created',
                 eventId,
-                customer_name,
+                customer_name: finalCustomerName,
                 event_type,
                 event_date,
-                cups,
-                timestamp: new Date()
-            });
-            io.emit('event-updated', {
-                type: 'event_created',
-                eventId,
-                customer_name,
-                event_type,
-                event_date,
-                cups,
-                timestamp: new Date()
-            });
+                cups: cupsNum,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Notify admin room specifically (most important)
+            console.log('📡 Emitting to admin-room...');
+            io.to('admin-room').emit('event-updated', eventData);
+            
+            // Also emit new-notification event for admins (for notification system)
+            const notificationData = {
+                notification_type: 'event_request',
+                title: 'New Event Request',
+                message: `New event request for ${event_date} - ${cupsNum} cups from ${finalCustomerName}`,
+                priority: 'high',
+                eventId: eventId,
+                timestamp: new Date().toISOString()
+            };
+            console.log('📡 Emitting new-notification to admin-room...');
+            io.to('admin-room').emit('new-notification', notificationData);
+            
+            // Broadcast to all (for admin dashboard updates)
+            console.log('📡 Broadcasting event-updated to all clients...');
+            io.emit('event-updated', eventData);
+            
+            console.log('✅ All Socket.IO events emitted successfully');
+        } else {
+            console.error('❌ Socket.IO instance not available - notifications may not be delivered in real-time');
         }
 
-        res.status(201).json({ success: true, eventId });
+        console.log('✅ Sending success response to client. Event ID:', eventId);
+        res.status(201).json({ 
+            success: true, 
+            eventId: eventId,
+            message: 'Event request submitted successfully. Admin has been notified.' 
+        });
     } catch (err) {
-        console.error('Error creating event:', err);
-        res.status(500).json({ success: false, message: 'Server error.' });
+        console.error('❌ [Controller] Unexpected error in createEvent handler:');
+        console.error('   Error type:', err.constructor.name);
+        console.error('   Error message:', err.message);
+        console.error('   Error stack:', err.stack);
+        console.error('   Full error:', err);
+        
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error. Please try again later.',
+            error: process.env.NODE_ENV === 'development' ? {
+                message: err.message,
+                type: err.constructor.name,
+                stack: err.stack
+            } : undefined
+        });
     }
 }
 
 // Admin: Get all events
 async function getAllEvents(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const events = await eventModel.getAllEvents();
         res.json({ success: true, events });
     } catch (err) {
@@ -85,6 +331,14 @@ async function getAllEvents(req, res) {
 async function getEventsByCustomer(req, res) {
     try {
         const { customer_id } = req.params;
+        
+        // Security: Ensure customer can only view their own events
+        if (req.user && req.user.role === 'customer') {
+            if (req.user.id !== parseInt(customer_id)) {
+                return res.status(403).json({ success: false, message: 'Access denied. You can only view your own events.' });
+            }
+        }
+        
         const events = await eventModel.getEventsByCustomer(customer_id);
         res.json({ success: true, events });
     } catch (err) {
@@ -95,6 +349,11 @@ async function getEventsByCustomer(req, res) {
 // Admin: Accept event
 async function acceptEvent(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const { id } = req.params;
         const updated = await eventModel.updateEventStatus(id, 'accepted');
         if (!updated) return res.status(404).json({ success: false, message: 'Event not found.' });
@@ -115,9 +374,26 @@ async function acceptEvent(req, res) {
             await emailService.sendEventStatusEmail(customerEmail, 'accepted', event);
         }
 
+        // Create notification for customer
+        if (event.customer_id) {
+            try {
+                await notificationService.notifyEventStatusUpdate({
+                    eventId: id,
+                    customerId: event.customer_id,
+                    status: 'accepted',
+                    eventDate: event.event_date,
+                    eventType: event.event_type,
+                    customerName: event.customer_name
+                });
+            } catch (notificationError) {
+                console.error('Failed to create event acceptance notification:', notificationError);
+            }
+        }
+
         // Emit real-time update for event acceptance
         const io = req.app.get('io');
         if (io) {
+            // Notify admin room
             io.to('admin-room').emit('event-updated', {
                 type: 'event_accepted',
                 eventId: id,
@@ -125,6 +401,17 @@ async function acceptEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Notify customer if they have a socket connection (using email)
+            if (customerEmail) {
+                io.to(`customer-${customerEmail}`).emit('event-updated', {
+                    type: 'event_accepted',
+                    eventId: id,
+                    customer_name: event.customer_name,
+                    event_type: event.event_type,
+                    timestamp: new Date()
+                });
+            }
+            // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_accepted',
                 eventId: id,
@@ -132,10 +419,21 @@ async function acceptEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Emit new notification event for customer (broadcast, will be filtered by user_id on frontend)
+            if (event.customer_id) {
+                io.emit('new-notification', {
+                    user_id: event.customer_id,
+                    user_type: 'customer',
+                    notification_type: 'event_request',
+                    title: 'Event Request Accepted',
+                    message: `Your event request for ${event.event_date} has been accepted! You will be contacted for further details.`
+                });
+            }
         }
 
         res.json({ success: true, message: 'Event accepted. Customer notified.' });
     } catch (err) {
+        console.error('Error accepting event:', err);
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 }
@@ -143,6 +441,11 @@ async function acceptEvent(req, res) {
 // Admin: Reject event
 async function rejectEvent(req, res) {
     try {
+        // Check if user is admin
+        if (!req.user || req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, message: 'Access denied. Admin role required.' });
+        }
+        
         const { id } = req.params;
         const updated = await eventModel.updateEventStatus(id, 'rejected');
         if (!updated) return res.status(404).json({ success: false, message: 'Event not found.' });
@@ -163,9 +466,26 @@ async function rejectEvent(req, res) {
             await emailService.sendEventStatusEmail(customerEmail, 'rejected', event);
         }
 
+        // Create notification for customer
+        if (event.customer_id) {
+            try {
+                await notificationService.notifyEventStatusUpdate({
+                    eventId: id,
+                    customerId: event.customer_id,
+                    status: 'rejected',
+                    eventDate: event.event_date,
+                    eventType: event.event_type,
+                    customerName: event.customer_name
+                });
+            } catch (notificationError) {
+                console.error('Failed to create event rejection notification:', notificationError);
+            }
+        }
+
         // Emit real-time update for event rejection
         const io = req.app.get('io');
         if (io) {
+            // Notify admin room
             io.to('admin-room').emit('event-updated', {
                 type: 'event_rejected',
                 eventId: id,
@@ -173,6 +493,17 @@ async function rejectEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Notify customer if they have a socket connection (using email)
+            if (customerEmail) {
+                io.to(`customer-${customerEmail}`).emit('event-updated', {
+                    type: 'event_rejected',
+                    eventId: id,
+                    customer_name: event.customer_name,
+                    event_type: event.event_type,
+                    timestamp: new Date()
+                });
+            }
+            // Broadcast to all (for admin dashboard updates)
             io.emit('event-updated', {
                 type: 'event_rejected',
                 eventId: id,
@@ -180,10 +511,21 @@ async function rejectEvent(req, res) {
                 event_type: event.event_type,
                 timestamp: new Date()
             });
+            // Emit new notification event for customer (broadcast, will be filtered by user_id on frontend)
+            if (event.customer_id) {
+                io.emit('new-notification', {
+                    user_id: event.customer_id,
+                    user_type: 'customer',
+                    notification_type: 'event_request',
+                    title: 'Event Request Rejected',
+                    message: `Your event request for ${event.event_date} has been rejected. Please contact us for more information.`
+                });
+            }
         }
 
         res.json({ success: true, message: 'Event rejected. Customer notified.' });
     } catch (err) {
+        console.error('Error rejecting event:', err);
         res.status(500).json({ success: false, message: 'Server error.' });
     }
 }

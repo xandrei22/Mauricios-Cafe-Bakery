@@ -12,21 +12,14 @@ function generateClaimCode() {
     return result;
 }
 const qrService = require('../services/qrService');
-const { ensureAuthenticated } = require('../middleware/authMiddleware');
-const { ensureStaffAuthenticated } = require('../middleware/staffAuthMiddleware');
+// Note: ensureAuthenticated and ensureStaffAuthenticated removed - all routes now use authenticateJWT (JWT-only)
+const { authenticateJWT } = require('../middleware/jwtAuth');
 
-// Apply authentication to all loyalty routes
-router.use(ensureAuthenticated);
+// Apply authentication to all loyalty routes - uses JWT
+router.use(authenticateJWT);
 
-// Get customer loyalty points
-router.get('/points/:customerId', (req, res, next) => {
-    // Check if staff is authenticated, otherwise use regular auth
-    if (req.session.staffUser && (req.session.staffUser.role === 'staff' || req.session.staffUser.role === 'admin')) {
-        return next();
-    }
-    // Fall back to regular authentication
-    return ensureAuthenticated(req, res, next);
-}, async(req, res) => {
+// Get customer loyalty points - requires authentication
+router.get('/points/:customerId', async(req, res) => {
     try {
         const { customerId } = req.params;
 
@@ -118,6 +111,22 @@ router.post('/earn', async(req, res) => {
             const [customers] = await db.query(`
                 SELECT loyalty_points FROM customers WHERE id = ?
             `, [customerId]);
+
+            // Emit loyalty update event
+            const io = req.app.get('io');
+            if (io) {
+                // Get customer email for room targeting
+                const [customerEmail] = await db.query('SELECT email FROM customers WHERE id = ?', [customerId]);
+                if (customerEmail.length > 0) {
+                    io.to(`customer-${customerEmail[0].email}`).emit('loyalty-updated', {
+                        customerId,
+                        pointsEarned,
+                        newBalance: customers[0].loyalty_points,
+                        orderId,
+                        timestamp: new Date()
+                    });
+                }
+            }
 
             res.json({
                 success: true,
@@ -280,13 +289,50 @@ router.post('/redeem-reward', async(req, res) => {
         // Create reward redemption record with 20-minute expiration
         const expirationTime = new Date(Date.now() + 20 * 60 * 1000); // 20 minutes from now
 
-        const [redemptionResult] = await db.query(`
-            INSERT INTO loyalty_reward_redemptions 
-            (customer_id, reward_id, order_id, points_redeemed, redemption_proof, staff_id, status, expires_at, claim_code) 
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-        `, [customerId, rewardId, orderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
+        // Handle NULL order_id - allow NULL for redemptions without an order
+        // Note: The database should allow NULL for order_id (see fix-redemption-order-id-null.sql)
+        const effectiveOrderId = orderId || null;
 
-        const redemptionId = redemptionResult.insertId;
+        let redemptionId;
+        try {
+            const [redemptionResult] = await db.query(`
+                INSERT INTO loyalty_reward_redemptions 
+                (customer_id, reward_id, order_id, points_redeemed, redemption_proof, staff_id, status, expires_at, claim_code) 
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            `, [customerId, rewardId, effectiveOrderId, reward.points_required, redemptionProof, staffId || null, expirationTime, claimCode]);
+
+            redemptionId = redemptionResult.insertId;
+            console.log('✅ Redemption created successfully:', {
+                redemptionId,
+                claimCode,
+                customerId,
+                rewardId,
+                orderId: effectiveOrderId
+            });
+        } catch (insertError) {
+            console.error('❌ Failed to insert redemption:', insertError);
+            console.error('   Error code:', insertError.code);
+            console.error('   Error message:', insertError.message);
+            console.error('   SQL state:', insertError.sqlState);
+            console.error('   Attempted values:', {
+                customerId,
+                rewardId,
+                orderId: effectiveOrderId,
+                points_redeemed: reward.points_required,
+                claimCode
+            });
+            
+            // Check if it's a NOT NULL constraint error
+            if (insertError.code === 'ER_BAD_NULL_ERROR' || insertError.message?.includes('NULL')) {
+                return res.status(500).json({ 
+                    success: false, 
+                    error: 'Database configuration error: order_id cannot be NULL. Please run the database migration script (fix-redemption-order-id.js) to allow NULL order_id values.',
+                    details: insertError.message
+                });
+            }
+            
+            throw insertError; // Re-throw to be caught by outer catch
+        }
 
         // Deduct points from effective balance to keep DB in sync
         const newBalance = Math.max(0, currentPoints - reward.points_required);
@@ -612,7 +658,7 @@ router.post('/redeem', (req, res, next) => {
         return next();
     }
     // Fall back to regular authentication
-    return ensureAuthenticated(req, res, next);
+    return authenticateJWT(req, res, next);
 }, async(req, res) => {
     try {
         const { customerId, pointsToRedeem, redemptionType, description } = req.body;
@@ -1046,7 +1092,7 @@ router.get('/staff/pending', async(req, res) => {
 });
 
 // Staff: Process redemption (complete or cancel)
-router.post('/staff/:redemptionId/:action', ensureStaffAuthenticated, async(req, res) => {
+router.post('/staff/:redemptionId/:action', authenticateJWT, async(req, res) => {
     try {
         const { redemptionId, action } = req.params;
         const staffId = req.user.id;

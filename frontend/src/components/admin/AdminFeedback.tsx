@@ -8,6 +8,7 @@ import { io, Socket } from 'socket.io-client';
 import Swal from 'sweetalert2';
 import '../customer/progress-bar.css';
 import RatingBar from '../ui/RatingBar';
+import axiosInstance from '../../utils/axiosInstance';
 
 interface Feedback {
   id: number;
@@ -62,7 +63,7 @@ export default function AdminFeedback() {
   const fetchFeedbacks = async () => {
     try {
       const response = await fetch('/api/feedback', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -78,7 +79,7 @@ export default function AdminFeedback() {
   const fetchMetrics = async () => {
     try {
       const response = await fetch('/api/feedback/metrics', {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -102,12 +103,10 @@ export default function AdminFeedback() {
 
     if (result.isConfirmed) {
       try {
-        const response = await fetch(`/api/feedback/${feedbackId}`, {
-          method: 'DELETE',
-          credentials: 'include'
-        });
+        // Use secured axios instance to include Authorization header automatically
+        const response = await axiosInstance.delete(`/api/feedback/${feedbackId}`);
 
-        if (response.ok) {
+        if (response.status >= 200 && response.status < 300) {
           // Remove from local state
           setFeedbacks(prev => prev.filter(f => f.id !== feedbackId));
           // Refresh metrics

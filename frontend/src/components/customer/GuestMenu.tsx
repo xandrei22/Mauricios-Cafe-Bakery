@@ -40,6 +40,7 @@ const GuestMenu: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showGuestOrderForm, setShowGuestOrderForm] = useState(false);
+  const [isCartMinimized, setIsCartMinimized] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -597,8 +598,18 @@ const GuestMenu: React.FC = () => {
         )}
 
         {/* Cart Summary (Floating) */}
-        {cartItems.length > 0 && (
+        {cartItems.length > 0 && !isCartMinimized && (
           <div className="fixed bottom-6 right-6 bg-white rounded-2xl shadow-2xl p-6 border-0 max-w-sm z-50">
+            <div className="absolute -top-3 -right-3">
+              <button
+                type="button"
+                onClick={() => setIsCartMinimized(true)}
+                className="h-8 w-8 rounded-full bg-[#a87437] text-white shadow-md hover:bg-[#8f652f]"
+                title="Minimize"
+              >
+                –
+              </button>
+            </div>
             <div className="flex items-center gap-2 mb-4">
               <ShoppingCart className="h-5 w-5 text-[#a87437]" />
               <h3 className="font-bold text-lg text-[#6B5B5B]">Your Cart</h3>
@@ -653,6 +664,18 @@ const GuestMenu: React.FC = () => {
               </Button>
             </div>
           </div>
+        )}
+
+        {/* Reopen pill when minimized */}
+        {cartItems.length > 0 && isCartMinimized && (
+          <button
+            type="button"
+            onClick={() => setIsCartMinimized(false)}
+            className="fixed bottom-6 right-6 z-50 bg-[#a87437] hover:bg-[#8f652f] text-white px-4 py-3 rounded-full shadow-lg"
+            title="Open cart"
+          >
+            Open Cart ({getCartItemCount()})
+          </button>
         )}
       </div>
 

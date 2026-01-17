@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../customer/AuthContext';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '../ui/tabs';
+// Tabs removed - no longer using tab navigation
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -29,9 +23,13 @@ import {
   ClipboardCheck,
   XCircle,
   CircleDotDashed,
+  Search,
+  User,
+  Coins,
   // CircleDot
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import axiosInstance from '../../utils/axiosInstance';
 
 interface ClaimedReward {
   id: number;
@@ -50,6 +48,7 @@ interface ClaimedReward {
   staff_id: number | null;
   redemption_proof: string | null;
   order_id: number | null;
+  claim_code?: string; // claim code for redemption
 }
 
 // Removed unused LoyaltySettings interface
@@ -112,40 +111,38 @@ const CountdownTimer: React.FC<{ expiryDate: string }> = ({ expiryDate }) => {
 };
 
 const AdminRewardProcessing: React.FC = () => {
-  const { user } = useAuth();
   const [claimedRewards, setClaimedRewards] = useState<ClaimedReward[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingRewardId, setProcessingRewardId] = useState<number | null>(null);
-  const [staffId, setStaffId] = useState<number | null>(null);
   const [redemptionProof, setRedemptionProof] = useState<string>('');
-  const [activeTab, setActiveTab] = useState('pending');
+  // Removed activeTab - always showing pending redemptions
   const [stats, setStats] = useState<LoyaltyStats | null>(null);
+  const [claimCode, setClaimCode] = useState('');
+  const [searchResult, setSearchResult] = useState<ClaimedReward | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const fetchClaimedRewards = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
-      // Prefer admin redemptions API (supports filtering and consistent fields)
-      const params = new URLSearchParams();
-      if (activeTab === 'pending') params.set('status', 'pending');
-      if (activeTab === 'processed' || activeTab === 'completed') params.set('status', 'completed');
-      if (activeTab === 'cancelled') params.set('status', 'cancelled');
-      if (activeTab === 'expired') params.set('status', 'expired');
-      const response = await fetch(`/api/admin/loyalty/redemptions?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.success) {
+      // Always fetch pending redemptions
+      const url = '/api/staff/reward-redemptions/pending';
+      console.log('📋 Admin: Fetching redemptions from:', url);
+      console.log('📋 Admin: axiosInstance baseURL:', axiosInstance.defaults.baseURL);
+      console.log('📋 Admin: Full URL will be:', `${axiosInstance.defaults.baseURL}${url}`);
+      console.log('📋 Admin: Auth token exists:', !!localStorage.getItem('authToken'));
+      
+      const response = await axiosInstance.get(url);
+      console.log('📋 Admin: Received response status:', response.status);
+      console.log('📋 Admin: Received response data:', response.data);
+      
+      if (response.data && response.data.success) {
         // Normalize fields so the table renders regardless of source names
-        const normalized: ClaimedReward[] = (data.redemptions || []).map((r: any) => ({
+        // Handle both staff endpoint format (redemptions array) and admin endpoint format
+        const redemptionsData = response.data.redemptions || [];
+        const normalized: ClaimedReward[] = redemptionsData.map((r: any) => ({
           id: r.id,
           customer_id: r.customer_id,
           customer_name: r.customer_name,
@@ -153,8 +150,8 @@ const AdminRewardProcessing: React.FC = () => {
           reward_id: r.reward_id,
           reward_name: r.reward_name,
           reward_type: r.reward_type,
-          description: r.reward_description,
-          points_cost: r.points_required ?? r.points_cost,
+          description: r.reward_description || r.description || '',
+          points_cost: r.points_required ?? r.points_redeemed ?? r.points_cost,
           points_required: r.points_required,
           redemption_date: r.redemption_date ?? r.created_at ?? null,
           expires_at: r.expires_at,
@@ -162,56 +159,173 @@ const AdminRewardProcessing: React.FC = () => {
           staff_id: r.staff_id ?? null,
           redemption_proof: r.redemption_proof ?? null,
           order_id: r.order_id ?? null,
+          claim_code: r.claim_code ?? null,
         }));
+        console.log(`✅ Admin: Found ${normalized.length} pending redemptions`);
         setClaimedRewards(normalized);
+        setError(null); // Clear any previous errors
       } else {
-        setError(data.error || 'Failed to fetch claimed rewards');
+        console.error('❌ Admin: API returned success:false', response.data);
+        setError(response.data?.error || 'Failed to fetch claimed rewards');
+        setClaimedRewards([]); // Set empty array on error
       }
     } catch (err: any) {
-      console.error('Error fetching claimed rewards:', err);
-      setError(err.message || 'An unexpected error occurred');
+      console.error('❌ Admin: Error fetching claimed rewards:', err);
+      console.error('❌ Admin: Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        url: '/api/admin/loyalty/redemptions',
+        hasToken: !!localStorage.getItem('authToken'),
+        tokenPreview: localStorage.getItem('authToken')?.substring(0, 20) + '...',
+        errorType: err.code || 'unknown'
+      });
+      
+      // Set empty array on error to prevent UI issues
+      setClaimedRewards([]);
+      
+      // Provide more specific error messages
+      if (!err.response) {
+        // Network error or CORS issue
+        if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+          setError('Network error: Unable to connect to server. Please check your connection and try again.');
+        } else {
+          setError('Connection error. Please check your internet connection and try again.');
+        }
+      } else if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+      } else if (err.response?.status === 403) {
+        setError('Access denied. Admin privileges required.');
+      } else if (err.response?.status === 404) {
+        setError('Endpoint not found. Please contact support.');
+      } else if (err.response?.status >= 500) {
+        setError('Server error. Please try again later.');
+      } else if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('Failed to fetch redemptions. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, []);
 
   const fetchLoyaltyStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/loyalty/statistics', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Calculate stats from redemptions data instead of separate endpoint
+      // This avoids needing a separate statistics endpoint
+      // Try admin endpoint first, fallback to fetching pending from staff endpoint
+      let response;
+      try {
+        response = await axiosInstance.get('/api/admin/loyalty/redemptions?limit=1000');
+      } catch (err) {
+        // If admin endpoint fails, fetch pending from staff endpoint
+        response = await axiosInstance.get('/api/staff/reward-redemptions/pending');
+        // For stats, we'll just use pending count if admin endpoint fails
+        if (response.data.success && response.data.redemptions) {
+          const redemptions = response.data.redemptions;
+          const stats = {
+            totalClaimed: redemptions.length,
+            pendingProcessing: redemptions.length,
+            processedToday: 0,
+            expiredToday: 0
+          };
+          setStats(stats);
+          return;
+        }
       }
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.stats);
-      } else {
-        console.error('Failed to fetch loyalty stats:', data.error);
+      if (response.data.success && response.data.redemptions) {
+        const redemptions = response.data.redemptions;
+        const stats = {
+          totalClaimed: redemptions.length,
+          pendingProcessing: redemptions.filter((r: any) => r.status === 'pending').length,
+          processedToday: redemptions.filter((r: any) => {
+            if (r.status === 'completed' || r.status === 'processed') {
+              const processedDate = new Date(r.processed_at || r.updated_at || r.redemption_date);
+              const today = new Date();
+              return processedDate.toDateString() === today.toDateString();
+            }
+            return false;
+          }).length,
+          expiredToday: redemptions.filter((r: any) => {
+            if (r.status === 'expired') {
+              const expiredDate = new Date(r.expires_at);
+              const today = new Date();
+              return expiredDate.toDateString() === today.toDateString();
+            }
+            return false;
+          }).length
+        };
+        setStats(stats);
       }
     } catch (err) {
       console.error('Error fetching loyalty stats:', err);
+      // Don't set error state for stats - it's not critical
     }
   }, []);
 
   useEffect(() => {
     fetchClaimedRewards();
     fetchLoyaltyStats();
-    // Set staffId from localStorage or default to 9 for testing
-    const storedStaffId = localStorage.getItem('staffId');
-    setStaffId(storedStaffId ? parseInt(storedStaffId) : (user?.id || 9)); // Fallback to 9 if user.id is not available
-  }, [fetchClaimedRewards, fetchLoyaltyStats, user?.id]);
+    
+    // Auto-refresh every 10 seconds to catch new redemptions
+    const interval = setInterval(() => {
+      fetchClaimedRewards();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchClaimedRewards, fetchLoyaltyStats]);
 
-  const processReward = async (rewardId: number, status: 'processed' | 'cancelled') => {
-    if (!staffId) {
-      Swal.fire('Error', 'Staff ID not available. Please log in as staff.', 'error');
+  const searchByClaimCode = async () => {
+    if (!claimCode.trim()) {
+      setSearchError('Please enter a claim code');
       return;
     }
 
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchResult(null);
+
+    try {
+      // Use staff endpoint which supports both staff and admin
+      const response = await axiosInstance.get(`/api/staff/reward-redemptions/search/${claimCode.toUpperCase()}`);
+
+      if (response.data.success) {
+        // Normalize the redemption data to match ClaimedReward interface
+        const r = response.data.redemption;
+        const normalized: ClaimedReward = {
+          id: r.id,
+          customer_id: r.customer_id,
+          customer_name: r.customer_name,
+          customer_email: r.customer_email,
+          reward_id: r.reward_id,
+          reward_name: r.reward_name,
+          reward_type: r.reward_type,
+          description: r.reward_description || r.description || '',
+          points_cost: r.points_required || r.points_redeemed,
+          points_required: r.points_required,
+          redemption_date: r.redemption_date || r.created_at || null,
+          expires_at: r.expires_at,
+          status: r.status,
+          staff_id: r.staff_id || null,
+          redemption_proof: r.redemption_proof || null,
+          order_id: r.order_id || null,
+          claim_code: r.claim_code || null,
+        };
+        setSearchResult(normalized);
+      } else {
+        setSearchError(response.data.error || 'Redemption not found');
+      }
+    } catch (error: any) {
+      setSearchError(error.response?.data?.error || 'Failed to search redemption');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const processReward = async (rewardId: number, status: 'processed' | 'cancelled') => {
     if (status === 'processed' && !redemptionProof.trim()) {
       Swal.fire('Error', 'Redemption proof is required to process the reward.', 'error');
       return;
@@ -219,52 +333,31 @@ const AdminRewardProcessing: React.FC = () => {
 
     setProcessingRewardId(rewardId);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/loyalty/redemptions/${rewardId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          adminId: user?.id,
-          status: status === 'processed' ? 'completed' : 'cancelled',
-          notes: status === 'processed' ? (redemptionProof.trim() || 'Processed by admin') : 'Cancelled by admin',
-        }),
-      });
+      // Use staff endpoint which supports both staff and admin
+      const action = status === 'processed' ? 'complete' : 'cancel';
+      const response = await axiosInstance.post(`/api/staff/reward-redemptions/${rewardId}/${action}`);
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || `Failed to ${status} reward`);
+      if (response.data.success) {
+        Swal.fire('Success', `Reward ${status === 'processed' ? 'processed' : 'cancelled'} successfully!`, 'success');
+        setRedemptionProof('');
+        setSearchResult(null);
+        setClaimCode('');
+        fetchClaimedRewards(); // Refresh the list
+        fetchLoyaltyStats(); // Refresh stats
+      } else {
+        throw new Error(response.data.error || `Failed to ${status} reward`);
       }
-
-      Swal.fire('Success', `Reward ${status} successfully!`, 'success');
-      setRedemptionProof('');
-      fetchClaimedRewards(); // Refresh the list
-      fetchLoyaltyStats(); // Refresh stats
     } catch (err: any) {
       console.error(`Error ${status} reward:`, err);
-      Swal.fire('Error', err.message || `Failed to ${status} reward.`, 'error');
+      Swal.fire('Error', err.response?.data?.error || err.message || `Failed to ${status} reward.`, 'error');
     } finally {
       setProcessingRewardId(null);
     }
   };
 
-  const filteredRewards = claimedRewards.filter((reward) => {
-    const now = new Date();
-    const expiry = new Date(reward.expires_at);
-    if (activeTab === 'pending') {
-      return reward.status === 'pending' && expiry > now;
-    } else if (activeTab === 'processed') {
-      return reward.status === 'completed' || reward.status === 'processed';
-    } else if (activeTab === 'cancelled') {
-      return reward.status === 'cancelled';
-    } else if (activeTab === 'expired') {
-      return reward.status === 'pending' && expiry <= now;
-    }
-    return true;
-  });
+  // Don't filter - the backend already filters by status
+  // Just use the claimedRewards directly since they're already filtered by activeTab
+  const filteredRewards = claimedRewards;
 
   if (loading) {
     return (
@@ -275,11 +368,11 @@ const AdminRewardProcessing: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !loading) {
     return (
       <div className="text-center p-4 text-red-600">
         <AlertCircle className="h-10 w-10 mx-auto mb-2" />
-        <p>Error: {error}</p>
+        <p className="mb-2">Error: {error}</p>
         <Button onClick={fetchClaimedRewards} className="mt-4">
           <RefreshCw className="w-4 h-4 mr-2" /> Retry
         </Button>
@@ -287,9 +380,148 @@ const AdminRewardProcessing: React.FC = () => {
     );
   }
 
+  const isExpired = (expiresAt: string) => {
+    return new Date(expiresAt) < new Date();
+  };
+
   return (
     <div className="p-6 bg-white min-h-screen">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Reward Processing</h1>
+
+      {/* Search by Code Section */}
+      <Card className="mb-6 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Search className="w-5 h-5" />
+            Search by Code
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Enter claim code (e.g., ABC12345)"
+                value={claimCode}
+                onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+                className="text-lg font-mono tracking-wider h-12 px-4"
+                onKeyPress={(e) => e.key === 'Enter' && searchByClaimCode()}
+              />
+            </div>
+            <Button 
+              onClick={searchByClaimCode}
+              disabled={searchLoading || !claimCode.trim()}
+              className="bg-[#a87437] hover:bg-[#a87437]/90 text-white h-12 px-8"
+            >
+              <Search className="w-5 h-5 mr-2" />
+              {searchLoading ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+
+          {searchError && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-800">
+              <AlertCircle className="w-5 h-5" />
+              <span>{searchError}</span>
+              <button onClick={() => setSearchError(null)} className="ml-auto text-red-600 hover:text-red-800">
+                ×
+              </button>
+            </div>
+          )}
+
+          {searchResult && (
+            <Card className="mt-4 border-2 border-[#a87437]/20 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between text-xl">
+                  <span className="text-[#6B5B5B]">Redemption Found</span>
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    searchResult.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                    searchResult.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    searchResult.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {searchResult.status.toUpperCase()}
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 pt-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-3 text-lg">Customer Information</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-gray-500" />
+                        <span className="text-sm">{searchResult.customer_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">{searchResult.customer_email}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-semibold text-gray-700 mb-3 text-lg">Reward Details</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Gift className="w-4 h-4 text-green-600" />
+                        <span className="text-sm font-medium">{searchResult.reward_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm">{searchResult.points_cost} points</span>
+                      </div>
+                      <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                        Code: {claimCode}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-6">
+                  <div className="flex items-center justify-between text-sm text-gray-600 mb-6">
+                    <span>Redemption Date: {searchResult.redemption_date ? new Date(searchResult.redemption_date).toLocaleString() : 'N/A'}</span>
+                    <span className={isExpired(searchResult.expires_at) ? 'text-red-600' : 'text-green-600'}>
+                      Expires: {new Date(searchResult.expires_at).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {searchResult.status === 'pending' && !isExpired(searchResult.expires_at) && (
+                    <div className="flex gap-4">
+                      <Input
+                        placeholder="Redemption Proof (e.g., Staff Name)"
+                        value={redemptionProof}
+                        onChange={(e) => setRedemptionProof(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        onClick={() => processReward(searchResult.id, 'processed')}
+                        className="bg-[#a87437] hover:bg-[#a87437]/90 text-white px-6 py-3"
+                        disabled={processingRewardId === searchResult.id || !redemptionProof.trim()}
+                      >
+                        <CheckCircle className="w-5 h-5 mr-2" />
+                        Complete Redemption
+                      </Button>
+                      <Button
+                        onClick={() => processReward(searchResult.id, 'cancelled')}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50 px-6 py-3"
+                        disabled={processingRewardId === searchResult.id}
+                      >
+                        <XCircle className="w-5 h-5 mr-2" />
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+
+                  {isExpired(searchResult.expires_at) && (
+                    <div className="text-center py-4 text-red-600 font-medium">
+                      This redemption has expired and cannot be processed.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
 
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -336,33 +568,38 @@ const AdminRewardProcessing: React.FC = () => {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="processed">Processed</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-          <TabsTrigger value="expired">Expired</TabsTrigger>
-        </TabsList>
-        <TabsContent value="pending" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Pending Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No pending rewards to process.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Expires In</TableHead>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead className="w-[200px]">Proof / Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold text-gray-700">Pending Rewards</h2>
+          <Button 
+            onClick={() => fetchClaimedRewards()} 
+            variant="outline" 
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
+        {claimedRewards.length === 0 ? (
+          <p className="text-gray-500">No pending rewards to process.</p>
+        ) : (
+          <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Reward</TableHead>
+                  <TableHead>Points Cost</TableHead>
+                  <TableHead>Claim Code</TableHead>
+                  <TableHead>Claimed At</TableHead>
+                  <TableHead>Expires In</TableHead>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead className="w-[200px]">Proof / Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {claimedRewards.map((reward) => (
                     <TableRow key={reward.id}>
                       <TableCell>
                         <div className="font-medium">{reward.customer_name}</div>
@@ -373,6 +610,11 @@ const AdminRewardProcessing: React.FC = () => {
                         <div className="text-sm text-gray-500">{reward.description}</div>
                       </TableCell>
                       <TableCell className="font-medium">{reward.points_cost}</TableCell>
+                      <TableCell>
+                        <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded text-center">
+                          {reward.claim_code || 'N/A'}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-1 text-sm">
                           <Calendar className="w-4 h-4 text-gray-500" />
@@ -433,172 +675,7 @@ const AdminRewardProcessing: React.FC = () => {
               </Table>
             </div>
           )}
-        </TabsContent>
-        <TabsContent value="processed" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Processed Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have been processed yet.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Processed At</TableHead>
-                    <TableHead>Processed By</TableHead>
-                    <TableHead>Proof</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {reward.redemption_date ? (
-                          <div className="flex items-center space-x-1 text-sm">
-                            <Calendar className="w-4 h-4 text-gray-500" />
-                            <span>{new Date(reward.redemption_date).toLocaleDateString()}</span>
-                          </div>
-                        ) : 'N/A'}
-                        {reward.redemption_date ? (
-                          <div className="flex items-center space-x-1 text-sm text-gray-500">
-                            <Clock className="w-4 h-4" />
-                            <span>{new Date(reward.redemption_date).toLocaleTimeString()}</span>
-                          </div>
-                        ) : ''}
-                      </TableCell>
-                      <TableCell>{reward.staff_id || 'N/A'}</TableCell>
-                      <TableCell>{reward.redemption_proof || 'N/A'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="cancelled" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Cancelled Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have been cancelled.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-red-600">{reward.status.toUpperCase()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-        <TabsContent value="expired" className="mt-4">
-          <h2 className="text-2xl font-semibold text-gray-700 mb-4">Expired Rewards</h2>
-          {filteredRewards.length === 0 ? (
-            <p className="text-gray-500">No rewards have expired.</p>
-          ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Reward</TableHead>
-                    <TableHead>Points Cost</TableHead>
-                    <TableHead>Claimed At</TableHead>
-                    <TableHead>Expired At</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredRewards.map((reward) => (
-                    <TableRow key={reward.id}>
-                      <TableCell>
-                        <div className="font-medium">{reward.customer_name}</div>
-                        <div className="text-sm text-gray-500">{reward.customer_email}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{reward.reward_name}</div>
-                        <div className="text-sm text-gray-500">{reward.description}</div>
-                      </TableCell>
-                      <TableCell className="font-medium">{reward.points_cost}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleDateString() : '—'}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{reward.redemption_date ? new Date(reward.redemption_date).toLocaleTimeString() : ''}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium text-red-600">
-                        <div className="flex items-center space-x-1 text-sm">
-                          <Calendar className="w-4 h-4 text-gray-500" />
-                          <span>{new Date(reward.expires_at).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 text-sm text-gray-500">
-                          <Clock className="w-4 h-4" />
-                          <span>{new Date(reward.expires_at).toLocaleTimeString()}</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 };

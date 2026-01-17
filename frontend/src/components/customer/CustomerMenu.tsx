@@ -105,7 +105,7 @@ const CustomerMenu: React.FC = () => {
       
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/guest/menu`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (!response.ok) {
@@ -147,7 +147,7 @@ const CustomerMenu: React.FC = () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
       const response = await fetch(`${API_URL}/api/menu/categories`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -167,7 +167,7 @@ const CustomerMenu: React.FC = () => {
     const newSocket = io(API_URL, {
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -206,7 +206,7 @@ const CustomerMenu: React.FC = () => {
     return () => {
       newSocket.close();
     };
-  }, [user?.email]);
+  }, [user?.email]); // Already correct - using user?.email
 
   // Filter and sort items when search/category/sort changes
   useEffect(() => {
@@ -343,15 +343,14 @@ const CustomerMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 pt-4">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
         <div className="space-y-4 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-            <div className="min-w-0 flex-1">
+          {/* Header */}
+          <div className="space-y-4 sm:space-y-6">
+            <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Menu</h1>
               <p className="text-sm sm:text-base text-gray-600 mt-1">Explore our delicious selection of coffee and beverages</p>
             </div>
-          </div>
           
           {/* Table Number Display */}
           {hasValidTableAccess && (
@@ -381,37 +380,37 @@ const CustomerMenu: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-
-      {/* Search and Filters */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search Input */}
-          <div className="relative flex-1">
-            <Input
-              placeholder="Search menu items..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="pr-12 h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 flex items-center py-3 px-3"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleSearch}
-              aria-label="Search menu items"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 flex items-center justify-center hover:bg-[#a87437]/10 rounded-md transition-colors"
-            >
-              <Search className="h-4 w-4 text-[#a87437]" />
-            </button>
           </div>
 
-          {/* Category Filter */}
+          {/* Search and Filters */}
+          <div className="flex flex-row flex-wrap items-center gap-3 justify-end w-full">
+        {/* Search Input - Full width on mobile, fixed width on larger screens */}
+        <div className="relative w-full sm:w-96 md:w-[28rem]">
+          <Input
+            placeholder="Search menu items..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="pr-12 h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 flex items-center py-3 px-3 w-full"
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            aria-label="Search menu items"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 flex items-center justify-center hover:bg-[#a87437]/10 rounded-md transition-colors"
+          >
+            <Search className="h-4 w-4 text-[#a87437]" />
+          </button>
+        </div>
+
+        {/* Category Filter */}
+        <div className="flex-shrink-0">
           <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-            <SelectTrigger className="h-12 text-lg border-2 border-[#a87437] rounded-xl focus:border-[#8f652f] focus:ring-2 focus:ring-[#a87437]/20 pr-8 flex items-center py-3 px-3">
+            <SelectTrigger className="h-12 text-lg border border-gray-300 rounded-xl focus:border-gray-400 focus:ring-2 focus:ring-gray-200 pr-8 flex items-center py-3 px-3 w-auto min-w-fit">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -423,16 +422,17 @@ const CustomerMenu: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
+        </div>
 
-          {/* View Toggle */}
-          <div className="relative" ref={moreMenuRef}>
-            <Button
-              variant="outline"
-              onClick={() => setShowMoreMenu(!showMoreMenu)}
-              className="h-12 w-12 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </Button>
+        {/* View Toggle */}
+        <div className="relative flex-shrink-0" ref={moreMenuRef}>
+          <Button
+            variant="outline"
+            onClick={() => setShowMoreMenu(!showMoreMenu)}
+            className="h-12 w-12 border-[#a87437] text-[#6B5B5B] hover:bg-[#a87437]/10"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </Button>
             
             {/* Dropdown Menu */}
             {showMoreMenu && (
@@ -467,10 +467,9 @@ const CustomerMenu: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
         <Card className="border-2 border-gray-300 shadow-xl hover:shadow-2xl transition-shadow duration-300">
           <CardContent className="p-6 text-center">
             <div className="text-3xl font-bold text-gray-700 mb-2">{totalItems}</div>
@@ -495,152 +494,148 @@ const CustomerMenu: React.FC = () => {
             <div className="text-sm text-gray-600">Categories</div>
           </CardContent>
         </Card>
-      </div>
+          </div>
 
-      {/* Menu Items by Category */}
-      {filteredItems.length === 0 ? (
-          <Card className="border-2 border-[#a87437] shadow-xl">
-            <CardContent className="text-center py-16">
-              <Coffee className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-[#6B5B5B] mb-2">No items found</h3>
-              <p className="text-gray-500 mb-4">
-                Try adjusting your search or filters
-              </p>
-              <Button 
-                onClick={clearFilters} 
-                variant="outline"
-                className="border-2 border-[#a87437]/30 hover:bg-[#a87437]/5"
-              >
-                Clear All Filters
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-8">
-            {(() => {
-              // Group items by category
-              const groupedItems = filteredItems.reduce((acc, item) => {
-                const category = item.category || 'Other';
-                if (!acc[category]) {
-                  acc[category] = [];
-                }
-                acc[category].push(item);
-                return acc;
-              }, {} as Record<string, MenuItem[]>);
+          {/* Menu Items by Category */}
+          {filteredItems.length === 0 ? (
+        <Card className="border-2 border-[#a87437] shadow-xl">
+          <CardContent className="text-center py-16">
+            <Coffee className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-[#6B5B5B] mb-2">No items found</h3>
+            <p className="text-gray-500 mb-4">
+              Try adjusting your search or filters
+            </p>
+            <Button 
+              onClick={clearFilters} 
+              variant="outline"
+              className="border-2 border-[#a87437]/30 hover:bg-[#a87437]/5"
+            >
+              Clear All Filters
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-8">
+          {(() => {
+            // Group items by category
+            const groupedItems = filteredItems.reduce((acc, item) => {
+              const category = item.category || 'Other';
+              if (!acc[category]) {
+                acc[category] = [];
+              }
+              acc[category].push(item);
+              return acc;
+            }, {} as Record<string, MenuItem[]>);
 
-              return Object.entries(groupedItems).map(([category, items]) => (
-                <div key={category} className="space-y-4">
-                  {/* Category Header */}
-                  <h2 className="text-2xl font-bold text-[#a87437] border-b-2 border-[#a87437]/30 pb-2">
-                    {category}
-                  </h2>
-                  
-                  {/* Items Display - Grid or List View */}
-                  {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                      {items.map((item) => (
-                        <Card key={item.id} className="bg-white border shadow-lg hover:shadow-xl transition-shadow duration-300 h-[480px] flex flex-col">
-                          <CardContent className="p-0 flex flex-col h-full">
-                            {/* Image - With padding from card edges */}
-                            <div className="h-40 w-3/4 mx-auto flex-shrink-0 flex items-center justify-center overflow-hidden p-3">
-                              {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
-                                <div className="w-full h-full overflow-hidden">
-                                  <img
-                                    src={item.image_url}
-                                    alt={item.name}
-                                    className="w-full h-full object-contain"
-                                    loading="lazy"
-                                    onError={(e) => {
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = 'none';
-                                      const fallback = target.parentElement?.nextElementSibling as HTMLElement;
-                                      if (fallback) {
-                                        fallback.classList.remove('hidden');
-                                      }
-                                    }}
-                                  />
+            return Object.entries(groupedItems).map(([category, items]) => (
+              <div key={category} className="space-y-4">
+                {/* Category Header */}
+                <h2 className="text-2xl font-bold text-[#a87437] border-b-2 border-[#a87437]/30 pb-2">
+                  {category}
+                </h2>
+                
+                {/* Items Display - Grid or List View */}
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {items.map((item) => (
+                      <Card key={item.id} className="bg-white border-2 border-gray-200 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col overflow-hidden">
+                        <CardContent className="p-4 flex flex-col h-full">
+                          {/* Image - Centered at top */}
+                          <div className="w-full h-48 mb-4 flex items-center justify-center overflow-hidden rounded-lg bg-gray-50 flex-shrink-0">
+                            {item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? (
+                              <img
+                                src={item.image_url}
+                                alt={item.name}
+                                className="w-full h-full object-contain"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const fallback = target.parentElement?.nextElementSibling as HTMLElement;
+                                  if (fallback) {
+                                    fallback.classList.remove('hidden');
+                                  }
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-sm border-2 border-gray-200">
+                                  <span className="text-2xl">🍽️</span>
                                 </div>
-                              ) : null}
-                              <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg ${item.image_url && item.image_url !== '' && item.image_url !== 'null' && item.image_url !== 'undefined' ? 'hidden' : ''}`}>
-                                <div className="text-center">
-                                  <div className="w-16 h-16 mx-auto mb-3 bg-white rounded-full flex items-center justify-center shadow-sm border-2 border-gray-200">
-                                    <span className="text-2xl">🍽️</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600 font-medium">No Image Available</p>
-                                </div>
+                                <p className="text-sm text-gray-600 font-medium">No Image Available</p>
                               </div>
                             </div>
-                            
-                            {/* Content */}
-                            <div className="p-4 flex-1 flex flex-col min-h-0">
-                              <h3 className="text-lg font-semibold text-[#3f3532] mb-1 line-clamp-2">
-                                {item.name}
-                              </h3>
-                              {item.category && (
-                                <p className="text-sm text-gray-500 mb-2">{item.category}</p>
-                              )}
-                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                          </div>
+                          
+                          {/* Content */}
+                          <div className="flex-1 flex flex-col">
+                            <h3 className="text-lg font-semibold text-[#3f3532] mb-2 line-clamp-2">
+                              {item.name}
+                            </h3>
+                            {item.description && (
+                              <p className="text-sm text-gray-600 mb-3 line-clamp-2 flex-shrink-0">
                                 {item.description}
                               </p>
-                              
-                              {/* Price */}
-                              <div className="mb-2">
-                                <span className="text-xl font-bold text-[#a87437]">
-                                  ₱{Number(item.price || 0).toFixed(2)}
-                                </span>
-                              </div>
-                              
-                              {/* Action Buttons */}
-                              <div className="flex flex-col gap-2 mt-auto pt-2">
-                                {item.allow_customization && (
-                                  <Button
-                                    onClick={() => setCustomizationModal({ isOpen: true, item: item })}
-                                    disabled={!hasValidTableAccess || item.is_available === false}
-                                    size="sm"
-                                    variant="outline"
-                                    className="w-full text-xs border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white"
-                                  >
-                                    Customize
-                                  </Button>
-                                )}
-                                <Button
-                                  onClick={() => handleAddToCart(item)}
-                                  disabled={!hasValidTableAccess || item.is_available === false}
-                                  size="sm"
-                                  className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white text-xs"
-                                >
-                                  Add to Cart
-                                </Button>
-                              </div>
+                            )}
+                            
+                            {/* Price */}
+                            <div className="mb-4">
+                              <span className="text-xl font-bold text-[#a87437]">
+                                ₱{Number(item.price || 0).toFixed(2)}
+                              </span>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {items.map((item) => (
-                        <MenuItem
-                          key={item.id}
-                          item={item}
-                          onAddToCart={handleAddToCart}
-                          hasTableAccess={hasValidTableAccess}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ));
-            })()}
-          </div>
-        )}
+                            
+                            {/* Action Buttons - Stacked vertically */}
+                            <div className="flex flex-col gap-2 mt-auto">
+                              {item.allow_customization && (
+                                <Button
+                                  onClick={() => setCustomizationModal({ isOpen: true, item: item })}
+                                  disabled={!hasValidTableAccess || item.is_available === false}
+                                  variant="outline"
+                                  className="w-full border-2 border-[#a87437] text-[#a87437] hover:bg-[#a87437] hover:text-white font-medium"
+                                >
+                                  Customize
+                                </Button>
+                              )}
+                              <Button
+                                onClick={() => handleAddToCart(item)}
+                                disabled={!hasValidTableAccess || item.is_available === false}
+                                className="w-full bg-[#a87437] hover:bg-[#8f652f] text-white font-medium"
+                              >
+                                Add to Cart
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {items.map((item) => (
+                      <MenuItem
+                        key={item.id}
+                        item={item}
+                        onAddToCart={handleAddToCart}
+                        hasTableAccess={hasValidTableAccess}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+        </div>
       </div>
 
       {/* Cart Modal */}
       <CustomerCartModal 
         isOpen={isCartModalOpen}
         cart={cartContextItems.map(item => ({
-          id: parseInt(item.id),
+          id: parseInt(item.id, 10),
           name: item.name,
           base_price: item.price,
           cartItemId: item.id,
@@ -701,6 +696,7 @@ const CustomerMenu: React.FC = () => {
             if (paymentMethod === 'gcash' || paymentMethod === 'paymaya') {
               console.log('Digital payment selected:', paymentMethod);
 
+              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
               let response;
               if (receiptFile) {
                 // Use FormData for file upload
@@ -708,19 +704,19 @@ const CustomerMenu: React.FC = () => {
                 formData.append('orderData', JSON.stringify(orderData));
                 formData.append('receipt', receiptFile);
                 
-                response = await fetch('/api/customer/checkout', {
+                response = await fetch(`${API_URL}/api/customer/checkout`, {
                   method: 'POST',
-                  credentials: 'include',
+                  credentials: 'omit',
                   body: formData,
                 });
               } else {
                 // Use JSON for orders without receipt
-                response = await fetch('/api/customer/checkout', {
+                response = await fetch(`${API_URL}/api/customer/checkout`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                   },
-                  credentials: 'include',
+                  credentials: 'omit',
                   body: JSON.stringify(orderData),
                 });
               }
@@ -731,7 +727,7 @@ const CustomerMenu: React.FC = () => {
               if (result.success) {
                 // Clear cart and close modal first
                 clearCart();
-                closeCartModal();
+                closeCartModal(); // Ensure modal is closed
                 // Show explicit prompt with a button (user gesture) to open the app
                 setWalletPrompt({
                   isOpen: true,
@@ -744,12 +740,13 @@ const CustomerMenu: React.FC = () => {
               }
             } else {
               // For cash payments, proceed normally
-              const response = await fetch('/api/customer/checkout', {
+              const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+              const response = await fetch(`${API_URL}/api/customer/checkout`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                credentials: 'include',
+                credentials: 'omit',
                 body: JSON.stringify(orderData),
               });
 
@@ -758,7 +755,9 @@ const CustomerMenu: React.FC = () => {
               if (result.success) {
                 clearCart();
                 closeCartModal();
-                alert(`Order placed successfully! Order ID: ${result.orderId}`);
+                // Always show the long order ID for consistency
+                const displayOrderId = result.orderId || result.orderNumber;
+                alert(`Order placed successfully! Order ID: ${displayOrderId}`);
                 
                 // Trigger a custom event to refresh orders data without page reload
                 setTimeout(() => {
@@ -798,24 +797,29 @@ const CustomerMenu: React.FC = () => {
         />
       )}
 
-      {/* Wallet App Prompt Modal */}
-      {walletPrompt.isOpen && walletPrompt.method && (
+      {(() => {
+        const activeWalletMethod = walletPrompt.method;
+        if (!walletPrompt.isOpen || !activeWalletMethod) {
+          return null;
+        }
+        const methodLabel = activeWalletMethod.toUpperCase();
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Open {walletPrompt.method.toUpperCase()}</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Open {methodLabel}</h3>
             <p className="text-sm text-gray-700 mb-4">
               Order ID: {walletPrompt.orderId}
             </p>
             <p className="text-sm text-gray-600 mb-6">
-              Tap the button below to open the {walletPrompt.method.toUpperCase()} app and complete your payment.
+              Tap the button below to open the {methodLabel} app and complete your payment.
             </p>
 
             <div className="flex gap-3">
               <button
-                onClick={() => openDigitalWalletApp(walletPrompt.method as 'gcash' | 'paymaya')}
+                onClick={() => openDigitalWalletApp(activeWalletMethod)}
                 className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
-                Open {walletPrompt.method.toUpperCase()}
+                Open {methodLabel}
               </button>
               <button
                 onClick={() => setWalletPrompt({ isOpen: false, method: null, orderId: '', amount: 0 })}
@@ -826,7 +830,8 @@ const CustomerMenu: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

@@ -165,7 +165,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/start`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
         });
@@ -202,7 +202,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/start`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
         });
@@ -220,7 +220,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
       try {
         const res = await fetch(`${API_URL}/api/ai-chat/session/${activeSession}/message`, {
           method: 'POST',
-          credentials: 'include',
+          credentials: 'omit',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: outgoing })
         });
@@ -254,7 +254,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
         try {
           const startRes = await fetch(`${API_URL}/api/ai-chat/session/start`, {
             method: 'POST',
-            credentials: 'include',
+            credentials: 'omit',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerId: null, dietaryPreferences: {} })
           });
@@ -265,7 +265,7 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
             try {
               const retryRes = await fetch(`${API_URL}/api/ai-chat/session/${activeSession}/message`, {
                 method: 'POST',
-                credentials: 'include',
+                credentials: 'omit',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: outgoing })
               });
@@ -351,10 +351,18 @@ const AIChatbot: React.FC<AIChatbotProps> = ({ onClose, resetOnClose = false, us
     }
     
     if (lowerMessage.includes('customize') || lowerMessage.includes('customization')) {
+      // Check if user is asking about food items
+      const foodKeywords = ['sandwich', 'rice meal', 'rice', 'food', 'meal', 'pastry', 'pastries', 'bread'];
+      const isAskingAboutFood = foodKeywords.some(keyword => lowerMessage.includes(keyword));
+      
+      if (isAskingAboutFood) {
+        return "I understand you'd like to customize a food item. Unfortunately, customization is only available for drinks (coffee, tea, beverages). Food items like sandwiches and rice meals are served as-is and cannot be customized. However, I'd be happy to help you customize any drink from our menu! What drink would you like to customize?";
+      }
+      
       if (menuItems.length > 0) {
-        return 'Great question! We offer many customization options including different milk types (almond, oat, soy), syrups (vanilla, caramel, chocolate), and toppings. What drink would you like to customize? You can choose from our available menu items.';
+        return 'Great question! We offer many customization options for drinks including different milk types (almond, oat, soy), syrups (vanilla, caramel, chocolate), and toppings. What drink would you like to customize? You can choose from our available drink items.';
       } else {
-        return "Great question! We offer many customization options, but I don't see any menu items available right now. Please check back later.";
+        return "Great question! We offer many customization options for drinks, but I don't see any menu items available right now. Please check back later.";
       }
     }
     

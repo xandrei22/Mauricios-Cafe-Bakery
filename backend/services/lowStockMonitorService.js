@@ -122,7 +122,7 @@ class LowStockMonitorService {
                         // Update throttling timestamp
                         await notificationThrottlingService.updateLastSentTime('low_stock_critical');
                     } else {
-                        console.log('⏰ Critical stock notification throttled - not at 8:00 AM or too recent');
+                        console.log('⏰ Critical stock notification throttled - outside 7-9 AM window or too recent');
                     }
                 }
 
@@ -167,7 +167,7 @@ class LowStockMonitorService {
                         // Update throttling timestamp
                         await notificationThrottlingService.updateLastSentTime('low_stock_low');
                     } else {
-                        console.log('⏰ Low stock notification throttled - not at 8:00 AM or too recent');
+                        console.log('⏰ Low stock notification throttled - outside 7-9 AM window or too recent');
                     }
                 }
 

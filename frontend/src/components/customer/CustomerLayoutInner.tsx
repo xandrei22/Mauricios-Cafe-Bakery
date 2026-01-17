@@ -16,11 +16,13 @@ import { useAuth } from "./AuthContext";
 import { mobileFriendlySwal } from '@/utils/sweetAlertConfig';
 import AIChatbot from "./AIChatbot";
 import { useEffect } from "react";
+import * as React from "react";
 
 export default function CustomerLayoutInner({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, authenticated, loading } = useAuth();
+  const [checkingLocalStorage, setCheckingLocalStorage] = React.useState(true);
 
   // Helper function to preserve table parameter in navigation
   const getUrlWithTableParam = (path: string) => {
@@ -29,9 +31,41 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     return tableFromUrl ? `${path}?table=${tableFromUrl}` : path;
   };
 
+  // IMMEDIATE localStorage check for ALL iOS users who just logged in (any version, any browser)
+  // Works for iOS 12, 13, 14, 15, 16, 17, 18+ and all browsers (Safari, Chrome, Firefox, etc.)
+  useEffect(() => {
+    const loginTimestamp = localStorage.getItem('loginTimestamp');
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const recentLoginWindow = isIOS ? 30000 : 10000; // 30 seconds for ALL iOS, 10 for others
+    const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+    
+    console.log('CustomerLayoutInner mount - loginTimestamp:', loginTimestamp, 'isRecentLogin:', isRecentLogin);
+    
+    if (isRecentLogin) {
+      const storedUser = localStorage.getItem('customerUser');
+      console.log('CustomerLayoutInner - storedUser exists:', !!storedUser);
+      if (storedUser) {
+        try {
+          const user = JSON.parse(storedUser);
+          // User exists in localStorage from recent login - this is iOS Safari cookie workaround
+          console.log('✅ CustomerLayoutInner: Found recent login in localStorage, allowing access (works for ALL iOS versions)');
+          console.log('✅ CustomerLayoutInner: User from localStorage:', user.email);
+          setCheckingLocalStorage(false);
+          return; // Don't redirect - let AuthContext handle it
+        } catch (e) {
+          console.error('❌ Failed to parse stored user:', e);
+        }
+      } else {
+        console.warn('⚠️ CustomerLayoutInner: Recent login but no storedUser found');
+      }
+    }
+    setCheckingLocalStorage(false);
+  }, []);
+
   // Check authentication and redirect if needed
   useEffect(() => {
-    if (!loading && !authenticated) {
+    // Wait for both loading states to complete
+    if (!loading && !checkingLocalStorage && !authenticated) {
       // Get table parameter from current URL if present
       const urlParams = new URLSearchParams(location.search);
       const tableFromUrl = urlParams.get('table');
@@ -43,10 +77,10 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
         navigate('/login');
       }
     }
-  }, [authenticated, loading, location.search]);
+  }, [authenticated, loading, checkingLocalStorage, location.search, navigate]);
 
-  // Show loading while checking authentication
-  if (loading) {
+  // Show loading while checking authentication or localStorage
+  if (loading || checkingLocalStorage) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -57,10 +91,45 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
     );
   }
 
-  // Don't render anything if not authenticated (will redirect)
-  if (!authenticated) {
-    return null;
+  // Check if we have localStorage fallback for recent login (works for ALL iOS versions)
+  // This check happens on EVERY render to catch localStorage immediately
+  const loginTimestamp = localStorage.getItem('loginTimestamp');
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const recentLoginWindow = isIOS ? 30000 : 10000;
+  const isRecentLogin = loginTimestamp && (Date.now() - parseInt(loginTimestamp)) < recentLoginWindow;
+  const storedUser = localStorage.getItem('customerUser');
+  const hasLocalStorageFallback = isRecentLogin && storedUser;
+
+  // Debug logging for iOS
+  if (isIOS && !authenticated) {
+    console.log('CustomerLayoutInner render - iOS device, authenticated:', authenticated);
+    console.log('CustomerLayoutInner render - hasLocalStorageFallback:', hasLocalStorageFallback);
+    console.log('CustomerLayoutInner render - loginTimestamp:', loginTimestamp);
+    console.log('CustomerLayoutInner render - storedUser exists:', !!storedUser);
   }
+
+  // Allow access if authenticated OR if we have localStorage fallback (works for ALL iOS versions and browsers)
+  if (!authenticated && !hasLocalStorageFallback) {
+    console.log('CustomerLayoutInner: No auth and no localStorage, will redirect to login');
+    return null; // Will redirect
+  }
+  
+  // If we have localStorage but not authenticated, log it (should be handled by AuthContext, but this is backup)
+  if (!authenticated && hasLocalStorageFallback) {
+    console.log('✅ CustomerLayoutInner: Allowing access via localStorage fallback (should have been set by AuthContext)');
+  }
+
+  const displayName =
+    (typeof (user as any)?.username === 'string' && (user as any).username.trim().length > 0
+      ? (user as any).username.trim()
+      : typeof user?.name === 'string' && user.name.trim().length > 0
+        ? user.name.trim()
+        : user?.email
+          ? user.email.split('@')[0]
+          : 'Customer');
+  const displayEmail = (typeof user?.email === 'string' && user.email.length > 0)
+    ? user.email
+    : 'customer@example.com';
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -71,8 +140,18 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
       'Cancel'
     );
     if (result.isConfirmed) {
-      await fetch('/api/customer/logout', { method: 'POST', credentials: 'include' });
-      navigate('/');
+      try {
+        await fetch('/api/customer/logout', { method: 'POST', credentials: 'omit' });
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        // Clear all local storage and session storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Force page reload to clear any cached data
+        window.location.href = '/';
+      }
     }
   };
 
@@ -173,8 +252,8 @@ export default function CustomerLayoutInner({ children }: { children: React.Reac
                 <User className="w-6 h-6 text-white" />
               </div>
               <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                <span className="font-semibold text-[#6B5B5B]">{user?.name || "Customer"}</span>
-                <span className="text-xs text-[#6B5B5B]/70">{user?.email || "customer@example.com"}</span>
+                <span className="font-semibold text-[#6B5B5B]">{displayName}</span>
+                <span className="text-xs text-[#6B5B5B]/70">{displayEmail}</span>
               </div>
             </div>
           </div>

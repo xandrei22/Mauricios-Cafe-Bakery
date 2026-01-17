@@ -45,7 +45,14 @@ const LayerBasedCustomization: React.FC<LayerBasedCustomizationProps> = ({
     return 'bg-amber-100 border-amber-300 text-amber-800';
   };
 
-  const groupedOptions = options.reduce((acc, option) => {
+  const filteredOptions = options.filter((option) => {
+    const category = (option.category || '').toLowerCase();
+    if (category.includes('milk')) return false;
+    if (category.includes('sweetener')) return false;
+    return true;
+  });
+
+  const groupedOptions = filteredOptions.reduce((acc, option) => {
     const category = option.category || 'Other';
     if (!acc[category]) {
       acc[category] = [];

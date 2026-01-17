@@ -61,7 +61,7 @@ export default function CustomerFeedback() {
       checkCustomerOrders();
       
       // Initialize Socket.IO connection
-      const newSocket = io(API_URL, { transports: ['polling','websocket'], path: '/socket.io', withCredentials: true });
+      const newSocket = io(API_URL, { transports: ['polling','websocket'], path: '/socket.io', withCredentials: false });
       setSocket(newSocket);
 
       // Join customer room for real-time updates
@@ -81,7 +81,7 @@ export default function CustomerFeedback() {
         newSocket.close();
       };
     }
-  }, [loading, authenticated, navigate, user]);
+  }, [loading, authenticated, navigate, user?.email]); // Changed from 'user' to 'user?.email'
 
   const checkCustomerOrders = async () => {
     if (!user?.email) {
@@ -92,7 +92,7 @@ export default function CustomerFeedback() {
     try {
       setCheckingOrders(true);
       const response = await fetch(`${API_URL}/api/feedback/check-orders?customer_email=${encodeURIComponent(user.email)}`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       
       if (response.ok) {
@@ -113,7 +113,7 @@ export default function CustomerFeedback() {
   const fetchFeedbacks = async () => {
     try {
       const response = await fetch(`${API_URL}/api/feedback`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -129,7 +129,7 @@ export default function CustomerFeedback() {
   const fetchMetrics = async () => {
     try {
       const response = await fetch(`${API_URL}/api/feedback/metrics`, {
-        credentials: 'include'
+        credentials: 'omit'
       });
       if (response.ok) {
         const data = await response.json();
@@ -177,7 +177,7 @@ export default function CustomerFeedback() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] pb-12">
-      <div className="space-y-4 sm:space-y-6 mx-2 sm:mx-4 lg:mx-6 pt-4">
+      <div className="space-y-4 sm:space-y-6 px-4 sm:px-6 lg:px-8 pt-4">
         {/* Header Section */}
         <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
@@ -267,7 +267,7 @@ export default function CustomerFeedback() {
             {/* Filter Bar and Share Button */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4">
               {/* Filter Bar */}
-              <div className="flex flex-wrap gap-3 rounded-xl p-4" style={{ backgroundColor: '#f5f5f5' }}>
+              <div className="flex flex-wrap gap-3 rounded-xl p-4 bg-[#f5f5f5]">
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger className="w-40 bg-[#f5f5f5] border-[#a87437] focus:border-[#8f652f] focus:ring-[#a87437] rounded-full pr-3">
                     <SelectValue placeholder="All categories" />

@@ -38,7 +38,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-      const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, { credentials: 'include' });
+      const res = await fetch(`${API_URL}/api/events/customer/${customer_id}`, { credentials: 'omit' });
       const data = await res.json();
       if (res.ok && data.success) {
         const pendingEvents = data.events.filter((event: any) => event.status === 'pending');
@@ -137,7 +137,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
       // Prefer polling first to avoid early WS-close errors, then upgrade
       transports: ['polling', 'websocket'],
       path: '/socket.io',
-      withCredentials: true,
+      withCredentials: false,
       timeout: 30000,
       forceNew: true,
       autoConnect: true,
@@ -159,6 +159,17 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
     newSocket.on('event-updated', (data) => {
       console.log('Event updated in CustomerDashboardNavbar:', data);
       fetchCustomerEvents();
+    });
+
+    // Listen for new notifications (for event status updates)
+    newSocket.on('new-notification', (notificationData) => {
+      console.log('New notification received in CustomerDashboardNavbar:', notificationData);
+      // Only process if it's for this customer
+      if (notificationData.user_type === 'customer' && 
+          (notificationData.user_id === customer_id || !notificationData.user_id)) {
+        // Refresh events to get updated status
+        fetchCustomerEvents();
+      }
     });
 
     fetchCustomerEvents();
@@ -192,22 +203,73 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
   // Cart management functions
   const loadCartFromStorage = () => {
     try {
-      const savedCart = localStorage.getItem('cart');
-      if (savedCart) {
-        const cart = JSON.parse(savedCart);
-        // Ensure all cart items have proper structure with default values
-        const normalizedCart = cart.map((item: any) => ({
-          ...item,
-          customizations: item.customizations || [],
-          notes: item.notes || '',
-          price: item.price || 0,
-          quantity: item.quantity || 1
-        }));
-        setCartItems(normalizedCart);
-        setCartItemCount(normalizedCart.reduce((total: number, item: any) => total + item.quantity, 0));
+      // CRITICAL: Check if cart was recently cleared (within last 5 seconds)
+      // This prevents reloading old data after clear
+      const lastClearTime = localStorage.getItem('cartLastCleared');
+      if (lastClearTime) {
+        const timeSinceClear = Date.now() - parseInt(lastClearTime);
+        if (timeSinceClear < 5000) {
+          console.log('🛑 Cart was recently cleared, NOT loading from localStorage');
+          setCartItems([]);
+          setCartItemCount(0);
+          return;
+        }
       }
+      
+      const savedCart = localStorage.getItem('cart');
+      
+      // CRITICAL: Check if cart is empty or null
+      if (!savedCart) {
+        console.log('🛒 No cart in localStorage, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
+      }
+      
+      // If cart is empty array string, clear state
+      if (savedCart === '[]' || savedCart.trim() === '[]') {
+        console.log('🛒 Cart is empty in localStorage, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
+      }
+      
+      const cart = JSON.parse(savedCart);
+      
+      // Validate that cart is an array
+      if (!Array.isArray(cart)) {
+        console.warn('⚠️ Invalid cart data: not an array, clearing...');
+        setCartItems([]);
+        setCartItemCount(0);
+        localStorage.removeItem('cart');
+        return;
+      }
+      
+      // If array is empty, clear state
+      if (cart.length === 0) {
+        console.log('🛒 Cart array is empty, clearing local state');
+        setCartItems([]);
+        setCartItemCount(0);
+        return;
+      }
+      
+      // Ensure all cart items have proper structure with default values
+      const normalizedCart = cart.map((item: any) => ({
+        ...item,
+        customizations: item.customizations || [],
+        notes: item.notes || '',
+        price: item.price || 0,
+        quantity: item.quantity || 1
+      }));
+      
+      setCartItems(normalizedCart);
+      setCartItemCount(normalizedCart.reduce((total: number, item: any) => total + item.quantity, 0));
     } catch (error) {
-      console.error('Error loading cart from storage:', error);
+      console.error('❌ Error loading cart from storage:', error);
+      // On error, clear state and localStorage
+      setCartItems([]);
+      setCartItemCount(0);
+      localStorage.removeItem('cart');
     }
   };
 
@@ -238,9 +300,35 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
 
 
   const clearCart = () => {
+    console.log('🧹 CustomerDashboardNavbar: Clearing cart...');
+    
+    // CRITICAL: Set timestamp FIRST to prevent reloading
+    localStorage.setItem('cartLastCleared', Date.now().toString());
+    
+    // Clear local state first
     setCartItems([]);
     setCartItemCount(0);
-    localStorage.setItem('cart', JSON.stringify([]));
+    
+    // CRITICAL: Remove localStorage COMPLETELY (not just set to '[]')
+    localStorage.removeItem('cart');
+    
+    // Clear all cart-related localStorage keys
+    const cartKeys = ['guest-cart', 'pos-cart', 'customer-cart', 'menu-cart'];
+    cartKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear ALL cart-related keys (case-insensitive search) as backup
+    Object.keys(localStorage).forEach(key => {
+      if (key.toLowerCase().includes('cart') && key !== 'cartLastCleared') {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Dispatch event to notify other components
+    window.dispatchEvent(new CustomEvent('cartUpdated'));
+    
+    console.log('✅ CustomerDashboardNavbar: Cart cleared');
   };
 
   const processOrder = async () => {
@@ -290,7 +378,7 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include session cookies for authentication
+        credentials: 'omit', // Include session cookies for authentication
         body: JSON.stringify(orderData),
       });
 
@@ -303,8 +391,9 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
         clearCart();
         setShowCart(false);
         
-        // Show success message
-        alert(`Order placed successfully! Order ID: ${result.orderId}`);
+        // Always show the long order ID for consistency
+        const displayOrderId = result.orderId || result.orderNumber;
+        alert(`Order placed successfully! Order ID: ${displayOrderId}`);
         
         // Redirect to orders page without full reload
         navigate('/customer/orders');
@@ -354,7 +443,22 @@ export default function CustomerDashboardNavbar({ customer_id }: CustomerDashboa
     
     // Listen for custom cart update events (from same tab)
     const handleCartUpdate = () => {
-      loadCartFromStorage();
+      // CRITICAL: Check if cart was recently cleared BEFORE loading
+      const lastClearTime = localStorage.getItem('cartLastCleared');
+      if (lastClearTime) {
+        const timeSinceClear = Date.now() - parseInt(lastClearTime);
+        if (timeSinceClear < 5000) {
+          console.log('🛑 Cart was recently cleared in event handler, NOT reloading');
+          setCartItems([]);
+          setCartItemCount(0);
+          return;
+        }
+      }
+      
+      // Add a delay to ensure localStorage is fully updated
+      setTimeout(() => {
+        loadCartFromStorage();
+      }, 100);
     };
     
     window.addEventListener('cartUpdated', handleCartUpdate);

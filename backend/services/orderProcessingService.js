@@ -103,21 +103,52 @@ class OrderProcessingService {
                 });
             }
 
-            // Generate order number
-            const [orderNumberResult] = await connection.query('SELECT MAX(CAST(order_number AS UNSIGNED)) as max_num FROM orders');
-            const nextOrderNumber = (orderNumberResult[0] && orderNumberResult[0].max_num ? parseInt(orderNumberResult[0].max_num) : 0) + 1;
+            // Generate consistent order_id format (same as other routes)
+            const orderIdStr = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Generate unique 5-character order code for order_number
+            const generateShortOrderCode = () => {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
+                let code = '';
+                for (let i = 0; i < 5; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return code;
+            };
+            
+            let orderNumberStr;
+            let isUnique = false;
+            let attempts = 0;
+            const maxAttempts = 10;
+            while (!isUnique && attempts < maxAttempts) {
+                orderNumberStr = generateShortOrderCode();
+                const [existing] = await connection.query(
+                    'SELECT id FROM orders WHERE order_number = ?', [orderNumberStr]
+                );
+                if (existing.length === 0) {
+                    isUnique = true;
+                }
+                attempts++;
+            }
+            // Fallback if we couldn't generate a unique code
+            if (!isUnique) {
+                orderNumberStr = generateShortOrderCode() + Date.now().toString().slice(-2);
+            }
 
             // Create order record with proper initial status
             const initialStatus = paymentMethod === 'cash' ? 'pending_verification' : 'pending';
             const initialPaymentStatus = paymentMethod === 'cash' ? 'pending' : 'pending';
 
+            // CRITICAL: Include created_at explicitly to avoid "Field 'created_at' doesn't have a default value" error
+            const currentTime = new Date();
             await connection.query(`
                 INSERT INTO orders 
                 (order_id, order_number, customer_id, customer_name, table_number, items, total_price, 
-                 payment_method, order_type, status, payment_status, notes, order_time, queue_position, estimated_ready_time, staff_id)
-                VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0, DATE_ADD(NOW(), INTERVAL 15 MINUTE), ?)
+                 payment_method, order_type, status, payment_status, notes, order_time, created_at, queue_position, estimated_ready_time, staff_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, DATE_ADD(?, INTERVAL 15 MINUTE), ?)
             `, [
-                nextOrderNumber,
+                orderIdStr,
+                orderNumberStr,
                 customerId,
                 customerName,
                 tableNumber,
@@ -128,11 +159,14 @@ class OrderProcessingService {
                 initialStatus,
                 initialPaymentStatus,
                 notes,
+                currentTime,
+                currentTime,
+                currentTime,
                 staffId
             ]);
 
             // Get the created order ID
-            const [orderResult] = await connection.query('SELECT LAST_INSERT_ID() as id, order_id FROM orders WHERE order_number = ?', [nextOrderNumber]);
+            const [orderResult] = await connection.query('SELECT LAST_INSERT_ID() as id, order_id FROM orders WHERE order_number = ?', [orderNumberStr]);
             const orderId = orderResult[0].id;
             const orderUuid = orderResult[0].order_id;
 
@@ -472,12 +506,25 @@ class OrderProcessingService {
             const emailLocal = (customerEmail || '').split('@')[0] || '';
             const nameLikeFromLocal = emailLocal.replace(/[._-]+/g, ' ').trim();
 
+            // First, try to get customer_id from email for more accurate matching
+            // Use full_name (aliased as name) for compatibility with older code
+            const [customerResult] = await connection.query(
+                'SELECT id, email, full_name AS name FROM customers WHERE LOWER(email) = LOWER(?)',
+                [customerEmail]
+            );
+            
+            const customerId = customerResult.length > 0 ? customerResult[0].id : null;
+            const customerName = customerResult.length > 0 ? customerResult[0].name : null;
+
             // Get orders for the customer by multiple heuristics (case-insensitive)
+            // Prioritize customer_id match, then fall back to name/email matching
             const [orders] = await connection.query(`
                 SELECT 
                     o.id,
                     o.order_id,
+                    o.order_number,
                     o.customer_name,
+                    o.customer_id,
                     o.items,
                     o.total_price,
                     o.status,
@@ -492,17 +539,21 @@ class OrderProcessingService {
                     o.notes
                 FROM orders o
                 LEFT JOIN customers c ON o.customer_id = c.id
-                WHERE LOWER(c.email) = LOWER(?)
+                WHERE (? IS NOT NULL AND o.customer_id = ?)
+                   OR LOWER(c.email) = LOWER(?)
                    OR LOWER(o.customer_name) = LOWER(?)
                    OR LOWER(o.customer_name) LIKE LOWER(?)
                    OR (LENGTH(?) > 0 AND LOWER(o.customer_name) LIKE LOWER(?))
+                   OR (? IS NOT NULL AND LOWER(c.full_name) = LOWER(?))
                 ORDER BY o.order_time DESC
             `, [
-                customerEmail,
-                customerEmail,
-                `%${customerEmail}%`,
-                nameLikeFromLocal,
-                `%${nameLikeFromLocal}%`
+                customerId, customerId,  // customer_id match (most accurate)
+                customerEmail,            // email match via join
+                customerEmail,            // exact customer_name match
+                `%${customerEmail}%`,      // customer_name contains email
+                nameLikeFromLocal,        // name-like from email local part
+                `%${nameLikeFromLocal}%`, // customer_name contains name-like
+                customerName, customerName // customer name match via join
             ]);
 
             // Parse JSON items for each order
@@ -972,33 +1023,59 @@ class OrderProcessingService {
 
                 // Emit real-time update
                 if (this.io) {
-                    // Emit to specific order room
-                    this.io.to(`order-${orderId}`).emit('order-updated', {
-                        orderId,
+                    const publicOrderId = order.order_id || orderId;
+                    const updatePayload = {
+                        orderId: publicOrderId,
                         status: newStatus,
+                        paymentStatus: order.payment_status,
+                        paymentMethod: order.payment_method,
                         timestamp: new Date(),
                         order: order
-                    });
+                    };
+                    
+                    // Emit to specific order room using public order ID
+                    this.io.to(`order-${publicOrderId}`).emit('order-updated', updatePayload);
+                    console.log(`📤 OrderProcessingService: Emitted order-updated to order room: order-${publicOrderId}`);
                     // Emit to staff and admin rooms
-                    this.io.to('staff-room').emit('order-updated', {
-                        orderId,
-                        status: newStatus,
-                        timestamp: new Date(),
-                        order: order
-                    });
-                    this.io.to('admin-room').emit('order-updated', {
-                        orderId,
-                        status: newStatus,
-                        timestamp: new Date(),
-                        order: order
-                    });
-                    // Broadcast to all customers
-                    this.io.emit('order-updated', {
-                        orderId,
-                        status: newStatus,
-                        timestamp: new Date(),
-                        order: order
-                    });
+                    this.io.to('staff-room').emit('order-updated', updatePayload);
+                    this.io.to('admin-room').emit('order-updated', updatePayload);
+                    
+                    // Emit to customer room if customer_id exists
+                    if (order.customer_id) {
+                        try {
+                            const [customerResult] = await connection.query(
+                                'SELECT email FROM customers WHERE id = ?',
+                                [order.customer_id]
+                            );
+                            if (customerResult.length > 0 && customerResult[0].email) {
+                                const customerEmail = customerResult[0].email;
+                                this.io.to(`customer-${customerEmail}`).emit('order-updated', updatePayload);
+                                console.log(`📤 Emitted order-updated to customer room: customer-${customerEmail}`);
+                            }
+                        } catch (customerError) {
+                            console.error('Failed to get customer email for room emission:', customerError);
+                        }
+                    }
+                    
+                    // Also try to get customer email from customer_name if customer_id is not available
+                    if (!order.customer_id && order.customer_name) {
+                        try {
+                            const [customerByName] = await connection.query(
+                                'SELECT email FROM customers WHERE LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?)',
+                                [order.customer_name, order.customer_name]
+                            );
+                            if (customerByName.length > 0 && customerByName[0].email) {
+                                const customerEmail = customerByName[0].email;
+                                this.io.to(`customer-${customerEmail}`).emit('order-updated', updatePayload);
+                                console.log(`📤 Emitted order-updated to customer room (by name): customer-${customerEmail}`);
+                            }
+                        } catch (customerByNameError) {
+                            console.error('Failed to get customer email by name for room emission:', customerByNameError);
+                        }
+                    }
+                    
+                    // Broadcast to all customers as fallback
+                    this.io.emit('order-updated', updatePayload);
                 }
 
                 // Create notification for order status update

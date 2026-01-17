@@ -22,32 +22,32 @@ class ScheduledNotificationService {
         this.isRunning = true;
         console.log('🕐 Starting scheduled notification service...');
 
-        // Schedule critical stock notifications at 8:00 AM daily, with fallback to next available time
-        this.criticalJob = cron.schedule('0 8 * * *', async() => {
-            console.log('🕐 Running scheduled critical stock check at 8:00 AM...');
+        // Schedule critical stock notifications at 7:00 AM daily
+        this.criticalJob = cron.schedule('0 7 * * *', async() => {
+            console.log('🕐 Running scheduled critical stock check at 7:00 AM...');
             await this.checkAndSendCriticalNotifications();
         }, {
             scheduled: true,
             timezone: "Asia/Manila"
         });
 
-        // Schedule low stock notifications at 8:00 AM every 3 days, with fallback to next available time
-        this.lowStockJob = cron.schedule('0 8 */3 * *', async() => {
-            console.log('🕐 Running scheduled low stock check at 8:00 AM (every 3 days)...');
+        // Schedule low stock notifications at 7:00 AM daily
+        this.lowStockJob = cron.schedule('0 7 * * *', async() => {
+            console.log('🕐 Running scheduled low stock check at 7:00 AM (daily)...');
             await this.checkAndSendLowStockNotifications();
         }, {
             scheduled: true,
             timezone: "Asia/Manila"
         });
 
-        // Fallback: Check every hour if 8 AM was missed and send notifications
-        this.fallbackJob = cron.schedule('0 * * * *', async() => {
+        // Fallback: Check every 10 minutes between 7 AM and 9 AM to catch the window
+        this.fallbackJob = cron.schedule('*/10 7-8 * * *', async() => {
             const now = new Date();
             const currentHour = now.getHours();
 
-            // If it's past 8 AM and we haven't sent today's notifications
-            if (currentHour > 8) {
-                console.log('🕐 Running fallback notification check...');
+            // Only check if we're within the notification window (7-9 AM)
+            if (currentHour >= 7 && currentHour < 9) {
+                console.log('🕐 Running fallback notification check (7-9 AM window)...');
                 await this.checkAndSendMissedNotifications();
             }
         }, {
@@ -56,8 +56,9 @@ class ScheduledNotificationService {
         });
 
         console.log('✅ Scheduled notification service started');
-        console.log('   - Critical stock notifications: Daily at 8:00 AM');
-        console.log('   - Low stock notifications: Every 3 days at 8:00 AM');
+        console.log('   - Critical stock notifications: Daily at 7:00 AM (window: 7-9 AM)');
+        console.log('   - Low stock notifications: Daily at 7:00 AM (window: 7-9 AM)');
+        console.log('   - Notifications stop automatically once stock is replenished');
     }
 
     /**
@@ -91,10 +92,10 @@ class ScheduledNotificationService {
             const criticalItems = lowStockItems.filter(item => item.stock_status === 'out_of_stock');
 
             if (criticalItems.length > 0) {
-                console.log(`⚠️  Found ${criticalItems.length} critical items at 8:00 AM`);
+                console.log(`⚠️  Found ${criticalItems.length} critical items`);
 
-                // Check if we can send critical notifications
-                const canSend = await notificationThrottlingService.canSendNotification('low_stock_critical');
+                // Check if we can send critical notifications (within time window and throttling)
+                const canSend = await notificationThrottlingService.shouldSendNotification('low_stock_critical');
 
                 if (canSend) {
                     console.log('📧 Sending scheduled critical stock notification...');
@@ -102,10 +103,10 @@ class ScheduledNotificationService {
                     // Trigger the low stock check which will handle the throttling
                     await lowStockMonitorService.checkLowStockItems();
                 } else {
-                    console.log('⏰ Critical stock notification already sent recently, skipping scheduled check');
+                    console.log('⏰ Critical stock notification throttled or outside time window');
                 }
             } else {
-                console.log('✅ No critical items found at 8:00 AM');
+                console.log('✅ No critical items found - stock has been replenished');
             }
         } catch (error) {
             console.error('❌ Error in scheduled critical stock check:', error);
@@ -123,10 +124,10 @@ class ScheduledNotificationService {
             const lowStockOnly = lowStockItems.filter(item => item.stock_status === 'low_stock');
 
             if (lowStockOnly.length > 0) {
-                console.log(`⚠️  Found ${lowStockOnly.length} low stock items at 8:00 AM`);
+                console.log(`⚠️  Found ${lowStockOnly.length} low stock items`);
 
-                // Check if we can send low stock notifications
-                const canSend = await notificationThrottlingService.canSendNotification('low_stock_low');
+                // Check if we can send low stock notifications (within time window and throttling)
+                const canSend = await notificationThrottlingService.shouldSendNotification('low_stock_low');
 
                 if (canSend) {
                     console.log('📧 Sending scheduled low stock notification...');
@@ -134,10 +135,10 @@ class ScheduledNotificationService {
                     // Trigger the low stock check which will handle the throttling
                     await lowStockMonitorService.checkLowStockItems();
                 } else {
-                    console.log('⏰ Low stock notification already sent recently, skipping scheduled check');
+                    console.log('⏰ Low stock notification throttled or outside time window');
                 }
             } else {
-                console.log('✅ No low stock items found at 8:00 AM');
+                console.log('✅ No low stock items found - stock has been replenished');
             }
         } catch (error) {
             console.error('❌ Error in scheduled low stock check:', error);
@@ -162,10 +163,16 @@ class ScheduledNotificationService {
 
     /**
      * Check and send missed notifications (fallback mechanism)
+     * Only runs between 7 AM and 9 AM
      */
     async checkAndSendMissedNotifications() {
         try {
-            console.log('🔄 Checking for missed notifications...');
+            // Only proceed if we're within the notification window
+            if (!notificationThrottlingService.isNotificationTime()) {
+                return;
+            }
+
+            console.log('🔄 Checking for missed notifications (7-9 AM window)...');
 
             // Check if we already sent notifications today
             const today = new Date().toISOString().split('T')[0];
@@ -189,34 +196,18 @@ class ScheduledNotificationService {
                     AND DATE(created_at) = ?
                 `, [today]);
 
-                // Send critical notifications if not sent today
+                // Send critical notifications if not sent today and items are still critical
                 if (criticalSent[0].count === 0) {
-                    console.log('📧 Sending missed critical stock notifications...');
+                    console.log('📧 Checking for missed critical stock notifications...');
                     await this.checkAndSendCriticalNotifications();
                 }
 
-                // Send low stock notifications if not sent today and it's been 3+ days
+                // Send low stock notifications if not sent today (daily now, not every 3 days)
                 if (lowStockSent[0].count === 0) {
-                    // Check if it's been 3+ days since last low stock notification
-                    const [lastLowStock] = await connection.query(`
-                        SELECT MAX(created_at) as last_sent FROM notifications 
-                        WHERE notification_type = 'low_stock' 
-                        AND priority = 'high'
-                    `);
-
-                    if (lastLowStock[0].last_sent) {
-                        const lastSent = new Date(lastLowStock[0].last_sent);
-                        const daysDiff = Math.floor((new Date() - lastSent) / (1000 * 60 * 60 * 24));
-
-                        if (daysDiff >= 3) {
-                            console.log('📧 Sending missed low stock notifications...');
-                            await this.checkAndSendLowStockNotifications();
-                        }
-                    } else {
-                        // No previous low stock notifications, send now
-                        console.log('📧 Sending first low stock notifications...');
-                        await this.checkAndSendLowStockNotifications();
-                    }
+                    console.log('📧 Checking for missed low stock notifications...');
+                    await this.checkAndSendLowStockNotifications();
+                } else {
+                    console.log('✅ Low stock notifications already sent today');
                 }
 
             } finally {
@@ -237,9 +228,9 @@ class ScheduledNotificationService {
             criticalJobRunning: this.criticalJob ? this.criticalJob.running : false,
             lowStockJobRunning: this.lowStockJob ? this.lowStockJob.running : false,
             fallbackJobRunning: this.fallbackJob ? this.fallbackJob.running : false,
-            criticalSchedule: '0 8 * * * (Daily at 8:00 AM)',
-            lowStockSchedule: '0 8 */3 * * (Every 3 days at 8:00 AM)',
-            fallbackSchedule: '0 * * * * (Hourly fallback check)'
+            criticalSchedule: '0 7 * * * (Daily at 7:00 AM, window: 7-9 AM)',
+            lowStockSchedule: '0 7 * * * (Daily at 7:00 AM, window: 7-9 AM)',
+            fallbackSchedule: '*/10 7-8 * * * (Every 10 minutes between 7-9 AM)'
         };
     }
 }

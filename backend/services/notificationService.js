@@ -53,7 +53,20 @@ class NotificationService {
 
             // Send real-time notification if Socket.IO is available
             if (this.io) {
+                // Emit to all clients
                 this.io.emit('new-notification', notification[0]);
+                
+                // Also emit specifically to admin room if notification is for admins
+                if (userType === 'admin' || (!userId && !userType)) {
+                    console.log('📡 Emitting notification to admin-room:', notification[0].id);
+                    this.io.to('admin-room').emit('new-notification', notification[0]);
+                }
+                
+                // Also emit to staff room if notification is for staff
+                if (userType === 'staff') {
+                    console.log('📡 Emitting notification to staff-room:', notification[0].id);
+                    this.io.to('staff-room').emit('new-notification', notification[0]);
+                }
             }
 
             // Send email notification if enabled
@@ -445,19 +458,92 @@ class NotificationService {
      * Create notification for event request
      */
     async notifyEventRequest(eventData) {
+        console.log('📢 Creating event request notification:', eventData);
+        try {
+            // Create a system-wide notification for all admins (user_id = null, userType = 'admin')
+            // This will be visible to all admins when they query notifications
+            const notification = await this.createNotification({
+                type: 'event_request',
+                title: 'New Event Request',
+                message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
+                data: {
+                    eventId: eventData.id,
+                    eventDate: eventData.event_date,
+                    cups: eventData.cups,
+                    customerName: eventData.customer_name,
+                    contactNumber: eventData.contact_number
+                },
+                userId: null, // null = system-wide notification for all admins
+                userType: 'admin',
+                priority: 'high'
+            });
+            console.log('✅ Event request notification created:', notification.id);
+            
+            // Also create individual notifications for each admin to ensure they all receive it
+            try {
+                const [admins] = await db.query(`
+                    SELECT id FROM admins WHERE is_active = 1
+                `);
+                
+                console.log(`📢 Creating individual notifications for ${admins.length} admin(s)`);
+                for (const admin of admins) {
+                    try {
+                        await this.createNotification({
+                            type: 'event_request',
+                            title: 'New Event Request',
+                            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups from ${eventData.customer_name}`,
+                            data: {
+                                eventId: eventData.id,
+                                eventDate: eventData.event_date,
+                                cups: eventData.cups,
+                                customerName: eventData.customer_name,
+                                contactNumber: eventData.contact_number
+                            },
+                            userId: admin.id,
+                            userType: 'admin',
+                            priority: 'high'
+                        });
+                    } catch (err) {
+                        console.error(`⚠️ Failed to create notification for admin ${admin.id}:`, err.message);
+                    }
+                }
+            } catch (err) {
+                console.error('⚠️ Failed to create individual admin notifications (non-critical):', err.message);
+                // Don't fail - the system-wide notification was already created
+            }
+            
+            return notification;
+        } catch (error) {
+            console.error('❌ Error creating event request notification:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create notification for event status update (accepted/rejected)
+     */
+    async notifyEventStatusUpdate(eventData) {
+        const { eventId, customerId, status, eventDate, eventType, customerName } = eventData;
+        
+        const statusText = status === 'accepted' ? 'Accepted' : 'Rejected';
+        const statusMessage = status === 'accepted' 
+            ? `Your event request for ${eventDate} has been accepted! You will be contacted for further details.`
+            : `Your event request for ${eventDate} has been rejected. Please contact us for more information.`;
+
         const notification = await this.createNotification({
             type: 'event_request',
-            title: 'New Event Request',
-            message: `New event request for ${eventData.event_date} - ${eventData.cups} cups`,
+            title: `Event Request ${statusText}`,
+            message: statusMessage,
             data: {
-                eventId: eventData.id,
-                eventDate: eventData.event_date,
-                cups: eventData.cups,
-                customerName: eventData.customer_name,
-                contactNumber: eventData.contact_number
+                eventId: eventId,
+                eventDate: eventDate,
+                eventType: eventType,
+                status: status,
+                customerName: customerName
             },
-            userType: 'admin',
-            priority: 'medium'
+            userId: customerId,
+            userType: 'customer',
+            priority: status === 'accepted' ? 'high' : 'medium'
         });
 
         return notification;
