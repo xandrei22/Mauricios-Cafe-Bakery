@@ -1,3 +1,5 @@
+# CAFÉ: A SMART CAFE MANAGEMENT SYSTEM FOR MAURICIO'S CAFE AND BAKERY
+
 # Coffee Shop POS System
 
 A comprehensive Point of Sale (POS) system designed for coffee shops with advanced features including AI-powered recommendations, QR code integration, loyalty system, and real-time order management.
