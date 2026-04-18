@@ -2,7 +2,8 @@
 
 # Coffee Shop POS System
 
-A comprehensive Point of Sale (POS) system designed for coffee shops with advanced features including AI-powered recommendations, QR code integration, loyalty system, and real-time order management.
+A comprehensive Point of Sale (POS) system designed for coffee shops, integrating AI-driven drink recommendations, QR-based digital ordering, a loyalty rewards system, and real-time order and inventory management. The system streamlines operations through automated order processing and enhances customer experience with personalized customization, order tracking, and seamless interaction between customers and staff.
+
 
 > End users: See the User Manual here: [docs/UserManual.md](docs/UserManual.md)
 
